@@ -48,7 +48,7 @@ function AnimatedNumber({ value }: { value: number }) {
 
 function Connector({ active }: { active: boolean }) {
   return (
-    <div className="relative mx-1 h-px w-6 shrink-0 self-center sm:w-8 lg:flex-1" aria-hidden>
+    <div className="relative mx-1 h-px w-6 shrink-0 self-center sm:w-8 xl:mx-0.5 xl:w-3" aria-hidden>
       <div className="absolute inset-0 bg-border" />
       {active && (
         <div
@@ -68,18 +68,18 @@ export function PipelineFlow({ stages }: { stages: Overview["stages"] }) {
   const maxCurrent = Math.max(1, ...stages.map((s) => s.current));
   return (
     <div className="scrollbar-thin -mx-1 overflow-x-auto px-1 pb-1">
-      <ol className="flex min-w-max items-stretch lg:min-w-0" aria-label="Pipeline stages">
+      <ol className="flex min-w-max items-stretch xl:min-w-0" aria-label="Pipeline stages">
         {stages.map((stage, i) => {
           const Icon = ICONS[stage.key] ?? Radar;
           const hot = stage.current > 0;
           const intensity = stage.current / maxCurrent;
           return (
-            <li key={stage.key} className="flex items-stretch lg:flex-1">
+            <li key={stage.key} className="flex min-w-0 items-stretch xl:flex-1">
               <motion.div
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04, duration: 0.3 }}
-                className="w-[118px] lg:w-full"
+                className="w-[118px] xl:w-auto xl:min-w-0 xl:flex-1"
               >
                 <Link
                   href={`/leads?stage=${stage.key}`}
@@ -96,10 +96,10 @@ export function PipelineFlow({ stages }: { stages: Overview["stages"] }) {
                       aria-hidden
                     />
                   )}
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex min-w-0 items-center gap-1.5">
                     <span
                       className={cn(
-                        "flex size-6 items-center justify-center rounded-md",
+                        "flex size-6 shrink-0 items-center justify-center rounded-md",
                         hot ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
                       )}
                     >

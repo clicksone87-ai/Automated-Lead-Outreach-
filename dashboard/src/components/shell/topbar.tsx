@@ -65,10 +65,10 @@ function BudgetIndicator() {
       <TooltipTrigger asChild>
         <Link
           href="/settings#budgets"
-          className="hidden h-8 min-w-[168px] flex-col justify-center gap-1 rounded-lg border bg-surface-raised px-2.5 lg:flex"
+          className="hidden h-8 min-w-[196px] flex-col justify-center gap-1 rounded-lg border bg-surface-raised px-2.5 lg:flex"
           aria-label="Budget used this month"
         >
-          <div className="flex items-center justify-between text-[11px] font-medium">
+          <div className="flex items-center justify-between gap-3 text-[11px] font-medium">
             <span className="text-muted-foreground">Budget (month)</span>
             <span className="tabular">
               {budget ? `${usd(budget.spent_month)} / ${usd(budget.monthly_cap, 0)}` : "—"}

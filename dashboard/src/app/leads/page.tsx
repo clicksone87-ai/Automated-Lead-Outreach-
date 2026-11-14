@@ -60,9 +60,9 @@ const columns: ColumnDef<LeadRow, unknown>[] = [
 ];
 
 function FilterSelect({
-  label, value, options, onChange,
+  label, allLabel, value, options, onChange,
 }: {
-  label: string; value: string | undefined; options: Record<string, string>; onChange: (v: string | undefined) => void;
+  label: string; allLabel: string; value: string | undefined; options: Record<string, string>; onChange: (v: string | undefined) => void;
 }) {
   return (
     <Select value={value ?? ALL} onValueChange={(v) => onChange(v === ALL ? undefined : v)}>
@@ -70,7 +70,7 @@ function FilterSelect({
         <SelectValue placeholder={label} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={ALL}>All {label.toLowerCase()}</SelectItem>
+        <SelectItem value={ALL}>{allLabel}</SelectItem>
         {Object.entries(options).map(([k, v]) => (
           <SelectItem key={k} value={k}>{v}</SelectItem>
         ))}
@@ -139,13 +139,13 @@ function LeadsView() {
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, domain, text…" className="h-8 bg-surface-raised pl-8" aria-label="Search leads" />
         </div>
-        <FilterSelect label="Stage" value={filters.stage} options={STAGES} onChange={(v) => setParam({ stage: v, status: undefined })} />
-        <FilterSelect label="Source" value={filters.source?.[0]} options={sourceOptions} onChange={(v) => setParam({ source: v })} />
-        <FilterSelect label="Country" value={filters.country?.[0]} options={Object.fromEntries(COUNTRIES.map((c) => [c, c]))} onChange={(v) => setParam({ country: v })} />
-        <FilterSelect label="Language" value={filters.language?.[0]} options={Object.fromEntries(LANGUAGES.map((l) => [l, l.toUpperCase()]))} onChange={(v) => setParam({ language: v })} />
-        <FilterSelect label="Service" value={filters.service?.[0]} options={SERVICES} onChange={(v) => setParam({ service: v })} />
-        <FilterSelect label="Trigger" value={filters.trigger?.[0]} options={TRIGGERS} onChange={(v) => setParam({ trigger: v })} />
-        <FilterSelect label="Intent" value={filters.min_score?.toString()} options={Object.fromEntries(SCORES.map((s) => [s, `≥ ${s}`]))} onChange={(v) => setParam({ min_score: v })} />
+        <FilterSelect label="Stage" allLabel="All stages" value={filters.stage} options={STAGES} onChange={(v) => setParam({ stage: v, status: undefined })} />
+        <FilterSelect label="Source" allLabel="All sources" value={filters.source?.[0]} options={sourceOptions} onChange={(v) => setParam({ source: v })} />
+        <FilterSelect label="Country" allLabel="All countries" value={filters.country?.[0]} options={Object.fromEntries(COUNTRIES.map((c) => [c, c]))} onChange={(v) => setParam({ country: v })} />
+        <FilterSelect label="Language" allLabel="All languages" value={filters.language?.[0]} options={Object.fromEntries(LANGUAGES.map((l) => [l, l.toUpperCase()]))} onChange={(v) => setParam({ language: v })} />
+        <FilterSelect label="Service" allLabel="All services" value={filters.service?.[0]} options={SERVICES} onChange={(v) => setParam({ service: v })} />
+        <FilterSelect label="Trigger" allLabel="All triggers" value={filters.trigger?.[0]} options={TRIGGERS} onChange={(v) => setParam({ trigger: v })} />
+        <FilterSelect label="Intent" allLabel="Any intent" value={filters.min_score?.toString()} options={Object.fromEntries(SCORES.map((s) => [s, `≥ ${s}`]))} onChange={(v) => setParam({ min_score: v })} />
         {activeFilters.length > 0 && (
           <Button
             variant="ghost"

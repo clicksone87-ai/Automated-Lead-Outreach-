@@ -22,7 +22,7 @@ import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fileUrl, type LeadDetail } from "@/lib/api";
-import { ago, countryName, dateTime, flag, languageName, titleCase } from "@/lib/format";
+import { ago, countryName, dateTime, languageName, titleCase } from "@/lib/format";
 import { useLead, useRerunLead } from "@/lib/queries";
 import { AGENT_LABELS, TRIGGERS } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -136,9 +136,7 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
       </div>
 
       <dl className="grid grid-cols-2 gap-4 rounded-xl border bg-surface-sunken/50 p-4 sm:grid-cols-4">
-        <Fact label="Country">
-          <span aria-hidden>{flag(lead.country)}</span> {countryName(lead.country)}
-        </Fact>
+        <Fact label="Country">{countryName(lead.country)}</Fact>
         <Fact label="Language">{languageName(lead.language)}</Fact>
         <Fact label="Time zone">{lead.timezone ?? "Unknown"}</Fact>
         <Fact label="Intent">

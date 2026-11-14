@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { SourceOut } from "@/lib/api";
-import { ago, dateTime, titleCase } from "@/lib/format";
+import { agoShort, dateTime, titleCase } from "@/lib/format";
 import { usePatchSource, useRunSource } from "@/lib/queries";
 import { SOURCE_STATUS } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -157,7 +157,7 @@ export function SourceCard({ source, index }: { source: SourceOut; index: number
       <dl className="grid grid-cols-3 gap-3 border-t px-5 py-3 text-xs">
         <div>
           <dt className="text-muted-foreground">Last run</dt>
-          <dd className="font-medium">{ago(source.last_run_at)}</dd>
+          <dd className="font-medium">{agoShort(source.last_run_at)}</dd>
         </div>
         <div>
           <dt className="text-muted-foreground">Leads (7d)</dt>

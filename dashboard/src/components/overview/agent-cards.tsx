@@ -5,7 +5,7 @@ import { AlertCircle, CheckCircle2, KeyRound, Loader2, PauseCircle } from "lucid
 import { StatusPill } from "@/components/common/status-pill";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AgentStatus } from "@/lib/api";
-import { ago, usd } from "@/lib/format";
+import { agoShort, usd } from "@/lib/format";
 import { AGENT_LABELS, AGENT_STATE } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +45,7 @@ export function AgentCards({ agents }: { agents: AgentStatus[] }) {
             <dl className="grid grid-cols-3 gap-2 text-[11px]">
               <div>
                 <dt className="text-muted-foreground">Last run</dt>
-                <dd className="truncate font-medium">{ago(agent.last_run_at)}</dd>
+                <dd className="truncate font-medium">{agoShort(agent.last_run_at)}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">24h runs</dt>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ExternalLink, KeyRound, Lock, ShieldCheck, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { PageHeader } from "@/components/common/page-header";
 import { Panel, PanelHeader } from "@/components/common/panel";
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { SettingsOut } from "@/lib/api";
-import { countryName, flag, languageName, money, titleCase, usd } from "@/lib/format";
+import { countryName, languageName, money, titleCase, usd } from "@/lib/format";
 import { useOverview, usePatchSettings, useSettings } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
@@ -80,10 +80,15 @@ function SaveBar({ dirty, saving, onSave, onReset }: { dirty: boolean; saving: b
 }
 
 function useDraft<T extends object>(source: T | undefined) {
-  const [draft, setDraft] = useState<T | undefined>(source);
-  useEffect(() => setDraft(source), [source]);
-  const dirty = !!source && !!draft && JSON.stringify(source) !== JSON.stringify(draft);
-  return { draft, setDraft, dirty, reset: () => setDraft(source) };
+  // `source` is rebuilt on every render; key it by content so the reset effect only fires
+  // when the saved values actually change (otherwise: infinite render loop).
+  const json = JSON.stringify(source ?? null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stable = useMemo(() => source, [json]);
+  const [draft, setDraft] = useState<T | undefined>(stable);
+  useEffect(() => setDraft(stable), [stable]);
+  const dirty = !!stable && !!draft && json !== JSON.stringify(draft);
+  return { draft, setDraft, dirty, reset: () => setDraft(stable) };
 }
 
 function pick<K extends keyof Runtime>(rt: Runtime, keys: readonly K[]): Pick<Runtime, K> {
@@ -259,7 +264,10 @@ function SettingsView({ data }: { data: SettingsOut }) {
                       const r = rule as { enabled: boolean; legal_reviewed: boolean; can_draft: boolean; can_send: boolean; regime_note?: string };
                       return (
                         <tr key={code} className="border-t">
-                          <td className="px-4 py-2.5 font-medium"><span aria-hidden>{flag(code)}</span> {countryName(code)}</td>
+                          <td className="px-4 py-2.5 font-medium">
+                            <span className="mr-2 inline-flex w-7 justify-center rounded bg-muted px-1 font-mono text-[11px] text-muted-foreground">{code}</span>
+                            {countryName(code)}
+                          </td>
                           <td className="px-4 py-2.5">
                             <Checkbox
                               checked={market.draft!.target_countries.includes(code)}

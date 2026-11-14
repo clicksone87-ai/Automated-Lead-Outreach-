@@ -1,7 +1,7 @@
 import { FlaskConical } from "lucide-react";
 import { StatusPill } from "@/components/common/status-pill";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { flag, languageName } from "@/lib/format";
+import { countryName, languageName } from "@/lib/format";
 import { leadStatus, SERVICES } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
@@ -38,11 +38,14 @@ export function ServiceChips({ services }: { services: string[] }) {
 
 export function LocaleCell({ country, language }: { country: string | null; language: string | null }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs">
-      <span aria-hidden>{flag(country)}</span>
-      <span className="font-medium">{country ?? "—"}</span>
-      <span className="text-muted-foreground">· {language ? language.toUpperCase() : "?"}</span>
-      <span className="sr-only">{languageName(language)}</span>
+    <span className="inline-flex items-center gap-1.5 text-xs" title={`${countryName(country)} · ${languageName(language)}`}>
+      <span className="inline-flex min-w-7 justify-center rounded bg-muted px-1 font-mono text-[11px] font-medium">
+        {country ?? "??"}
+      </span>
+      <span className="text-muted-foreground">{language ? language.toUpperCase() : "—"}</span>
+      <span className="sr-only">
+        {countryName(country)}, {languageName(language)}
+      </span>
     </span>
   );
 }
