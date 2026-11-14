@@ -14,6 +14,7 @@ Guarantees:
 from __future__ import annotations
 
 import asyncio
+import http.cookiejar
 import logging
 import socket
 import ssl
@@ -72,7 +73,7 @@ class _GuardedBackend(httpcore.AsyncNetworkBackend):
         self,
         host: str,
         port: int,
-        timeout: float | None = None,
+        timeout: float | None = None,  # noqa: ASYNC109 - httpcore interface
         local_address: str | None = None,
         socket_options: Iterable[Any] | None = None,
     ) -> httpcore.AsyncNetworkStream:
@@ -88,7 +89,7 @@ class _GuardedBackend(httpcore.AsyncNetworkBackend):
         )
 
     async def connect_unix_socket(
-        self, path: str, timeout: float | None = None,
+        self, path: str, timeout: float | None = None,  # noqa: ASYNC109 - httpcore interface
         socket_options: Iterable[Any] | None = None,
     ) -> httpcore.AsyncNetworkStream:
         raise BlockedURLError("unix sockets are not allowed")
@@ -169,7 +170,10 @@ class SafeFetcher:
             timeout=httpx.Timeout(timeout_s),
             follow_redirects=False,
             headers={"User-Agent": user_agent, "Accept-Language": "en;q=0.9, *;q=0.5"},
-            cookies=None,
+            # A jar whose policy accepts no domain: cookies are never stored or sent.
+            cookies=http.cookiejar.CookieJar(
+                policy=http.cookiejar.DefaultCookiePolicy(allowed_domains=[])
+            ),
             trust_env=False,
         )
 

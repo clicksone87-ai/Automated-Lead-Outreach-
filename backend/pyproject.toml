@@ -54,7 +54,8 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP", "N", "S", "ASYNC", "RUF", "SIM", "PL", "C4", "PT"]
+allowed-confusables = ["–", "—", "×", "’"]
+select =["E", "F", "W", "I", "B", "UP", "N", "S", "ASYNC", "RUF", "SIM", "PL", "C4", "PT"]
 ignore = [
   "PLR0913",  # agents legitimately take many params
   "PLR2004",  # magic numbers in thresholds are config-backed
@@ -66,7 +67,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S", "PLR", "N802"]
+"tests/**" = ["S", "PLR", "N802", "PT018", "RUF043", "E501"]
 "app/db/migrations/**" = ["E501", "N999"]
 
 [tool.mypy]

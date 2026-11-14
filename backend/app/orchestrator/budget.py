@@ -99,14 +99,16 @@ async def charge(
         (f"agent:{agent}", {"agent": agent}),
         (f"provider:{provider}", {"provider": provider}),
     ):
-        cap = rs.budget_caps.get(scope_key)
-        if cap is None:
+        scoped = rs.budget_caps.get(scope_key)
+        if scoped is None:
             continue
-        if cap.daily_usd is not None:
-            checks.append((f"{scope_key}:daily", await _sum(session, day, **kwargs), cap.daily_usd))
-        if cap.monthly_usd is not None:
+        if scoped.daily_usd is not None:
             checks.append(
-                (f"{scope_key}:monthly", await _sum(session, month, **kwargs), cap.monthly_usd)
+                (f"{scope_key}:daily", await _sum(session, day, **kwargs), scoped.daily_usd)
+            )
+        if scoped.monthly_usd is not None:
+            checks.append(
+                (f"{scope_key}:monthly", await _sum(session, month, **kwargs), scoped.monthly_usd)
             )
 
     for scope, spent, cap in checks:

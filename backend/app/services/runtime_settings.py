@@ -60,6 +60,10 @@ class RuntimeSettings(BaseModel):
     follow_up_delay_days: list[int] = Field(default_factory=lambda: [4, 9])
     sending_window: SendingWindow = Field(default_factory=SendingWindow)
     model_prices: dict[str, ModelPrice] = Field(default_factory=dict)
+    # USD per call for non-LLM paid providers. Planning estimates — verify vendor pricing.
+    provider_prices: dict[str, float] = Field(
+        default_factory=lambda: {"brave": 0.005, "zerobounce": 0.008, "places": 0.035, "x": 0.01}
+    )
     # Learning loop (§13)
     scoring_weights: dict[str, float] = Field(default_factory=dict)
     source_weights: dict[str, float] = Field(default_factory=dict)

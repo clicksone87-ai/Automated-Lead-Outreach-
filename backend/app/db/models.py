@@ -263,7 +263,10 @@ class Evidence(Base):
     lead: Mapped[Lead | None] = relationship(back_populates="evidence")
 
     __table_args__ = (
-        UniqueConstraint("lead_id", "kind", "content_hash", name="uq_evidence_lead_hash"),
+        UniqueConstraint(
+            "lead_id", "kind", "content_hash", name="uq_evidence_lead_hash",
+            postgresql_nulls_not_distinct=True,
+        ),
     )
 
 

@@ -13,8 +13,10 @@ import json
 import logging
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Literal, Protocol, TypeVar
+from typing import Any, ClassVar, Literal, Protocol, TypeVar, cast
 
+from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletion
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -77,7 +79,8 @@ def build_messages(request: LLMRequest, schema: type[BaseModel]) -> list[dict[st
         for img in request.images:
             mime = "image/png" if img[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
             data = base64.b64encode(img).decode()
-            content.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}})
+            url = f"data:{mime};base64,{data}"
+            content.append({"type": "image_url", "image_url": {"url": url}})
     else:
         content = user_text
     return [
@@ -100,8 +103,6 @@ class OpenAILLM:
     is_mock: ClassVar[bool] = False
 
     def __init__(self, api_key: str, text_model: str, vision_model: str) -> None:
-        from openai import AsyncOpenAI  # local import: optional at test time
-
         self._client = AsyncOpenAI(api_key=api_key, max_retries=2, timeout=90)
         self._models = {"text": text_model, "vision": vision_model or text_model}
 
@@ -123,10 +124,10 @@ class OpenAILLM:
         last_error: Exception | None = None
         try:
             for _attempt in range(2):
-                resp = await self._client.chat.completions.create(
-                    model=model,
-                    messages=messages,  # type: ignore[arg-type]
-                    response_format={
+                params: dict[str, Any] = {
+                    "model": model,
+                    "messages": messages,
+                    "response_format": {
                         "type": "json_schema",
                         "json_schema": {
                             "name": schema.__name__[:64],
@@ -134,8 +135,9 @@ class OpenAILLM:
                             "strict": False,
                         },
                     },
-                    max_completion_tokens=request.max_output_tokens,
-                )
+                    "max_completion_tokens": request.max_output_tokens,
+                }
+                resp = cast(ChatCompletion, await self._client.chat.completions.create(**params))
                 if resp.usage:
                     total_in += resp.usage.prompt_tokens
                     total_out += resp.usage.completion_tokens
