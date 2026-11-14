@@ -71,7 +71,10 @@ class RuntimeSettings(BaseModel):
     # Quality thresholds (§7 quality check)
     lighthouse_min: dict[str, int] = Field(
         default_factory=lambda: {
-            "performance": 80, "accessibility": 90, "best-practices": 85, "seo": 90,
+            "performance": 80,
+            "accessibility": 90,
+            "best-practices": 85,
+            "seo": 90,
         }
     )
 
@@ -124,8 +127,11 @@ async def update(
         await session.execute(stmt)
         session.add(
             SettingChange(
-                key=key, old_value=old_values.get(key), new_value=new_values[key],
-                changed_by=changed_by, reason=reason,
+                key=key,
+                old_value=old_values.get(key),
+                new_value=new_values[key],
+                changed_by=changed_by,
+                reason=reason,
             )
         )
     await session.flush()

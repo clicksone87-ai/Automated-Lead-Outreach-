@@ -69,9 +69,13 @@ def test_timezones() -> None:
 
 
 def test_language_detection() -> None:
-    assert detect_language("Wir suchen einen Webdesigner für unsere neue Firmenwebseite.")[0] == "de"
-    assert detect_language("Nous cherchons quelqu'un pour créer le site de notre entreprise.")[0] \
+    assert (
+        detect_language("Wir suchen einen Webdesigner für unsere neue Firmenwebseite.")[0] == "de"
+    )
+    assert (
+        detect_language("Nous cherchons quelqu'un pour créer le site de notre entreprise.")[0]
         == "fr"
+    )
     assert detect_language("Necesitamos una página web nueva para nuestro negocio.")[0] == "es"
     assert detect_language("short")[0] is None
 
@@ -79,7 +83,8 @@ def test_language_detection() -> None:
 def test_guess_locale_prefers_strong_signals() -> None:
     guess = guess_locale(
         text="Need a website for my plumbing company in Leeds",
-        url="https://example.com", address="Leeds LS1 4AP",
+        url="https://example.com",
+        address="Leeds LS1 4AP",
     )
     assert guess.country == "GB"
     assert guess.language == "en"

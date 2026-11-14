@@ -85,26 +85,47 @@ def build_adapters(s: Settings) -> Adapters:
     llm = pick(
         "openai",
         OpenAILLM(key(s.openai_api_key), s.openai_text_model, s.openai_vision_model)
-        if st["openai"].configured else None,
-        MockLLM(), _DisabledLLM(),
+        if st["openai"].configured
+        else None,
+        MockLLM(),
+        _DisabledLLM(),
     )
     adapters = Adapters(
         llm=llm,
-        search=pick("brave", BraveSearch(key(s.brave_search_api_key))
-                    if st["brave"].configured else None, MockSearch(), DisabledSearch()),
+        search=pick(
+            "brave",
+            BraveSearch(key(s.brave_search_api_key)) if st["brave"].configured else None,
+            MockSearch(),
+            DisabledSearch(),
+        ),
         verification=pick(
             "verification",
             ZeroBounceVerifier(key(s.email_verification_api_key))
-            if st["verification"].configured else None,
-            MockVerifier(), DisabledVerifier(),
+            if st["verification"].configured
+            else None,
+            MockVerifier(),
+            DisabledVerifier(),
         ),
-        pagespeed=pick("pagespeed", GooglePageSpeed(key(s.google_pagespeed_api_key))
-                       if st["pagespeed"].configured else None, MockPageSpeed(),
-                       DisabledPageSpeed()),
-        places=pick("places", GooglePlaces(key(s.google_places_api_key))
-                    if st["places"].configured else None, MockPlaces(), DisabledPlaces()),
-        email=pick("resend", ResendEmail(key(s.resend_api_key))
-                   if st["resend"].configured else None, MockEmail(), DisabledEmail()),
+        pagespeed=pick(
+            "pagespeed",
+            GooglePageSpeed(key(s.google_pagespeed_api_key))
+            if st["pagespeed"].configured
+            else None,
+            MockPageSpeed(),
+            DisabledPageSpeed(),
+        ),
+        places=pick(
+            "places",
+            GooglePlaces(key(s.google_places_api_key)) if st["places"].configured else None,
+            MockPlaces(),
+            DisabledPlaces(),
+        ),
+        email=pick(
+            "resend",
+            ResendEmail(key(s.resend_api_key)) if st["resend"].configured else None,
+            MockEmail(),
+            DisabledEmail(),
+        ),
         storage=LocalStorage(s.data_dir),
         fetcher=SafeFetcher(s.crawler_user_agent),
         mocks_in_use=mocks,

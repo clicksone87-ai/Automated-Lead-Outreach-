@@ -50,13 +50,14 @@ class ZeroBounceVerifier:
         self._key = api_key
         self._client = client or httpx.AsyncClient(timeout=30)
 
-    async def verify(
-        self, session: AsyncSession, email: str, *, agent: str
-    ) -> VerificationResult:
+    async def verify(self, session: AsyncSession, email: str, *, agent: str) -> VerificationResult:
         rs = await runtime_settings.load(session)
         await budget.charge(
-            session, provider="zerobounce", agent=agent,
-            amount_usd=rs.provider_prices.get("zerobounce", 0.008), description="verify email",
+            session,
+            provider="zerobounce",
+            agent=agent,
+            amount_usd=rs.provider_prices.get("zerobounce", 0.008),
+            description="verify email",
         )
         resp = await self._client.get(
             self.ENDPOINT, params={"api_key": self._key, "email": email, "ip_address": ""}
@@ -67,8 +68,10 @@ class ZeroBounceVerifier:
             raise RuntimeError(f"ZeroBounce error: {body['error']}")
         raw = str(body.get("status", "unknown")).lower()
         return VerificationResult(
-            email=email, status=_ZB_MAP.get(raw, VerificationStatus.UNKNOWN),
-            provider_status=raw, sub_status=body.get("sub_status") or None,
+            email=email,
+            status=_ZB_MAP.get(raw, VerificationStatus.UNKNOWN),
+            provider_status=raw,
+            sub_status=body.get("sub_status") or None,
         )
 
 
@@ -78,9 +81,7 @@ class MockVerifier:
     name: ClassVar[str] = "mock_verifier"
     is_mock: ClassVar[bool] = True
 
-    async def verify(
-        self, session: AsyncSession, email: str, *, agent: str
-    ) -> VerificationResult:
+    async def verify(self, session: AsyncSession, email: str, *, agent: str) -> VerificationResult:
         domain = email.rsplit("@", 1)[-1].lower()
         ok = domain.endswith(("example.com", "example.org", "example.net"))
         status = VerificationStatus.VALID if ok else VerificationStatus.UNKNOWN
@@ -91,7 +92,5 @@ class DisabledVerifier:
     name: ClassVar[str] = "verification_disabled"
     is_mock: ClassVar[bool] = False
 
-    async def verify(
-        self, session: AsyncSession, email: str, *, agent: str
-    ) -> VerificationResult:
+    async def verify(self, session: AsyncSession, email: str, *, agent: str) -> VerificationResult:
         raise AdapterUnavailableError("Email verification", ("EMAIL_VERIFICATION_API_KEY",))

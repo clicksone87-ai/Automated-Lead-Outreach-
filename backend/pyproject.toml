@@ -57,6 +57,7 @@ target-version = "py311"
 allowed-confusables = ["–", "—", "×", "’"]
 select =["E", "F", "W", "I", "B", "UP", "N", "S", "ASYNC", "RUF", "SIM", "PL", "C4", "PT"]
 ignore = [
+  "E501",     # line length is enforced by `ruff format`; long string literals are allowed
   "PLR0913",  # agents legitimately take many params
   "PLR2004",  # magic numbers in thresholds are config-backed
   "S101",     # asserts allowed in tests (scoped below too)
@@ -69,6 +70,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S", "PLR", "N802", "PT018", "RUF043", "E501"]
 "app/db/migrations/**" = ["E501", "N999"]
+"app/api/**" = ["PLR0917"]  # FastAPI query parameters
 
 [tool.mypy]
 python_version = "3.12"

@@ -1,0 +1,129 @@
+# Local stack. Memory limits keep the whole stack ~4.5 GB for an 8 GB host.
+# Moving to a single Linux server is a config change: same file, different .env.
+
+x-backend: &backend
+  build: ./backend
+  image: leads-backend:local
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql+psycopg://leads:leads@postgres:5432/leads
+    REDIS_URL: redis://redis:6379/0
+    DATA_DIR: /data
+  volumes:
+    - ./data:/data
+    - ./backups:/backups
+    - ./site-templates:/site-templates:ro
+    - ./email-templates:/email-templates:ro
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_USER: leads
+      POSTGRES_PASSWORD: leads
+      POSTGRES_DB: leads
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leads -d leads"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    deploy:
+      resources:
+        limits: { memory: 512m }
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "96mb"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    deploy:
+      resources:
+        limits: { memory: 128m }
+    restart: unless-stopped
+
+  api:
+    <<: *backend
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    deploy:
+      resources:
+        limits: { memory: 512m }
+
+  worker:
+    <<: *backend
+    command: ["arq", "app.orchestrator.worker.WorkerSettings"]
+    depends_on:
+      api:
+        condition: service_healthy
+    shm_size: 512m  # Chromium needs shared memory
+    deploy:
+      resources:
+        limits: { memory: 2g }
+
+  scheduler:
+    <<: *backend
+    command: ["arq", "app.orchestrator.scheduler.SchedulerSettings"]
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits: { memory: 256m }
+
+  dashboard:
+    build:
+      context: ./dashboard
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    image: leads-dashboard:local
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits: { memory: 512m }
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.8-alpine
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/previews:/srv/previews:ro
+    deploy:
+      resources:
+        limits: { memory: 64m }
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:

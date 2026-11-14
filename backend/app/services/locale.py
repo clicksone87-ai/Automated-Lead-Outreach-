@@ -1,4 +1,4 @@
-﻿"""Country, language and time-zone resolution.
+"""Country, language and time-zone resolution.
 
 Deterministic signals (TLD, phone prefix, postcode/state patterns, explicit country names)
 first; language detection with lingua. Every result carries the signal used, so the
@@ -18,35 +18,95 @@ from app.services.dedup import tld_extract
 
 # Languages we can detect. Leads in anything other than enabled languages get parked.
 _DETECTABLE = [
-    Language.ENGLISH, Language.GERMAN, Language.FRENCH, Language.SPANISH, Language.ITALIAN,
-    Language.DUTCH, Language.PORTUGUESE, Language.POLISH, Language.SWEDISH, Language.DANISH,
-    Language.BOKMAL, Language.FINNISH,
+    Language.ENGLISH,
+    Language.GERMAN,
+    Language.FRENCH,
+    Language.SPANISH,
+    Language.ITALIAN,
+    Language.DUTCH,
+    Language.PORTUGUESE,
+    Language.POLISH,
+    Language.SWEDISH,
+    Language.DANISH,
+    Language.BOKMAL,
+    Language.FINNISH,
 ]
 _ISO = {
-    Language.ENGLISH: "en", Language.GERMAN: "de", Language.FRENCH: "fr",
-    Language.SPANISH: "es", Language.ITALIAN: "it", Language.DUTCH: "nl",
-    Language.PORTUGUESE: "pt", Language.POLISH: "pl", Language.SWEDISH: "sv",
-    Language.DANISH: "da", Language.BOKMAL: "nb", Language.FINNISH: "fi",
+    Language.ENGLISH: "en",
+    Language.GERMAN: "de",
+    Language.FRENCH: "fr",
+    Language.SPANISH: "es",
+    Language.ITALIAN: "it",
+    Language.DUTCH: "nl",
+    Language.PORTUGUESE: "pt",
+    Language.POLISH: "pl",
+    Language.SWEDISH: "sv",
+    Language.DANISH: "da",
+    Language.BOKMAL: "nb",
+    Language.FINNISH: "fi",
 }
 
 TLD_COUNTRY = {
-    "uk": "GB", "co.uk": "GB", "org.uk": "GB", "ie": "IE", "de": "DE", "fr": "FR", "es": "ES",
-    "it": "IT", "nl": "NL", "be": "BE", "at": "AT", "ch": "CH", "pt": "PT", "se": "SE",
-    "dk": "DK", "no": "NO", "fi": "FI", "pl": "PL", "lu": "LU", "us": "US",
+    "uk": "GB",
+    "co.uk": "GB",
+    "org.uk": "GB",
+    "ie": "IE",
+    "de": "DE",
+    "fr": "FR",
+    "es": "ES",
+    "it": "IT",
+    "nl": "NL",
+    "be": "BE",
+    "at": "AT",
+    "ch": "CH",
+    "pt": "PT",
+    "se": "SE",
+    "dk": "DK",
+    "no": "NO",
+    "fi": "FI",
+    "pl": "PL",
+    "lu": "LU",
+    "us": "US",
 }
 
 COUNTRY_DEFAULT_LANGUAGE = {
-    "US": "en", "GB": "en", "IE": "en", "DE": "de", "AT": "de", "CH": "de", "FR": "fr",
-    "BE": "fr", "LU": "fr", "ES": "es", "IT": "it", "NL": "nl", "PT": "pt", "SE": "sv",
-    "DK": "da", "NO": "nb", "FI": "fi", "PL": "pl",
+    "US": "en",
+    "GB": "en",
+    "IE": "en",
+    "DE": "de",
+    "AT": "de",
+    "CH": "de",
+    "FR": "fr",
+    "BE": "fr",
+    "LU": "fr",
+    "ES": "es",
+    "IT": "it",
+    "NL": "nl",
+    "PT": "pt",
+    "SE": "sv",
+    "DK": "da",
+    "NO": "nb",
+    "FI": "fi",
+    "PL": "pl",
 }
 
 COUNTRY_TIMEZONE = {
-    "GB": "Europe/London", "IE": "Europe/Dublin", "DE": "Europe/Berlin", "FR": "Europe/Paris",
-    "ES": "Europe/Madrid", "IT": "Europe/Rome", "NL": "Europe/Amsterdam",
-    "BE": "Europe/Brussels", "AT": "Europe/Vienna", "CH": "Europe/Zurich",
-    "PT": "Europe/Lisbon", "SE": "Europe/Stockholm", "DK": "Europe/Copenhagen",
-    "NO": "Europe/Oslo", "FI": "Europe/Helsinki", "PL": "Europe/Warsaw",
+    "GB": "Europe/London",
+    "IE": "Europe/Dublin",
+    "DE": "Europe/Berlin",
+    "FR": "Europe/Paris",
+    "ES": "Europe/Madrid",
+    "IT": "Europe/Rome",
+    "NL": "Europe/Amsterdam",
+    "BE": "Europe/Brussels",
+    "AT": "Europe/Vienna",
+    "CH": "Europe/Zurich",
+    "PT": "Europe/Lisbon",
+    "SE": "Europe/Stockholm",
+    "DK": "Europe/Copenhagen",
+    "NO": "Europe/Oslo",
+    "FI": "Europe/Helsinki",
+    "PL": "Europe/Warsaw",
     "LU": "Europe/Luxembourg",
 }
 
@@ -61,26 +121,75 @@ _US_TZ_GROUPS = {
 }
 US_STATE_TZ = {st: tz for tz, states in _US_TZ_GROUPS.items() for st in states.split()}
 US_STATE_NAMES = {
-    "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR", "california": "CA",
-    "colorado": "CO", "connecticut": "CT", "delaware": "DE", "florida": "FL", "georgia": "GA",
-    "hawaii": "HI", "idaho": "ID", "illinois": "IL", "indiana": "IN", "iowa": "IA",
-    "kansas": "KS", "kentucky": "KY", "louisiana": "LA", "maine": "ME", "maryland": "MD",
-    "massachusetts": "MA", "michigan": "MI", "minnesota": "MN", "mississippi": "MS",
-    "missouri": "MO", "montana": "MT", "nebraska": "NE", "nevada": "NV",
-    "new hampshire": "NH", "new jersey": "NJ", "new mexico": "NM", "new york": "NY",
-    "north carolina": "NC", "north dakota": "ND", "ohio": "OH", "oklahoma": "OK",
-    "oregon": "OR", "pennsylvania": "PA", "rhode island": "RI", "south carolina": "SC",
-    "south dakota": "SD", "tennessee": "TN", "texas": "TX", "utah": "UT", "vermont": "VT",
-    "virginia": "VA", "washington": "WA", "west virginia": "WV", "wisconsin": "WI",
+    "alabama": "AL",
+    "alaska": "AK",
+    "arizona": "AZ",
+    "arkansas": "AR",
+    "california": "CA",
+    "colorado": "CO",
+    "connecticut": "CT",
+    "delaware": "DE",
+    "florida": "FL",
+    "georgia": "GA",
+    "hawaii": "HI",
+    "idaho": "ID",
+    "illinois": "IL",
+    "indiana": "IN",
+    "iowa": "IA",
+    "kansas": "KS",
+    "kentucky": "KY",
+    "louisiana": "LA",
+    "maine": "ME",
+    "maryland": "MD",
+    "massachusetts": "MA",
+    "michigan": "MI",
+    "minnesota": "MN",
+    "mississippi": "MS",
+    "missouri": "MO",
+    "montana": "MT",
+    "nebraska": "NE",
+    "nevada": "NV",
+    "new hampshire": "NH",
+    "new jersey": "NJ",
+    "new mexico": "NM",
+    "new york": "NY",
+    "north carolina": "NC",
+    "north dakota": "ND",
+    "ohio": "OH",
+    "oklahoma": "OK",
+    "oregon": "OR",
+    "pennsylvania": "PA",
+    "rhode island": "RI",
+    "south carolina": "SC",
+    "south dakota": "SD",
+    "tennessee": "TN",
+    "texas": "TX",
+    "utah": "UT",
+    "vermont": "VT",
+    "virginia": "VA",
+    "washington": "WA",
+    "west virginia": "WV",
+    "wisconsin": "WI",
     "wyoming": "WY",
 }
 
 _UK_POSTCODE = re.compile(r"\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b")
 _US_STATE_ZIP = re.compile(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b")
 _COUNTRY_WORDS = {
-    "united kingdom": "GB", "england": "GB", "scotland": "GB", "wales": "GB", "uk": "GB",
-    "ireland": "IE", "germany": "DE", "deutschland": "DE", "france": "FR", "spain": "ES",
-    "espaÃ±a": "ES", "united states": "US", "usa": "US", "u.s.": "US",
+    "united kingdom": "GB",
+    "england": "GB",
+    "scotland": "GB",
+    "wales": "GB",
+    "uk": "GB",
+    "ireland": "IE",
+    "germany": "DE",
+    "deutschland": "DE",
+    "france": "FR",
+    "spain": "ES",
+    "espaÃ±a": "ES",
+    "united states": "US",
+    "usa": "US",
+    "u.s.": "US",
 }
 
 
@@ -95,8 +204,11 @@ class LocaleGuess:
 
 @lru_cache(maxsize=1)
 def _detector():  # type: ignore[no-untyped-def]
-    return LanguageDetectorBuilder.from_languages(*_DETECTABLE).with_preloaded_language_models() \
+    return (
+        LanguageDetectorBuilder.from_languages(*_DETECTABLE)
+        .with_preloaded_language_models()
         .build()
+    )
 
 
 def detect_language(text: str, min_confidence: float = 0.5) -> tuple[str | None, float]:
@@ -165,8 +277,12 @@ def timezone_for(country: str | None, address_or_text: str | None = None) -> str
 
 
 def guess_locale(
-    *, text: str | None = None, url: str | None = None, phone: str | None = None,
-    address: str | None = None, country_hint: str | None = None,
+    *,
+    text: str | None = None,
+    url: str | None = None,
+    phone: str | None = None,
+    address: str | None = None,
+    country_hint: str | None = None,
 ) -> LocaleGuess:
     country, signal = None, None
     if country_hint:
@@ -185,7 +301,9 @@ def guess_locale(
     if language is None and country:
         language, confidence = COUNTRY_DEFAULT_LANGUAGE.get(country), 0.3
     return LocaleGuess(
-        country=country, language=language,
+        country=country,
+        language=language,
         timezone=timezone_for(country, " ".join(filter(None, [address, text]))),
-        country_signal=signal, language_confidence=confidence,
+        country_signal=signal,
+        language_confidence=confidence,
     )

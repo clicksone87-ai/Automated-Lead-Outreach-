@@ -77,7 +77,8 @@ class ResendEmail:
                 for a in email.attachments
             ]
         resp = await self._client.post(
-            f"{self.BASE}/emails", json=payload,
+            f"{self.BASE}/emails",
+            json=payload,
             headers={**self._headers, "Idempotency-Key": email.idempotency_key[:256]},
         )
         resp.raise_for_status()
@@ -88,7 +89,8 @@ class ResendEmail:
         resp.raise_for_status()
         body = resp.json()
         return DeliveryEvent(
-            provider_id=provider_id, status=str(body.get("last_event", "sent")),
+            provider_id=provider_id,
+            status=str(body.get("last_event", "sent")),
             occurred_at=body.get("created_at"),
         )
 

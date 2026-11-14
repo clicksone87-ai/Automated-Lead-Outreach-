@@ -50,7 +50,10 @@ def _period_starts(now: datetime) -> tuple[datetime, datetime]:
 
 
 async def _sum(
-    session: AsyncSession, since: datetime, *, agent: str | None = None,
+    session: AsyncSession,
+    since: datetime,
+    *,
+    agent: str | None = None,
     provider: str | None = None,
 ) -> float:
     stmt = select(func.coalesce(func.sum(Cost.amount_usd), 0)).where(Cost.created_at >= since)
@@ -115,7 +118,10 @@ async def charge(
         if cap is not None and spent + amount_usd > cap + 1e-9:
             session.add(
                 PolicyDecision(
-                    check="budget", action=f"{agent}:{provider}", lead_id=lead_id, allowed=False,
+                    check="budget",
+                    action=f"{agent}:{provider}",
+                    lead_id=lead_id,
+                    allowed=False,
                     reason=f"{scope} cap ${cap:.2f} reached (spent ${spent:.4f})",
                     details={"amount_usd": amount_usd, "scope": scope},
                 )
@@ -124,7 +130,10 @@ async def charge(
             raise BudgetExceededError(scope, spent, cap, amount_usd)
 
     cost = Cost(
-        provider=provider, agent=agent, lead_id=lead_id, amount_usd=amount_usd,
+        provider=provider,
+        agent=agent,
+        lead_id=lead_id,
+        amount_usd=amount_usd,
         description=description,
     )
     session.add(cost)
@@ -139,8 +148,11 @@ async def settle(session: AsyncSession, reserved: Cost, actual_usd: float) -> No
         return
     session.add(
         Cost(
-            provider=reserved.provider, agent=reserved.agent, lead_id=reserved.lead_id,
-            amount_usd=delta, description=f"settlement for cost #{reserved.id}",
+            provider=reserved.provider,
+            agent=reserved.agent,
+            lead_id=reserved.lead_id,
+            amount_usd=delta,
+            description=f"settlement for cost #{reserved.id}",
         )
     )
     await session.flush()

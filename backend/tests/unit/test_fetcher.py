@@ -19,9 +19,22 @@ UA = "TestBot/1.0"
 @pytest.mark.parametrize(
     "ip",
     [
-        "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1", "127.0.0.1", "169.254.169.254",
-        "::1", "fc00::1", "fd12:3456::1", "0.0.0.0", "100.64.0.1", "::ffff:127.0.0.1",
-        "::ffff:10.0.0.1", "fe80::1", "224.0.0.1", "not-an-ip",
+        "10.1.2.3",
+        "172.16.0.1",
+        "172.31.255.255",
+        "192.168.1.1",
+        "127.0.0.1",
+        "169.254.169.254",
+        "::1",
+        "fc00::1",
+        "fd12:3456::1",
+        "0.0.0.0",
+        "100.64.0.1",
+        "::ffff:127.0.0.1",
+        "::ffff:10.0.0.1",
+        "fe80::1",
+        "224.0.0.1",
+        "not-an-ip",
     ],
 )
 def test_blocked_ips(ip: str) -> None:
@@ -36,9 +49,16 @@ def test_public_ips_allowed(ip: str) -> None:
 @pytest.mark.parametrize(
     "url",
     [
-        "ftp://example.com/file", "file:///etc/passwd", "http://127.0.0.1/", "http://[::1]/",
-        "http://localhost/", "http://foo.localhost/", "http://example.com:8080/",
-        "http://user:pass@example.com/", "http://10.0.0.5/admin", "http://printer.local/",
+        "ftp://example.com/file",
+        "file:///etc/passwd",
+        "http://127.0.0.1/",
+        "http://[::1]/",
+        "http://localhost/",
+        "http://foo.localhost/",
+        "http://example.com:8080/",
+        "http://user:pass@example.com/",
+        "http://10.0.0.5/admin",
+        "http://printer.local/",
         "gopher://example.com/",
     ],
 )

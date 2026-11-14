@@ -89,10 +89,13 @@ def build_messages(request: LLMRequest, schema: type[BaseModel]) -> list[dict[st
     ]
 
 
-def estimate_cost(messages: list[dict[str, Any]], price: ModelPrice, max_out: int,
-                  n_images: int) -> float:
-    chars = len(json.dumps(messages)) if n_images == 0 else sum(
-        len(m["content"]) if isinstance(m["content"], str) else 2000 for m in messages
+def estimate_cost(
+    messages: list[dict[str, Any]], price: ModelPrice, max_out: int, n_images: int
+) -> float:
+    chars = (
+        len(json.dumps(messages))
+        if n_images == 0
+        else sum(len(m["content"]) if isinstance(m["content"], str) else 2000 for m in messages)
     )
     in_tokens = chars / 3.5 + n_images * 1100
     return (in_tokens * price.input_per_mtok + max_out * price.output_per_mtok) / 1_000_000
@@ -106,9 +109,7 @@ class OpenAILLM:
         self._client = AsyncOpenAI(api_key=api_key, max_retries=2, timeout=90)
         self._models = {"text": text_model, "vision": vision_model or text_model}
 
-    async def structured(
-        self, session: AsyncSession, request: LLMRequest, schema: type[T]
-    ) -> T:
+    async def structured(self, session: AsyncSession, request: LLMRequest, schema: type[T]) -> T:
         model = self._models[request.kind]
         if not model:
             raise AdapterUnavailableError(f"openai {request.kind} model", ("OPENAI_*_MODEL",))
@@ -117,8 +118,12 @@ class OpenAILLM:
         messages = build_messages(request, schema)
         estimate = estimate_cost(messages, price, request.max_output_tokens, len(request.images))
         reserved = await budget.charge(
-            session, provider="openai", agent=request.agent, amount_usd=estimate,
-            lead_id=request.lead_id, description=f"{model} {schema.__name__}",
+            session,
+            provider="openai",
+            agent=request.agent,
+            amount_usd=estimate,
+            lead_id=request.lead_id,
+            description=f"{model} {schema.__name__}",
         )
         total_in = total_out = 0
         last_error: Exception | None = None
@@ -149,8 +154,11 @@ class OpenAILLM:
                     messages = [
                         *messages,
                         {"role": "assistant", "content": raw},
-                        {"role": "user", "content": f"Invalid output: {exc.errors()[:5]}. "
-                                                    "Return corrected JSON only."},
+                        {
+                            "role": "user",
+                            "content": f"Invalid output: {exc.errors()[:5]}. "
+                            "Return corrected JSON only.",
+                        },
                     ]
             raise LLMOutputError(f"invalid structured output for {schema.__name__}: {last_error}")
         finally:
@@ -167,9 +175,7 @@ class MockLLM:
     def __init__(self) -> None:
         self.calls: list[tuple[LLMRequest, type[BaseModel]]] = []
 
-    async def structured(
-        self, session: AsyncSession, request: LLMRequest, schema: type[T]
-    ) -> T:
+    async def structured(self, session: AsyncSession, request: LLMRequest, schema: type[T]) -> T:
         self.calls.append((request, schema))
         build_messages(request, schema)  # exercise wrapping in tests
         if not isinstance(schema, SupportsMock):

@@ -30,7 +30,8 @@ def test_parse_pagespeed() -> None:
     body = {
         "lighthouseResult": {
             "categories": {
-                "performance": {"score": 0.42}, "seo": {"score": 0.9},
+                "performance": {"score": 0.42},
+                "seo": {"score": 0.9},
                 "accessibility": {"score": None},
             },
             "audits": {"largest-contentful-paint": {"numericValue": 4100.5}},

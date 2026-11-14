@@ -1,0 +1,25 @@
+# Private website previews: http://<preview_id>.preview.localhost:8080
+# Each preview is a static export at ./data/previews/<preview_id>/site
+{
+	auto_https off
+	admin off
+}
+
+:8080 {
+	@preview header_regexp host Host ^([a-f0-9]{32})\.preview\.localhost(:\d+)?$
+	handle @preview {
+		root * /srv/previews/{re.host.1}/site
+		header {
+			X-Robots-Tag "noindex, nofollow, noarchive"
+			X-Frame-Options "SAMEORIGIN"
+			Referrer-Policy "no-referrer"
+			X-Content-Type-Options "nosniff"
+			-Server
+		}
+		try_files {path} {path}/index.html {path}.html /404.html
+		file_server
+	}
+	handle {
+		respond "Not found" 404
+	}
+}

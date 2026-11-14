@@ -62,7 +62,8 @@ def parse_pagespeed(url: str, strategy: str, body: dict[str, Any]) -> PageSpeedR
     audits = lh.get("audits", {})
     scores = {
         c: round(float(cats[c]["score"]) * 100, 1)
-        for c in LIGHTHOUSE_CATEGORIES if c in cats and cats[c].get("score") is not None
+        for c in LIGHTHOUSE_CATEGORIES
+        if c in cats and cats[c].get("score") is not None
     }
     metric_ids = {
         "lcp_ms": "largest-contentful-paint",
@@ -73,7 +74,8 @@ def parse_pagespeed(url: str, strategy: str, body: dict[str, Any]) -> PageSpeedR
     }
     metrics = {
         name: float(audits[a]["numericValue"])
-        for name, a in metric_ids.items() if a in audits and "numericValue" in audits[a]
+        for name, a in metric_ids.items()
+        if a in audits and "numericValue" in audits[a]
     }
     return PageSpeedResult(url=url, strategy=strategy, scores=scores, metrics=metrics)
 
@@ -114,14 +116,18 @@ class GooglePlaces:
     ) -> PlaceResult | None:
         rs = await runtime_settings.load(session)
         await budget.charge(
-            session, provider="places", agent=agent,
-            amount_usd=rs.provider_prices.get("places", 0.035), description="place lookup",
+            session,
+            provider="places",
+            agent=agent,
+            amount_usd=rs.provider_prices.get("places", 0.035),
+            description="place lookup",
         )
         payload: dict[str, Any] = {"textQuery": query, "pageSize": 1}
         if region:
             payload["regionCode"] = region
         resp = await self._client.post(
-            self.ENDPOINT, json=payload,
+            self.ENDPOINT,
+            json=payload,
             headers={"X-Goog-Api-Key": self._key, "X-Goog-FieldMask": self.FIELD_MASK},
         )
         resp.raise_for_status()
@@ -130,10 +136,14 @@ class GooglePlaces:
             return None
         p = places[0]
         return PlaceResult(
-            place_id=p["id"], name=p.get("displayName", {}).get("text", ""),
-            address=p.get("formattedAddress"), website=p.get("websiteUri"),
-            phone=p.get("nationalPhoneNumber"), business_status=p.get("businessStatus"),
-            maps_url=p.get("googleMapsUri"), rating=p.get("rating"),
+            place_id=p["id"],
+            name=p.get("displayName", {}).get("text", ""),
+            address=p.get("formattedAddress"),
+            website=p.get("websiteUri"),
+            phone=p.get("nationalPhoneNumber"),
+            business_status=p.get("businessStatus"),
+            maps_url=p.get("googleMapsUri"),
+            rating=p.get("rating"),
             rating_count=p.get("userRatingCount"),
         )
 
@@ -144,9 +154,14 @@ class MockPageSpeed:
 
     async def run(self, url: str, strategy: str = "mobile") -> PageSpeedResult:
         return PageSpeedResult(
-            url=url, strategy=strategy,
-            scores={"performance": 41.0, "accessibility": 72.0, "best-practices": 67.0,
-                    "seo": 75.0},
+            url=url,
+            strategy=strategy,
+            scores={
+                "performance": 41.0,
+                "accessibility": 72.0,
+                "best-practices": 67.0,
+                "seo": 75.0,
+            },
             metrics={"lcp_ms": 5200.0, "fcp_ms": 2900.0, "tbt_ms": 640.0, "cls": 0.21},
         )
 
@@ -159,8 +174,13 @@ class MockPlaces:
         self, session: AsyncSession, query: str, *, agent: str, region: str | None = None
     ) -> PlaceResult | None:
         return PlaceResult(
-            place_id="mock-place-1", name=query.split(",", maxsplit=1)[0], address="1 Example St",
-            website=None, business_status="OPERATIONAL", rating=4.6, rating_count=38,
+            place_id="mock-place-1",
+            name=query.split(",", maxsplit=1)[0],
+            address="1 Example St",
+            website=None,
+            business_status="OPERATIONAL",
+            rating=4.6,
+            rating_count=38,
         )
 
 

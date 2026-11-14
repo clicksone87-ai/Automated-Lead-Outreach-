@@ -1,4 +1,4 @@
-﻿"""Duplicate matching â€” one business = one record across all sources.
+"""Duplicate matching â€” one business = one record across all sources.
 
 Match order (first hit wins):
   1. website domain (registrable domain, exact)
@@ -28,20 +28,83 @@ NAME_SIMILARITY_THRESHOLD = 0.62
 tld_extract = tldextract.TLDExtract(suffix_list_urls=(), cache_dir=None)
 
 # Hosts that are platforms, not a business's own website.
-PLATFORM_DOMAINS = frozenset({
-    "facebook.com", "instagram.com", "linkedin.com", "twitter.com", "x.com", "tiktok.com",
-    "youtube.com", "google.com", "goo.gl", "yelp.com", "yell.com", "reddit.com", "upwork.com",
-    "fiverr.com", "freelancer.com", "peopleperhour.com", "etsy.com", "amazon.com",
-    "wixsite.com", "linktr.ee", "nextdoor.com", "checkatrade.com", "trustpilot.com",
-    "bbb.org", "thumbtack.com", "angi.com", "houzz.com", "producthunt.com", "quora.com",
-    "indiehackers.com", "medium.com", "craigslist.org", "gumtree.com",
-})
+PLATFORM_DOMAINS = frozenset(
+    {
+        "facebook.com",
+        "instagram.com",
+        "linkedin.com",
+        "twitter.com",
+        "x.com",
+        "tiktok.com",
+        "youtube.com",
+        "google.com",
+        "goo.gl",
+        "yelp.com",
+        "yell.com",
+        "reddit.com",
+        "upwork.com",
+        "fiverr.com",
+        "freelancer.com",
+        "peopleperhour.com",
+        "etsy.com",
+        "amazon.com",
+        "wixsite.com",
+        "linktr.ee",
+        "nextdoor.com",
+        "checkatrade.com",
+        "trustpilot.com",
+        "bbb.org",
+        "thumbtack.com",
+        "angi.com",
+        "houzz.com",
+        "producthunt.com",
+        "quora.com",
+        "indiehackers.com",
+        "medium.com",
+        "craigslist.org",
+        "gumtree.com",
+    }
+)
 
 LEGAL_SUFFIXES = (
-    "limited", "ltd", "llc", "l l c", "inc", "incorporated", "corp", "corporation", "co",
-    "company", "plc", "llp", "lp", "gmbh", "ug", "ag", "kg", "ohg", "e k", "ek", "sarl",
-    "sas", "sa", "sl", "slu", "srl", "spa", "bv", "nv", "as", "asa", "ab", "oy", "aps",
-    "teo", "dac", "clg", "the",
+    "limited",
+    "ltd",
+    "llc",
+    "l l c",
+    "inc",
+    "incorporated",
+    "corp",
+    "corporation",
+    "co",
+    "company",
+    "plc",
+    "llp",
+    "lp",
+    "gmbh",
+    "ug",
+    "ag",
+    "kg",
+    "ohg",
+    "e k",
+    "ek",
+    "sarl",
+    "sas",
+    "sa",
+    "sl",
+    "slu",
+    "srl",
+    "spa",
+    "bv",
+    "nv",
+    "as",
+    "asa",
+    "ab",
+    "oy",
+    "aps",
+    "teo",
+    "dac",
+    "clg",
+    "the",
 )
 _suffix_re = re.compile(r"\b(" + "|".join(re.escape(s) for s in LEGAL_SUFFIXES) + r")\b")
 
@@ -105,33 +168,39 @@ class MatchResult:
 async def find_match(session: AsyncSession, c: BusinessCandidate) -> tuple[Business, str] | None:
     domain = normalize_domain(c.domain)
     if domain:
-        hit = (await session.execute(
-            select(Business).where(Business.domain == domain)
-        )).scalar_one_or_none()
+        hit = (
+            await session.execute(select(Business).where(Business.domain == domain))
+        ).scalar_one_or_none()
         if hit:
             return hit, "domain"
     if c.registry_number and c.registry_source:
-        hit = (await session.execute(
-            select(Business).where(
-                Business.registry_source == c.registry_source,
-                Business.registry_number == c.registry_number,
+        hit = (
+            await session.execute(
+                select(Business).where(
+                    Business.registry_source == c.registry_source,
+                    Business.registry_number == c.registry_number,
+                )
             )
-        )).scalar_one_or_none()
+        ).scalar_one_or_none()
         if hit:
             return hit, "registry"
     contact_values = [v for v in (c.email and c.email.lower(), normalize_phone(c.phone)) if v]
     if contact_values:
-        hit = (await session.execute(
-            select(Business).join(Contact).where(func.lower(Contact.value).in_(contact_values))
-            .limit(1)
-        )).scalar_one_or_none()
+        hit = (
+            await session.execute(
+                select(Business)
+                .join(Contact)
+                .where(func.lower(Contact.value).in_(contact_values))
+                .limit(1)
+            )
+        ).scalar_one_or_none()
         if hit:
             return hit, "contact"
         phone = normalize_phone(c.phone)
         if phone:
-            hit = (await session.execute(
-                select(Business).where(Business.phone == phone).limit(1)
-            )).scalar_one_or_none()
+            hit = (
+                await session.execute(select(Business).where(Business.phone == phone).limit(1))
+            ).scalar_one_or_none()
             if hit:
                 return hit, "phone"
     norm = normalize_name(c.name)
@@ -175,9 +244,9 @@ async def resolve_business(session: AsyncSession, c: BusinessCandidate) -> Match
         industry=c.industry,
         address=c.address,
         phone=normalize_phone(c.phone),
-        has_website=c.has_website if c.has_website is not None else (
-            True if normalize_domain(c.domain) else None
-        ),
+        has_website=c.has_website
+        if c.has_website is not None
+        else (True if normalize_domain(c.domain) else None),
     )
     session.add(business)
     await session.flush()
@@ -190,8 +259,15 @@ def _merge(b: Business, c: BusinessCandidate) -> None:
     if not b.domain and domain:
         b.domain = domain
         b.has_website = True
-    for attr in ("registry_number", "registry_source", "country", "language", "timezone",
-                 "industry", "address"):
+    for attr in (
+        "registry_number",
+        "registry_source",
+        "country",
+        "language",
+        "timezone",
+        "industry",
+        "address",
+    ):
         if getattr(b, attr) is None and getattr(c, attr) is not None:
             setattr(b, attr, getattr(c, attr))
     if not b.phone and c.phone:

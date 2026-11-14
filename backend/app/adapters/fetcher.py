@@ -30,6 +30,7 @@ import httpcore
 import httpx
 
 from app.policy.network import ALLOWED_PORTS, ALLOWED_SCHEMES, is_blocked_ip
+from app.policy.platforms import forbidden_reason
 
 logger = logging.getLogger(__name__)
 
@@ -84,12 +85,17 @@ class _GuardedBackend(httpcore.AsyncNetworkBackend):
         if blocked:
             raise BlockedURLError(f"{host} resolves to blocked address(es): {blocked}")
         return await self._inner.connect_tcp(
-            addresses[0], port, timeout=timeout, local_address=local_address,
+            addresses[0],
+            port,
+            timeout=timeout,
+            local_address=local_address,
             socket_options=socket_options,
         )
 
     async def connect_unix_socket(
-        self, path: str, timeout: float | None = None,  # noqa: ASYNC109 - httpcore interface
+        self,
+        path: str,
+        timeout: float | None = None,  # noqa: ASYNC109 - httpcore interface
         socket_options: Iterable[Any] | None = None,
     ) -> httpcore.AsyncNetworkStream:
         raise BlockedURLError("unix sockets are not allowed")
@@ -201,8 +207,12 @@ class SafeFetcher:
                 current = nxt
                 continue
             return FetchResult(
-                url=url, final_url=current, status_code=status, headers=resp_headers,
-                content=content, elapsed_ms=int((time.monotonic() - started) * 1000),
+                url=url,
+                final_url=current,
+                status_code=status,
+                headers=resp_headers,
+                content=content,
+                elapsed_ms=int((time.monotonic() - started) * 1000),
                 redirects=redirects,
             )
         raise FetchError(f"too many redirects from {url}")
@@ -236,6 +246,9 @@ class SafeFetcher:
             raise BlockedURLError(f"internal hostname: {host}")
         if _looks_like_ip(host) and is_blocked_ip(host):
             raise BlockedURLError(f"blocked address: {host}")
+        reason = forbidden_reason(host)
+        if reason:
+            raise BlockedURLError(f"{host}: {reason}")
 
     async def allowed_by_robots(self, url: str) -> bool:
         parts = urlsplit(url)
@@ -290,8 +303,10 @@ class SafeFetcher:
                 if total > self._max_bytes:
                     raise ResponseTooLargeError(f"{url}: exceeds {self._max_bytes} bytes")
                 chunks.append(chunk)
-            return resp.status_code, {k.lower(): v for k, v in resp.headers.items()}, b"".join(
-                chunks
+            return (
+                resp.status_code,
+                {k.lower(): v for k, v in resp.headers.items()},
+                b"".join(chunks),
             )
 
     async def _throttle(self, url: str) -> None:

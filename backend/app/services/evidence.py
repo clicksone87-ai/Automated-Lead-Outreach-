@@ -35,9 +35,11 @@ async def capture(
     """Store content (if any) under data/evidence and record it. Returns the Evidence row."""
     if content is None and text is not None:
         content = text.encode("utf-8")
-    hash_source = content if content is not None else json.dumps(
-        {"url": url, "data": data}, sort_keys=True, default=str
-    ).encode()
+    hash_source = (
+        content
+        if content is not None
+        else json.dumps({"url": url, "data": data}, sort_keys=True, default=str).encode()
+    )
     digest = sha256_hex(hash_source)
 
     file_path: str | None = None
@@ -56,15 +58,18 @@ async def capture(
         "excerpt": (text or "")[:EXCERPT_CHARS] or None,
         "data": data or {},
     }
-    stmt = insert(Evidence).values(**values).on_conflict_do_nothing(
-        constraint="uq_evidence_lead_hash"
+    stmt = (
+        insert(Evidence).values(**values).on_conflict_do_nothing(constraint="uq_evidence_lead_hash")
     )
     await session.execute(stmt)
     existing = await session.execute(
-        select(Evidence).where(
+        select(Evidence)
+        .where(
             Evidence.lead_id.is_(None) if lead_id is None else Evidence.lead_id == lead_id,
             Evidence.kind == str(kind),
             Evidence.content_hash == digest,
-        ).order_by(Evidence.captured_at).limit(1)
+        )
+        .order_by(Evidence.captured_at)
+        .limit(1)
     )
     return existing.scalar_one()

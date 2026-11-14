@@ -233,9 +233,7 @@ class Lead(Base):
     business: Mapped[Business | None] = relationship(back_populates="leads")
     evidence: Mapped[list[Evidence]] = relationship(back_populates="lead")
 
-    __table_args__ = (
-        UniqueConstraint("source", "source_item_id", name="uq_lead_source_item"),
-    )
+    __table_args__ = (UniqueConstraint("source", "source_item_id", name="uq_lead_source_item"),)
 
     @property
     def evidence_ids(self) -> list[uuid.UUID]:
@@ -264,7 +262,10 @@ class Evidence(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "lead_id", "kind", "content_hash", name="uq_evidence_lead_hash",
+            "lead_id",
+            "kind",
+            "content_hash",
+            name="uq_evidence_lead_hash",
             postgresql_nulls_not_distinct=True,
         ),
     )
@@ -449,12 +450,21 @@ class Suppression(Base):
     created_at: Mapped[datetime] = _created()
 
     __table_args__ = (
-        Index("uq_suppression_email", "email", unique=True,
-              postgresql_where=text("email IS NOT NULL")),
-        Index("uq_suppression_domain", "domain", unique=True,
-              postgresql_where=text("domain IS NOT NULL AND email IS NULL")),
-        Index("uq_suppression_business", "business_id", unique=True,
-              postgresql_where=text("business_id IS NOT NULL AND email IS NULL")),
+        Index(
+            "uq_suppression_email", "email", unique=True, postgresql_where=text("email IS NOT NULL")
+        ),
+        Index(
+            "uq_suppression_domain",
+            "domain",
+            unique=True,
+            postgresql_where=text("domain IS NOT NULL AND email IS NULL"),
+        ),
+        Index(
+            "uq_suppression_business",
+            "business_id",
+            unique=True,
+            postgresql_where=text("business_id IS NOT NULL AND email IS NULL"),
+        ),
     )
 
 
@@ -619,10 +629,40 @@ class ActivityEvent(Base):
 
 
 __all__ = [
-    "ActivityEvent", "AgentRun", "ApprovalStatus", "Audit", "Base", "BrandProfile", "Brief",
-    "Business", "Contact", "ContactType", "Cost", "Deal", "DeliveryStatus", "Evidence",
-    "EvidenceKind", "Lead", "LeadStatus", "LogoConcept", "Message", "OutreachLock",
-    "PolicyDecision", "Preview", "PricingPackage", "Proposal", "QAStatus", "Reply", "ReplyClass",
-    "RunStatus", "Service", "SettingChange", "SettingRow", "Source", "SourceRun", "Suppression",
-    "TriggerType", "VerificationStatus",
+    "ActivityEvent",
+    "AgentRun",
+    "ApprovalStatus",
+    "Audit",
+    "Base",
+    "BrandProfile",
+    "Brief",
+    "Business",
+    "Contact",
+    "ContactType",
+    "Cost",
+    "Deal",
+    "DeliveryStatus",
+    "Evidence",
+    "EvidenceKind",
+    "Lead",
+    "LeadStatus",
+    "LogoConcept",
+    "Message",
+    "OutreachLock",
+    "PolicyDecision",
+    "Preview",
+    "PricingPackage",
+    "Proposal",
+    "QAStatus",
+    "Reply",
+    "ReplyClass",
+    "RunStatus",
+    "Service",
+    "SettingChange",
+    "SettingRow",
+    "Source",
+    "SourceRun",
+    "Suppression",
+    "TriggerType",
+    "VerificationStatus",
 ]
