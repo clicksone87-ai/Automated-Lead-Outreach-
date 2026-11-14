@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Check, ExternalLink, KeyRound, Lock, ShieldCheck, X } from "lucide-react";
 import { useEffect, useState } from "react";

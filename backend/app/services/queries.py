@@ -1,4 +1,4 @@
-﻿"""Read models for the dashboard API (keeps business logic out of route handlers)."""
+"""Read models for the dashboard API (keeps business logic out of route handlers)."""
 
 from __future__ import annotations
 

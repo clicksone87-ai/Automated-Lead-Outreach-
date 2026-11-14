@@ -25,7 +25,31 @@ from app.db.models import Business, Contact
 
 NAME_SIMILARITY_THRESHOLD = 0.62
 
-tld_extract = tldextract.TLDExtract(suffix_list_urls=(), cache_dir=None)
+tld_extract = tldextract.TLDExtract(
+    suffix_list_urls=(), cache_dir=None, include_psl_private_domains=True
+)
+
+# Shared site builders / reserved test domains: each subdomain is a different business, so the
+# full host (not the registrable domain) is the identity. Private PSL suffixes (github.io,
+# netlify.app, …) are already handled by include_psl_private_domains.
+SHARED_HOST_DOMAINS = frozenset(
+    {
+        "wixsite.com",
+        "weebly.com",
+        "wordpress.com",
+        "blogspot.com",
+        "business.site",
+        "godaddysites.com",
+        "square.site",
+        "webflow.io",
+        "carrd.co",
+        "jimdosite.com",
+        "site123.me",
+        "example.com",
+        "example.org",
+        "example.net",
+    }
+)
 
 # Hosts that are platforms, not a business's own website.
 PLATFORM_DOMAINS = frozenset(
@@ -48,7 +72,6 @@ PLATFORM_DOMAINS = frozenset(
         "peopleperhour.com",
         "etsy.com",
         "amazon.com",
-        "wixsite.com",
         "linktr.ee",
         "nextdoor.com",
         "checkatrade.com",
@@ -132,6 +155,9 @@ def normalize_domain(url_or_host: str | None) -> str | None:
     registrable = f"{ext.domain}.{ext.suffix}".lower()
     if registrable in PLATFORM_DOMAINS or ext.suffix in ("local", "localhost"):
         return None
+    if registrable in SHARED_HOST_DOMAINS:
+        sub = ext.subdomain.lower().removeprefix("www.").removeprefix("www")
+        return f"{sub}.{registrable}" if sub else None
     return registrable
 
 

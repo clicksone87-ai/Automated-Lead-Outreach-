@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import calendar
 import hashlib
 import logging
 from datetime import UTC, datetime
-from time import mktime
 from typing import Any, ClassVar
 
 import feedparser
@@ -65,7 +65,9 @@ class RssSource:
         link = str(entry.get("link") or feed_url)
         item_id = str(entry.get("id") or entry.get("guid") or link)
         published = entry.get("published_parsed") or entry.get("updated_parsed")
-        posted_at = datetime.fromtimestamp(mktime(published), tz=UTC) if published else None
+        posted_at = (
+            datetime.fromtimestamp(calendar.timegm(published), tz=UTC) if published else None
+        )
         country = feed_cfg.get("country") if isinstance(feed_cfg, dict) else None
         return [
             RawLead(

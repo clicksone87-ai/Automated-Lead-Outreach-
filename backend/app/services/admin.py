@@ -1,4 +1,4 @@
-﻿"""Write operations triggered from the dashboard (validated here, not in route handlers)."""
+"""Write operations triggered from the dashboard (validated here, not in route handlers)."""
 
 from __future__ import annotations
 

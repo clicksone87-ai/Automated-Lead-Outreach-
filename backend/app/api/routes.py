@@ -1,4 +1,4 @@
-﻿"""Dashboard API routes (thin: validation + delegation to services)."""
+"""Dashboard API routes (thin: validation + delegation to services)."""
 
 from __future__ import annotations
 

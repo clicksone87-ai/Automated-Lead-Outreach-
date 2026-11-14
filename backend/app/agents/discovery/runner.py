@@ -1,4 +1,4 @@
-﻿"""Runs one discovery source: fetch → dedup → locale → evidence → lead → enqueue pipeline."""
+"""Runs one discovery source: fetch → dedup → locale → evidence → lead → enqueue pipeline."""
 
 from __future__ import annotations
 
