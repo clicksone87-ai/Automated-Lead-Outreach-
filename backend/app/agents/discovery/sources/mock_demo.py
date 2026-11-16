@@ -16,7 +16,7 @@ CATALOGUE: list[dict[str, Any]] = [
         "title": "Looking for a web designer for my plumbing company",
         "text": "We're a 3-person plumbing business in Austin, TX 78704. Our current site was made in "
         "2014 and doesn't work on phones. Need a redesign with online booking. Budget "
-        "$1,500-2,500. Please reply with portfolio.",
+        "$1,500-2,500. Please reply with portfolio to owner@riverside-plumbing.example.com.",
         "biz": {
             "name": "Riverside Plumbing Co",
             "website": "https://riverside-plumbing.example.com",
@@ -74,7 +74,7 @@ CATALOGUE: list[dict[str, Any]] = [
         "t": TriggerType.EXPLICIT_REQUEST,
         "title": "Can anyone help with SEO for my cleaning company?",
         "text": "We run a cleaning company in Tampa, FL 33602. Our website gets no traffic and we're "
-        "not on the first page of Google. Looking for SEO help, ideally local SEO.",
+        "not on the first page of Google. Looking for SEO help, ideally local SEO. Email info@sparkle-clean.example.com.",
         "biz": {
             "name": "Sparkle Clean Tampa",
             "website": "https://sparkle-clean.example.com",
