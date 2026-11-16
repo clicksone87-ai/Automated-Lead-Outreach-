@@ -1,5 +1,8 @@
 import {
+  Ban,
   FileSearch,
+  Inbox,
+  MailCheck,
   Palette,
   Gauge,
   LayoutDashboard,
@@ -31,6 +34,10 @@ export const NAV: NavGroup[] = [
         description: "Pipeline, agents, costs and deliverability" },
       { href: "/leads", label: "Leads", icon: Users, shortcut: "G L",
         description: "Every lead with its full history" },
+      { href: "/approvals", label: "Approval queue", icon: MailCheck, shortcut: "G Q",
+        description: "Approve, edit or reject drafted emails (Stage 1)" },
+      { href: "/inbox", label: "Inbox", icon: Inbox, shortcut: "G I",
+        description: "Positive replies, deals and pricing" },
     ],
   },
   {
@@ -47,6 +54,8 @@ export const NAV: NavGroup[] = [
     items: [
       { href: "/sources", label: "Sources", icon: Radar, shortcut: "G S",
         description: "Enable sources, health and API keys" },
+      { href: "/suppressions", label: "Suppression list", icon: Ban, shortcut: "G X",
+        description: "Permanent do-not-contact list" },
       { href: "/settings", label: "Settings", icon: Settings2, shortcut: "G ,",
         description: "Autonomy, limits, budgets, languages, pricing" },
     ],

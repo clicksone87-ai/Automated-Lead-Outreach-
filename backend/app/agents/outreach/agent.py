@@ -61,7 +61,7 @@ class OutreachAgent:
             )
 
         sandbox = bool(getattr(ctx.adapters.email, "is_sandbox", False))
-        verdict = await PolicyEngine(s).evaluate_outreach(
+        verdict = await PolicyEngine(s, settings=ctx.settings).evaluate_outreach(
             lead,
             email=proposal.to_email,
             recipient_type=lead.recipient_type or "unknown",

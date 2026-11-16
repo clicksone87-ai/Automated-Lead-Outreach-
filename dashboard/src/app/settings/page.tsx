@@ -4,6 +4,7 @@ import { Check, ExternalLink, KeyRound, Lock, ShieldCheck, X } from "lucide-reac
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { PageHeader } from "@/components/common/page-header";
+import { AutonomyControls } from "@/components/outreach/autonomy-controls";
 import { Panel, PanelHeader } from "@/components/common/panel";
 import { ErrorState, RowsSkeleton } from "@/components/common/states";
 import { StatusPill } from "@/components/common/status-pill";
@@ -139,6 +140,7 @@ function SettingsView({ data }: { data: SettingsOut }) {
               </div>
             ))}
           </div>
+          <AutonomyControls />
           {overview && (
             <div className="mt-4 grid gap-3 text-xs sm:grid-cols-3">
               <Metric label="Bounce rate (30d)" ok={overview.deliverability.bounce_rate < 0.03} value={`${(overview.deliverability.bounce_rate * 100).toFixed(1)}%`} target="< 3%" />

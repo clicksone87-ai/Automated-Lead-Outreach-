@@ -136,7 +136,7 @@ async def send_due(session: AsyncSession, settings: Settings, adapters: Adapters
     rs = await runtime_settings.load(session)
     sent = 0
     for msg, proposal, lead in due:
-        verdict = await PolicyEngine(session).evaluate_outreach(
+        verdict = await PolicyEngine(session, settings=settings).evaluate_outreach(
             lead, email=msg.to_email, recipient_type=lead.recipient_type or "unknown",
             sandbox=bool(getattr(adapters.email, "is_sandbox", False)),
         )  # fmt: skip
@@ -352,7 +352,7 @@ async def follow_ups(session: AsyncSession, settings: Settings, adapters: Adapte
         assert last.sent_at is not None
         if now < last.sent_at + timedelta(days=rs.follow_up_delay_days[n - 1]):
             continue
-        verdict = await PolicyEngine(session).evaluate_outreach(
+        verdict = await PolicyEngine(session, settings=settings).evaluate_outreach(
             lead, email=proposal.to_email, recipient_type=lead.recipient_type or "unknown",
             sandbox=bool(getattr(adapters.email, "is_sandbox", False)),
         )  # fmt: skip

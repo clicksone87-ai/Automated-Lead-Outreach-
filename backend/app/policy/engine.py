@@ -14,7 +14,7 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings, integration_status
+from app.config import Settings, get_settings, integration_status
 from app.db.models import (
     Business,
     DeliveryStatus,
@@ -62,7 +62,13 @@ def email_domain(email: str) -> str:
 
 
 class PolicyEngine:
-    def __init__(self, session: AsyncSession, rules: CountryRules | None = None) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        rules: CountryRules | None = None,
+        settings: Settings | None = None,
+    ) -> None:
+        self.settings = settings or get_settings()
         self.session = session
         self.rules = rules or get_rules()
 
@@ -282,7 +288,7 @@ class PolicyEngine:
         return await self._log(result, action=action, lead_id=lead.id)
 
     async def check_sender_identity(self, *, action: str, lead_id: uuid.UUID) -> PolicyResult:
-        configured = integration_status(get_settings())["sender_identity"].configured
+        configured = integration_status(self.settings)["sender_identity"].configured
         result = PolicyResult(
             "sender_identity",
             configured,
@@ -328,7 +334,7 @@ class PolicyEngine:
         always needs legally reviewed country rules.
         """
         rs = await runtime_settings.load(self.session)
-        demo_mode = get_settings().mocks_allowed
+        demo_mode = self.settings.mocks_allowed
         action = "send_email"
         country = await self.check_country(
             action=action, lead=lead, purpose="send", recipient_type=recipient_type
