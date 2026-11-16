@@ -239,7 +239,8 @@ class GeminiLLM:
         schema: type[BaseModel],
         body: dict[str, Any],
     ) -> dict[str, Any]:
-        models = [self._models[request.kind], *self._fallbacks]
+        # Primary model for this kind, configured fallbacks, then the fast text model last.
+        models = [self._models[request.kind], *self._fallbacks, self._models["text"]]
         seen: list[str] = []
         last: Exception | None = None
         for model in models:

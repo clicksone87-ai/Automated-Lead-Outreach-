@@ -82,6 +82,15 @@ class LocalSitesSource:
             for t in trades
         ]
 
+    @staticmethod
+    def city_of(query: str, country: str) -> str:
+        """'plumber Lubbock TX' → 'Lubbock, TX' (the town searched = where the business is)."""
+        for city in CITIES.get(country, []):
+            if query.endswith(city):
+                parts = city.rsplit(" ", 1)
+                return f"{parts[0]}, {parts[1]}" if country == "US" and len(parts) == 2 else city
+        return ""
+
     async def fetch(self, ctx: SourceContext) -> list[RawLead]:
         queries = self.queries(ctx)
         if not queries:
@@ -139,6 +148,7 @@ class LocalSitesSource:
                         business=RawBusiness(
                             name=name,
                             website=url,
+                            address=self.city_of(query, country) or None,
                             country_hint=country,
                             industry=ctx.runtime.active_industry,
                             has_website=True,

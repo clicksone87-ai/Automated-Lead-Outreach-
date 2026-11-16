@@ -100,6 +100,8 @@ class Settings(BaseSettings):
     postgres_port: int = 5432
     redis_url: str = "redis://localhost:6379/0"
     data_dir: Path = Path("./data")
+    # Website templates (mounted read-only at /site-templates in the containers)
+    site_templates_dir: Path = Path("/site-templates")
     dashboard_origin: str = "http://localhost:3000"
     # Optional bearer token for the API (recommended when moving to a server). Empty = off.
     api_token: SecretStr | None = None
