@@ -487,6 +487,12 @@ def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
         else:
             state, note = "ready", ""
         out[key] = IntegrationStatus(key, label, env, has_keys, paid, url, state, note)
+    # Derived: the inbox for replies and alert emails — Mailpit in testing, IMAP at go-live.
+    inbox = out["mailpit"] if out["mailpit"].configured else out["imap"]
+    out["mailbox"] = IntegrationStatus(
+        "mailbox", f"Inbox ({inbox.label})", inbox.env_vars, inbox.has_keys, inbox.paid,
+        inbox.signup_url, inbox.state, inbox.note,
+    )  # fmt: skip
     return out
 
 

@@ -5,9 +5,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 from app.config import Settings
 
 EXAMPLE = Path(__file__).resolve().parents[3] / ".env.example"
+# The backend container image holds only backend/; the repo-root file is checked on the host.
+pytestmark = pytest.mark.skipif(not EXAMPLE.is_file(), reason=".env.example not in this image")
 
 
 def test_env_example_matches_settings_fields() -> None:

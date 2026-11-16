@@ -64,8 +64,11 @@ class SerperSearch:
         language: str | None = None,
         count: int = 20,
         freshness: str | None = None,
+        page: int = 1,
     ) -> list[SearchResult]:
         body: dict[str, Any] = {"q": query, "num": min(count, 10)}
+        if page > 1:
+            body["page"] = page
         if gl := _gl(country):
             body["gl"] = gl
         if language:
@@ -164,6 +167,7 @@ class ExaSearch:
         language: str | None = None,
         count: int = 20,
         freshness: str | None = None,
+        page: int = 1,  # Exa has no paging; ignored
         objective: str | None = None,
     ) -> list[SearchResult]:
         # Reserve a conservative estimate; settle with Exa's reported cost.
@@ -223,6 +227,7 @@ class FallbackSearch:
         language: str | None = None,
         count: int = 20,
         freshness: str | None = None,
+        page: int = 1,
     ) -> list[SearchResult]:
         last: Exception | None = None
         for adapter in self.adapters:
@@ -236,6 +241,7 @@ class FallbackSearch:
                         language=language,
                         count=count,
                         freshness=freshness,
+                        page=page,
                     )
             except (httpx.HTTPError, BudgetExceededError, AdapterUnavailableError) as exc:
                 logger.warning("search via %s failed (%s); falling back", adapter.name, exc)

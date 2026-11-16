@@ -73,6 +73,7 @@ class ApifyClient:
         self._client = client or httpx.AsyncClient(timeout=httpx.Timeout(90, connect=15))
         self._poll = poll_s
         self._max_wait = max_wait_s
+        self._live: tuple[float, float | None] | None = None
 
     async def run_actor(
         self,
@@ -85,6 +86,7 @@ class ApifyClient:
         max_charge_usd: float,
     ) -> ApifyRun:
         """Run `actor` (e.g. 'apidojo/tweet-scraper') and return its dataset items."""
+        await self._check_live_cap()
         reserved = await quota.consume(
             session,
             "apify",
@@ -139,6 +141,20 @@ class ApifyClient:
             raise ApifyRunError(f"{actor}: run {run.get('id')} ended {status}")
         logger.info("apify %s: %s, %d items, $%.4f", actor, status, len(items), cost)
         return ApifyRun(str(run.get("id")), status, items, cost)
+
+    async def _check_live_cap(self) -> None:
+        """Belt and braces: per-run cost reports can lag, so the account's own monthly usage
+        (cached 5 min) must also be below APIFY_MONTHLY_CAP_USD before any run starts."""
+        from app.config import get_settings  # noqa: PLC0415
+        from app.orchestrator.quota import FreeQuotaExceededError  # noqa: PLC0415
+
+        now = time.monotonic()
+        if self._live is None or now - self._live[0] > 300:
+            usage = await self.monthly_usage()
+            self._live = (now, usage["used_usd"] if usage else None)
+        used, cap = self._live[1], get_settings().apify_monthly_cap_usd
+        if used is not None and used >= cap:
+            raise FreeQuotaExceededError("apify:account(live)", used, cap, 0.0)
 
     async def monthly_usage(self) -> dict[str, Any] | None:
         """Account usage this billing cycle (free; for the Sources page)."""

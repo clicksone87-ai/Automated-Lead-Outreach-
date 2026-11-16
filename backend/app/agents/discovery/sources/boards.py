@@ -96,7 +96,7 @@ class AlertEmailSource:
         "Reads alert emails you subscribe to (Upwork, Fiverr, PeoplePerHour, Gumtree, …) from "
         "the mailbox folder set in ALERTS_IMAP_FOLDER."
     )
-    integration: ClassVar[str] = "imap"
+    integration: ClassVar[str] = "mailbox"
     default_enabled: ClassVar[bool] = True
     default_schedule_minutes: ClassVar[int] = 20
     constraints: ClassVar[str] = (

@@ -24,11 +24,13 @@ from app.services.dedup import PLATFORM_DOMAINS, normalize_domain
 
 logger = logging.getLogger(__name__)
 
+# Small and mid-sized towns: local trades there are far more likely to run dated sites
+# than the businesses ranking top in big cities.
 CITIES: dict[str, list[str]] = {
-    "GB": ["Leeds", "Manchester", "Birmingham", "Bristol", "Sheffield", "Nottingham",
-           "Liverpool", "Glasgow", "Cardiff", "Leicester"],
-    "US": ["Austin TX", "Denver CO", "Columbus OH", "Charlotte NC", "Tampa FL", "Portland OR",
-           "Nashville TN", "Kansas City MO", "Sacramento CA", "Raleigh NC"],
+    "GB": ["Wakefield", "Barnsley", "Rotherham", "Doncaster", "Huddersfield", "Halifax",
+           "Burnley", "Wigan", "Stoke-on-Trent", "Telford", "Grimsby", "Kidderminster"],
+    "US": ["Abilene TX", "Lubbock TX", "Joplin MO", "Dothan AL", "Muncie IN", "Casper WY",
+           "Erie PA", "Duluth MN", "Yakima WA", "Macon GA", "Pueblo CO", "Bangor ME"],
 }  # fmt: skip
 # Directories, marketplaces and aggregators are not a business's own website.
 NOT_A_BUSINESS_SITE = PLATFORM_DOMAINS | {
@@ -43,9 +45,12 @@ NOT_A_BUSINESS_SITE = PLATFORM_DOMAINS | {
 }  # fmt: skip
 
 
-def _business_name(html: str, title: str) -> str:
+def _business_name(html: str, title: str, domain: str) -> str:
     soup = BeautifulSoup(html or "", "lxml")
-    name = find_brand_name(soup) or title.split(" - ", maxsplit=1)[0].split(" | ", maxsplit=1)[0]
+    name = (
+        find_brand_name(soup, domain)
+        or title.split(" - ", maxsplit=1)[0].split(" | ", maxsplit=1)[0]
+    )
     return name.strip()[:200]
 
 
@@ -63,12 +68,19 @@ class LocalSitesSource:
         "Licensed search API, organic results only (no Maps/Places bulk lists, no scraping of "
         "result pages); one homepage fetch per business via the safe fetcher."
     )
-    default_config: ClassVar[dict[str, Any]] = {"queries_per_run": 1, "max_sites": 10}
+    default_config: ClassVar[dict[str, Any]] = {"queries_per_run": 1, "max_sites": 10, "pages": 2}
 
-    def queries(self, ctx: SourceContext) -> list[tuple[str, str]]:
+    def queries(self, ctx: SourceContext) -> list[tuple[str, str, int]]:
         trades = industry_keywords(ctx.runtime.active_industry)[:8]
         countries = [c for c in (ctx.runtime.target_countries or ["GB", "US"]) if c in CITIES]
-        return [(f"{t} {city}", c) for c in countries for city in CITIES[c] for t in trades]
+        pages = range(1, max(1, int(ctx.config.get("pages", 2))) + 1)
+        return [
+            (f"{t} {city}", c, page)
+            for page in pages
+            for c in countries
+            for city in CITIES[c]
+            for t in trades
+        ]
 
     async def fetch(self, ctx: SourceContext) -> list[RawLead]:
         queries = self.queries(ctx)
@@ -80,9 +92,15 @@ class LocalSitesSource:
         leads: list[RawLead] = []
         seen: set[str] = set()
         for i in range(per_run):
-            query, country = queries[(cursor + i) % len(queries)]
+            query, country, page = queries[(cursor + i) % len(queries)]
             results = await ctx.adapters.search.search(
-                ctx.session, query, agent="discovery", country=country, language="en", count=10
+                ctx.session,
+                query,
+                agent="discovery",
+                country=country,
+                language="en",
+                count=10,
+                page=page,
             )
             for r in results[: int(ctx.config.get("max_sites", 10))]:
                 domain = normalize_domain(r.url)
@@ -96,16 +114,16 @@ class LocalSitesSource:
                 seen.add(domain)
                 url = f"https://{domain}/"
                 try:
-                    page = await ctx.adapters.fetcher.get(url)
-                    health = classify_site(page.status_code, page.text, page.final_url)
-                    html, final_url = page.text, page.final_url
+                    resp = await ctx.adapters.fetcher.get(url)
+                    health = classify_site(resp.status_code, resp.text, resp.final_url)
+                    html, final_url = resp.text, resp.final_url
                 except RobotsDisallowedError:
                     continue  # the site opted out of crawling
                 except FetchError:
                     health, html, final_url = classify_site(None, None, None), "", url
                 if health.status in ("ok", "protected", "unreachable"):
                     continue  # healthy, bot-protected (unknown) or possibly our network
-                name = _business_name(html, r.title)
+                name = _business_name(html, r.title, domain)
                 if not name:
                     continue
                 leads.append(

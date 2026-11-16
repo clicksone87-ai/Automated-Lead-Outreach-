@@ -366,11 +366,15 @@ class RequirementsAgent:
         )
         author = (evidence.data or {}).get("author") if evidence else None
         handle = str(author or lead.source_item_id)[:100]
+        # Human-readable label: the author, else the page's site, else the title (the hashed
+        # item id stays only as the identity key below).
+        site = normalize_domain(lead.source_url) if lead.source_url else None
+        label = str(author or site or (lead.title or "")[:60] or handle)
         # A person on a platform: exact identity by (source, handle), never fuzzy-merged.
         match = await resolve_business(
             s,
             BusinessCandidate(
-                name=f"{handle} ({lead.source})",
+                name=f"{label} ({lead.source})",
                 registry_source=f"handle:{lead.source}",
                 registry_number=handle,
                 domain=website,

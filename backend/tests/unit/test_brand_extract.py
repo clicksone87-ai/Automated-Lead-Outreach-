@@ -123,3 +123,24 @@ def test_empty_page_is_safe() -> None:
     result = extract("<html></html>", BASE, [])
     assert result.colors == [] and result.fonts == [] and result.logo_candidates == []
     assert result.brand_name is None
+
+
+def test_brand_name_prefers_title_part_matching_the_domain() -> None:
+    html = "<html><head><title>Hub City Plumbing and Mechanical -  located in Lubbock, Texas</title></head></html>"
+    assert (
+        extract(html, "https://hubcityplumbing.com/", []).brand_name
+        == "Hub City Plumbing and Mechanical"
+    )
+    html2 = "<html><head><title>Emergency plumbers | Smith &amp; Sons</title></head></html>"
+    assert extract(html2, "https://smithandsons.co.uk/", []).brand_name == "Smith & Sons"
+
+
+def test_font_shorthand_keeps_multiword_family() -> None:
+    css = [
+        (
+            "s.css",
+            'p{font: italic 700 16px/1.4 "Helvetica Neue", Arial, sans-serif} h1{font:bold 2em Poppins}',
+        )
+    ]
+    families = {f["family"] for f in extract("<html></html>", BASE, css).fonts}
+    assert families == {"Helvetica Neue", "Poppins"}

@@ -35,6 +35,17 @@ RUN mkdir -p app && touch app/__init__.py \
 # (Playwright's bundled Node driver needs libatomic1, installed above.)
 RUN playwright install --with-deps chromium
 
+# pg_dump must match the server major version (PostgreSQL 16); Debian bookworm ships 15.
+# Debian's pg_wrapper picks the newest installed client, so `pg_dump` runs version 16.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates gnupg \
+ && install -d /usr/share/postgresql-common/pgdg \
+ && curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+ && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends postgresql-client-16 \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY . .
 RUN pip install --no-deps -e . \
  && useradd --create-home --uid 1000 appuser \

@@ -35,6 +35,7 @@ class SearchAdapter(Protocol):
         language: str | None = None,
         count: int = 20,
         freshness: str | None = None,
+        page: int = 1,
     ) -> list[SearchResult]: ...
 
 
@@ -57,6 +58,7 @@ class BraveSearch:
         language: str | None = None,
         count: int = 20,
         freshness: str | None = None,
+        page: int = 1,
     ) -> list[SearchResult]:
         rs = await runtime_settings.load(session)
         await budget.charge(
@@ -106,6 +108,7 @@ class MockSearch:
         language: str | None = None,
         count: int = 20,
         freshness: str | None = None,
+        page: int = 1,
     ) -> list[SearchResult]:
         seed = hashlib.sha1(query.encode(), usedforsecurity=False).hexdigest()[:6]
         return [
@@ -133,5 +136,6 @@ class DisabledSearch:
         language: str | None = None,
         count: int = 20,
         freshness: str | None = None,
+        page: int = 1,
     ) -> list[SearchResult]:
         raise AdapterUnavailableError("Brave Search", ("BRAVE_SEARCH_API_KEY",))

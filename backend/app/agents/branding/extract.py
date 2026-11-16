@@ -209,6 +209,19 @@ def _first_family(value: str) -> str | None:
     return None
 
 
+_FONT_SIZE = re.compile(
+    r"(?:^|\s)(?:\d*\.?\d+(?:px|pt|em|rem|%|vw|vh|ex|ch)|xx-small|x-small|small|medium|large|"
+    r"x-large|xx-large|smaller|larger)(?:\s*/\s*[\w.%-]+)?\s+(.+)$",
+    re.I,
+)
+
+
+def _shorthand_family(value: str) -> str:
+    """`font: italic 700 16px/1.4 "Helvetica Neue", Arial` → the family list after the size."""
+    m = _FONT_SIZE.search(value)
+    return m.group(1) if m else ""
+
+
 def extract_fonts(
     soup: BeautifulSoup, css_blocks: list[tuple[str, str]], base_url: str
 ) -> list[dict[str, Any]]:
@@ -243,7 +256,7 @@ def extract_fonts(
         for selector, prop, value in _iter_declarations(css):
             if prop not in ("font-family", "font"):
                 continue
-            fam = _first_family(value if prop == "font-family" else value.split(" ", 2)[-1])
+            fam = _first_family(value if prop == "font-family" else _shorthand_family(value))
             if not fam:
                 continue
             role = (
@@ -358,7 +371,23 @@ def find_social_profiles(soup: BeautifulSoup, base_url: str) -> list[dict[str, s
     return list(out.values())
 
 
-def find_brand_name(soup: BeautifulSoup) -> str | None:
+def _domain_overlap(candidate: str, label: str) -> float:
+    """Longest common substring of the compacted candidate and the domain label, as a share
+    of the label (hubcityplumbing vs "Hub City Plumbing and Mechanical" → 1.0)."""
+    a = re.sub(r"[^a-z0-9]", "", candidate.lower())
+    if not a or not label:
+        return 0.0
+    best = 0
+    for i in range(len(label)):
+        for j in range(i + best + 1, len(label) + 1):
+            if label[i:j] in a:
+                best = j - i
+            else:
+                break
+    return best / len(label)
+
+
+def find_brand_name(soup: BeautifulSoup, domain: str | None = None) -> str | None:
     site_name = soup.find("meta", property="og:site_name")
     if isinstance(site_name, Tag) and str(site_name.get("content", "")).strip():
         return str(site_name["content"]).strip()
@@ -377,10 +406,18 @@ def find_brand_name(soup: BeautifulSoup) -> str | None:
     title = soup.title.get_text(strip=True) if soup.title else ""
     if title:
         # "Home | Smith Plumbing" / "Smith Plumbing – Emergency plumbers"
-        parts = [p.strip() for p in re.split(r"\s[|–—-]\s", title) if p.strip()]
+        parts = [p.strip() for p in re.split(r"\s[|–—:-]\s", title) if p.strip()]
         parts = [p for p in parts if p.lower() not in ("home", "homepage", "welcome")]
-        if parts:
-            return min(parts, key=len) if len(parts) > 1 else parts[0]
+        if not parts:
+            return None
+        if len(parts) == 1:
+            return parts[0]
+        label = (domain or "").split(".")[0].replace("-", "")
+        if label:
+            scored = sorted(parts, key=lambda p: (-_domain_overlap(p, label), len(p)))
+            if _domain_overlap(scored[0], label) >= 0.5:
+                return scored[0]
+        return min(parts, key=len)
     return None
 
 
@@ -410,7 +447,9 @@ def extract(html: str, base_url: str, external_css: list[tuple[str, str]]) -> Br
     ] + external_css
     colors, neutrals = extract_colors(soup, css_blocks)
     return BrandExtraction(
-        brand_name=find_brand_name(soup),
+        brand_name=find_brand_name(
+            soup, (urlsplit(base_url).hostname or "").removeprefix("www.") or None
+        ),
         colors=[c.as_dict() for c in colors],
         neutrals=neutrals,
         fonts=extract_fonts(soup, css_blocks, base_url),

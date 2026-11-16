@@ -250,6 +250,14 @@ def test_apify_cost_from_ppe_events() -> None:
 
 @respx.mock
 async def test_apify_run_actor_caps_and_settles() -> None:
+    respx.get("https://api.apify.com/v2/users/me/limits").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {"current": {"monthlyUsageUsd": 0.2}, "limits": {"maxMonthlyUsageUsd": 5}}
+            },
+        )
+    )
     start = respx.post("https://api.apify.com/v2/acts/apify~facebook-search-scraper/runs").mock(
         return_value=httpx.Response(
             201,
@@ -371,3 +379,22 @@ async def test_mailpit_mailbox_reads_only_our_address() -> None:
     assert search.calls[0].request.url.params["query"] == "to:replies@test-agency.local is:unread"
     await box.mark_seen("INBOX", ["abc"])
     assert json.loads(mark.calls[0].request.content) == {"IDs": ["abc"], "Read": True}
+
+
+@respx.mock
+async def test_apify_refuses_to_run_when_account_usage_reached_cap() -> None:
+    respx.get("https://api.apify.com/v2/users/me/limits").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {"current": {"monthlyUsageUsd": 5.01}, "limits": {"maxMonthlyUsageUsd": 5}}
+            },
+        )
+    )
+    start = respx.post(url__regex=r".*/runs").mock(return_value=httpx.Response(201))
+    async with session_scope() as s:
+        with pytest.raises(FreeQuotaExceededError):
+            await ApifyClient("t").run_actor(
+                s, "apify/x", {}, source="social_x", max_items=1, max_charge_usd=0.01
+            )
+    assert not start.called
