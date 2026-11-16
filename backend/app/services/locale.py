@@ -186,7 +186,7 @@ _COUNTRY_WORDS = {
     "deutschland": "DE",
     "france": "FR",
     "spain": "ES",
-    "espaÃ±a": "ES",
+    "españa": "ES",
     "united states": "US",
     "usa": "US",
     "u.s.": "US",

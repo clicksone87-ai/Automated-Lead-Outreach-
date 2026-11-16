@@ -1,4 +1,5 @@
 import {
+  FileSearch,
   Gauge,
   LayoutDashboard,
   Radar,
@@ -29,6 +30,13 @@ export const NAV: NavGroup[] = [
         description: "Pipeline, agents, costs and deliverability" },
       { href: "/leads", label: "Leads", icon: Users, shortcut: "G L",
         description: "Every lead with its full history" },
+    ],
+  },
+  {
+    label: "Deliverables",
+    items: [
+      { href: "/audits", label: "Audits", icon: FileSearch, shortcut: "G A",
+        description: "Website & SEO audit reports with evidence" },
     ],
   },
   {

@@ -7,6 +7,7 @@ import pytest
 
 from app.adapters.fetcher import (
     BlockedURLError,
+    FetchError,
     ResponseTooLargeError,
     RobotsDisallowedError,
     SafeFetcher,
@@ -142,6 +143,30 @@ async def test_robots_5xx_means_disallow() -> None:
 
     with pytest.raises(RobotsDisallowedError):
         await _fetcher(httpx.MockTransport(handler)).get("https://example.com/")
+
+
+async def test_dns_failure_is_a_fetch_error() -> None:
+    import socket  # noqa: PLC0415
+
+    async def no_dns(host: str, port: int) -> list[str]:
+        raise socket.gaierror(11001, "getaddrinfo failed")
+
+    fetcher = SafeFetcher(UA, resolver=no_dns, min_interval_s=0)
+    with pytest.raises(FetchError):
+        await fetcher.get("https://does-not-exist.example.com/")
+    with pytest.raises(FetchError):
+        await fetcher.get("https://does-not-exist.example.com/", respect_robots=False)
+    await fetcher.aclose()
+
+
+async def test_unreachable_host_is_not_reported_as_robots_disallow() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused")
+
+    with pytest.raises(FetchError) as exc:
+        await _fetcher(httpx.MockTransport(handler)).get("https://down.example.com/")
+    assert not isinstance(exc.value, RobotsDisallowedError)
+    assert "unreachable" in str(exc.value)
 
 
 async def test_user_agent_sent_and_no_cookies() -> None:

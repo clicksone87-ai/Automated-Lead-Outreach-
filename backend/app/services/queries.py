@@ -45,6 +45,9 @@ from app.schemas import (
     ActivityOut,
     AgentRunOut,
     AgentStatus,
+    AuditDetail,
+    AuditPage,
+    AuditRow,
     BudgetOut,
     BusinessOut,
     ContactOut,
@@ -52,6 +55,7 @@ from app.schemas import (
     CostsOut,
     DeliverabilityOut,
     EvidenceOut,
+    EvidenceRef,
     IntegrationOut,
     LeadDetail,
     LeadPage,
@@ -428,9 +432,7 @@ async def lead_detail(session: AsyncSession, lead_id: uuid.UUID) -> LeadDetail |
         if lead.business_id
         else []
     )
-    audit = (
-        await session.execute(select(Audit).where(Audit.lead_id == lead_id))
-    ).scalar_one_or_none()
+    audit_detail = await audit_view(session, lead_id)
     logos = await all_(
         select(LogoConcept).where(LogoConcept.lead_id == lead_id).order_by(LogoConcept.variant)
     )
@@ -483,20 +485,7 @@ async def lead_detail(session: AsyncSession, lead_id: uuid.UUID) -> LeadDetail |
         evidence=[EvidenceOut.model_validate(e) for e in evidence],
         brief=brief.data if brief else None,
         contacts=[ContactOut.model_validate(c) for c in contacts],
-        audit=_dump(
-            audit,
-            "id",
-            "url",
-            "scores",
-            "findings",
-            "screenshots",
-            "competitor_comparison",
-            "before_after_summary",
-            "report_pdf_path",
-            "created_at",
-        )
-        if audit
-        else None,
+        audit=audit_detail.model_dump(mode="json") if audit_detail else None,
         logos=[
             _dump(
                 lg,
@@ -782,3 +771,91 @@ async def search(session: AsyncSession, q: str, limit: int = 8) -> list[SearchHi
         )
         for lead, name in rows
     ]
+
+
+SEVERITIES = ("critical", "high", "medium", "low")
+
+
+def _severity_counts(findings: list[dict[str, Any]]) -> dict[str, int]:
+    return {s: sum(1 for f in findings if f.get("severity") == s) for s in SEVERITIES}
+
+
+async def _evidence_refs(session: AsyncSession, ids: set[str]) -> dict[str, EvidenceRef]:
+    valid = []
+    for raw in ids:
+        try:
+            valid.append(uuid.UUID(raw))
+        except (ValueError, TypeError):
+            continue
+    if not valid:
+        return {}
+    rows = (await session.execute(select(Evidence).where(Evidence.id.in_(valid)))).scalars()
+    return {
+        str(e.id): EvidenceRef(id=str(e.id), kind=e.kind, url=e.url, file_path=e.file_path)
+        for e in rows
+    }
+
+
+async def audit_view(session: AsyncSession, lead_id: uuid.UUID) -> AuditDetail | None:
+    row = (
+        await session.execute(
+            select(Audit, Business.name)
+            .join(Lead, Lead.id == Audit.lead_id)
+            .outerjoin(Business, Lead.business_id == Business.id)
+            .where(Audit.lead_id == lead_id)
+        )
+    ).first()
+    if row is None:
+        return None
+    audit, name = row
+    findings = list(audit.findings or [])
+    shots = audit.screenshots or {}
+    ids = {f.get("evidence_id") for f in findings} | {shots.get("desktop"), shots.get("mobile")}
+    refs = await _evidence_refs(session, {i for i in ids if i})
+    return AuditDetail(
+        lead_id=audit.lead_id,
+        business_name=name,
+        url=audit.url,
+        scores=audit.scores or {},
+        findings=findings,
+        severity_counts=_severity_counts(findings),
+        competitor_comparison=list(audit.competitor_comparison or []),
+        before_after_summary=audit.before_after_summary,
+        report_pdf_path=audit.report_pdf_path,
+        desktop_path=refs[shots["desktop"]].file_path if shots.get("desktop") in refs else None,
+        mobile_path=refs[shots["mobile"]].file_path if shots.get("mobile") in refs else None,
+        evidence=refs,
+        created_at=audit.created_at,
+    )
+
+
+async def list_audits(session: AsyncSession, *, page: int = 1, page_size: int = 24) -> AuditPage:
+    total = (await session.execute(select(func.count()).select_from(Audit))).scalar_one()
+    rows = (
+        await session.execute(
+            select(Audit, Business.name)
+            .join(Lead, Lead.id == Audit.lead_id)
+            .outerjoin(Business, Lead.business_id == Business.id)
+            .order_by(Audit.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    ).all()
+    desktop_ids = {(a.screenshots or {}).get("desktop") for a, _ in rows}
+    refs = await _evidence_refs(session, {i for i in desktop_ids if i})
+    items = []
+    for audit, name in rows:
+        desktop = (audit.screenshots or {}).get("desktop")
+        items.append(
+            AuditRow(
+                lead_id=audit.lead_id,
+                business_name=name,
+                url=audit.url,
+                scores=audit.scores or {},
+                severity_counts=_severity_counts(list(audit.findings or [])),
+                desktop_path=refs[desktop].file_path if desktop in refs else None,
+                report_pdf_path=audit.report_pdf_path,
+                created_at=audit.created_at,
+            )
+        )
+    return AuditPage(items=items, total=int(total))

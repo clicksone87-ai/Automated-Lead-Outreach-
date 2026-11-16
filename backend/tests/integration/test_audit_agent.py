@@ -215,6 +215,28 @@ async def test_competitors_and_axe_injection(
         assert axe["severity"] == "medium"
 
 
+async def test_unreachable_site_is_a_critical_finding_with_evidence() -> None:
+    lead_id = await _lead(["contact_enrichment", "audit", "proposal"])
+    settings = _settings()
+    adapters = build_adapters(settings)
+
+    def down(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    adapters.fetcher = SafeFetcher(
+        "TestBot/1.0", transport=httpx.MockTransport(down), min_interval_s=0
+    )
+    async with session_scope() as s:
+        outcome = await runs.execute(AgentContext(s, adapters, settings), AuditAgent(), lead_id)
+    assert outcome.proceed and outcome.status == LeadStatus.AUDITED
+    async with session_scope() as s:
+        audit = (await s.execute(select(Audit).where(Audit.lead_id == lead_id))).scalar_one()
+        assert [f["check"] for f in audit.findings] == ["site_unreachable"]
+        ev = await s.get(Evidence, uuid.UUID(audit.findings[0]["evidence_id"]))
+        assert ev is not None and "ConnectError" in ev.data["error"]
+        assert (await s.execute(select(Business))).scalar_one().site_status == "unreachable"
+
+
 async def test_audit_skipped_when_brief_does_not_need_it() -> None:
     lead_id = await _lead(["contact_enrichment", "branding", "proposal"])
     outcome = await _run(lead_id)

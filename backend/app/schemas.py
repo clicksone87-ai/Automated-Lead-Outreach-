@@ -251,3 +251,42 @@ class SearchHit(BaseModel):
     title: str
     subtitle: str | None = None
     href: str
+
+
+class EvidenceRef(BaseModel):
+    id: str
+    kind: str
+    url: str | None
+    file_path: str | None
+
+
+class AuditRow(BaseModel):
+    lead_id: uuid.UUID
+    business_name: str | None
+    url: str
+    scores: dict[str, float | None]
+    severity_counts: dict[str, int]
+    desktop_path: str | None
+    report_pdf_path: str | None
+    created_at: datetime
+
+
+class AuditPage(BaseModel):
+    items: list[AuditRow]
+    total: int
+
+
+class AuditDetail(BaseModel):
+    lead_id: uuid.UUID
+    business_name: str | None
+    url: str
+    scores: dict[str, float | None]
+    findings: list[dict[str, Any]]
+    severity_counts: dict[str, int]
+    competitor_comparison: list[dict[str, Any]]
+    before_after_summary: str | None
+    report_pdf_path: str | None
+    desktop_path: str | None
+    mobile_path: str | None
+    evidence: dict[str, EvidenceRef]
+    created_at: datetime

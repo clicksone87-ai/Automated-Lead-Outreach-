@@ -15,6 +15,8 @@ export const qk = {
   costs: (days: number) => ["costs", days] as const,
   activity: ["activity"] as const,
   search: (q: string) => ["search", q] as const,
+  audits: (page: number) => ["audits", page] as const,
+  audit: (leadId: string) => ["audit", leadId] as const,
 };
 
 export interface LeadFilters {
@@ -95,6 +97,23 @@ export function useSearch(q: string) {
     queryFn: () => unwrap(api.GET("/api/search", { params: { query: { q } } })),
     enabled: q.trim().length >= 2,
     staleTime: 10_000,
+  });
+}
+
+export function useAudits(page = 1) {
+  return useQuery({
+    queryKey: qk.audits(page),
+    queryFn: () => unwrap(api.GET("/api/audits", { params: { query: { page, page_size: 24 } } })),
+    placeholderData: keepPreviousData,
+    ...LIVE,
+  });
+}
+
+export function useAudit(leadId: string) {
+  return useQuery({
+    queryKey: qk.audit(leadId),
+    queryFn: () => unwrap(api.GET("/api/audits/{lead_id}", { params: { path: { lead_id: leadId } } })),
+    retry: (count, err) => !(err instanceof Error && /not found/i.test(err.message)) && count < 1,
   });
 }
 

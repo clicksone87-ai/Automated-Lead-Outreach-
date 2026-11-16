@@ -28,6 +28,9 @@ export type AgentStatus = Schemas["AgentStatus"];
 export type Health = Schemas["HealthOut"];
 export type Costs = Schemas["CostsOut"];
 export type SearchHit = Schemas["SearchHit"];
+export type AuditRow = Schemas["AuditRow"];
+export type AuditPage = Schemas["AuditPage"];
+export type AuditDetail = Schemas["AuditDetail"];
 
 export class ApiError extends Error {
   constructor(

@@ -21,6 +21,8 @@ from app.db.session import session_scope
 from app.orchestrator.queue import enqueue_pipeline, enqueue_source
 from app.schemas import (
     ActivityOut,
+    AuditDetail,
+    AuditPage,
     CostsOut,
     HealthOut,
     IntegrationOut,
@@ -210,6 +212,23 @@ async def events(request: Request, after_id: int = 0) -> EventSourceResponse:
             await asyncio.sleep(2)
 
     return EventSourceResponse(stream(), ping=15)
+
+
+@router.get("/audits", response_model=AuditPage)
+async def audits(
+    session: SessionDep,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 24,
+) -> AuditPage:
+    return await queries.list_audits(session, page=page, page_size=page_size)
+
+
+@router.get("/audits/{lead_id}", response_model=AuditDetail)
+async def audit_detail(lead_id: uuid.UUID, session: SessionDep) -> AuditDetail:
+    detail = await queries.audit_view(session, lead_id)
+    if detail is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "audit not found")
+    return detail
 
 
 @router.get("/search", response_model=list[SearchHit])

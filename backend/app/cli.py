@@ -12,7 +12,7 @@ from sqlalchemy import select
 from app.adapters.registry import get_adapters
 from app.agents.discovery.runner import run_source
 from app.config import get_settings, log_missing_integrations
-from app.db.models import Source
+from app.db.models import Lead, LeadStatus, Source
 from app.db.session import session_scope
 from app.logging_setup import configure_logging
 from app.orchestrator import pipeline
@@ -22,6 +22,17 @@ from app.services import backup, seed
 async def _seed() -> dict[str, object]:
     async with session_scope() as session:
         return dict(await seed.seed(session, get_settings()))
+
+
+IN_PROGRESS = (
+    LeadStatus.DISCOVERED,
+    LeadStatus.QUALIFIED,
+    LeadStatus.CONTACT_FOUND,
+    LeadStatus.AUDITED,
+    LeadStatus.BRANDED,
+    LeadStatus.BUILT,
+    LeadStatus.QA_PASSED,
+)
 
 
 async def _run_cycle() -> dict[str, object]:
@@ -46,6 +57,21 @@ async def _run_cycle() -> dict[str, object]:
             "leads": len(result.lead_ids or []),
         }
         new_leads.extend(result.lead_ids or [])
+    # Resume every lead that is mid-pipeline (e.g. a step crashed or a key was missing);
+    # completed steps are skipped by the orchestrator, so this never repeats work.
+    async with session_scope() as session:
+        waiting = (
+            (
+                await session.execute(
+                    select(Lead.id)
+                    .where(Lead.status.in_([str(s) for s in IN_PROGRESS]))
+                    .order_by(Lead.created_at)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    new_leads = list(dict.fromkeys([*new_leads, *waiting]))
     for lead_id in new_leads:
         state = await pipeline.run_lead(lead_id, adapters)
         pipelines.append(

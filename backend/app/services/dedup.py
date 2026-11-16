@@ -1,4 +1,4 @@
-"""Duplicate matching â€” one business = one record across all sources.
+"""Duplicate matching — one business = one record across all sources.
 
 Match order (first hit wins):
   1. website domain (registrable domain, exact)

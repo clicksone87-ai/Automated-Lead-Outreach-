@@ -26,6 +26,7 @@ import { ago, countryName, dateTime, languageName, titleCase } from "@/lib/forma
 import { useLead, useRerunLead } from "@/lib/queries";
 import { AGENT_LABELS, TRIGGERS } from "@/lib/status";
 import { cn } from "@/lib/utils";
+import { AuditSummaryCard, BriefView } from "./brief-view";
 import { DemoBadge, IntentBar, LeadStatusPill, ServiceChips } from "./lead-bits";
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
@@ -195,9 +196,7 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
 
         <TabsContent value="brief" className="pt-4">
           {data.brief ? (
-            <pre className="scrollbar-thin overflow-x-auto rounded-xl border bg-surface-sunken p-4 font-mono text-xs leading-relaxed">
-              {JSON.stringify(data.brief, null, 2)}
-            </pre>
+            <BriefView brief={data.brief} />
           ) : (
             <NotYet icon={FileText} title="No brief yet" description="The Requirements agent writes a structured brief once it qualifies this lead." />
           )}
@@ -227,7 +226,7 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
           <Panel as="div">
             <PanelHeader title="Audit" />
             {data.audit ? (
-              <div className="p-4 text-sm">{Object.keys(data.audit.scores ?? {}).length} scores · {(data.audit.findings as unknown[]).length} findings</div>
+              <AuditSummaryCard audit={data.audit} leadId={lead.id} />
             ) : (
               <NotYet icon={Globe} title="No audit" description="Runs for qualified leads with a website and a verified contact." />
             )}

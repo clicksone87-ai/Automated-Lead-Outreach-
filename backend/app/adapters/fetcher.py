@@ -78,7 +78,10 @@ class _GuardedBackend(httpcore.AsyncNetworkBackend):
         local_address: str | None = None,
         socket_options: Iterable[Any] | None = None,
     ) -> httpcore.AsyncNetworkStream:
-        addresses = await self._resolver(host, port)
+        try:
+            addresses = await self._resolver(host, port)
+        except OSError as exc:  # DNS failure: surface as a normal transport error
+            raise httpcore.ConnectError(f"could not resolve {host}: {exc}") from exc
         if not addresses:
             raise BlockedURLError(f"could not resolve {host}")
         blocked = [a for a in addresses if is_blocked_ip(a)]
@@ -147,6 +150,7 @@ class _RobotsEntry:
     allow_all: bool
     disallow_all: bool
     fetched_at: float
+    unreachable: str | None = None  # set when the host itself could not be reached
 
 
 class SafeFetcher:
@@ -198,9 +202,17 @@ class SafeFetcher:
         for _ in range(self._max_redirects + 1):
             self.validate_url(current)
             if respect_robots and not await self.allowed_by_robots(current):
+                parts = urlsplit(current)
+                entry = self._robots.get(f"{parts.scheme}://{parts.netloc}")
+                if entry is not None and entry.unreachable:
+                    raise FetchError(f"{parts.netloc} unreachable: {entry.unreachable}")
                 raise RobotsDisallowedError(current)
             await self._throttle(current)
-            status, resp_headers, content = await self._raw_get(current, headers)
+            try:
+                status, resp_headers, content = await self._raw_get(current, headers)
+            except httpx.HTTPError as exc:
+                # Callers handle one exception family: FetchError.
+                raise FetchError(f"{type(exc).__name__}: {exc}") from exc
             if status in (301, 302, 303, 307, 308) and "location" in resp_headers:
                 nxt = urljoin(current, resp_headers["location"])
                 redirects.append(nxt)
@@ -278,6 +290,16 @@ class SafeFetcher:
         try:
             await self._throttle(origin)
             status, _, content = await self._raw_get(f"{origin}/robots.txt", None)
+        except (httpx.TransportError, BlockedURLError) as exc:
+            # Host down / refused / blocked: not a robots decision — the site is unreachable.
+            logger.info("robots.txt unreachable for %s (%s)", origin, exc)
+            return _RobotsEntry(
+                None,
+                allow_all=False,
+                disallow_all=True,
+                fetched_at=now,
+                unreachable=f"{type(exc).__name__}: {exc}",
+            )
         except (httpx.HTTPError, FetchError) as exc:
             logger.info("robots.txt unavailable for %s (%s): disallowing", origin, exc)
             return _RobotsEntry(None, allow_all=False, disallow_all=True, fetched_at=now)

@@ -1,4 +1,4 @@
-"""Agent 4 â€” Website Audit and SEO.
+"""Agent 4 — Website Audit and SEO.
 
 Runs only when the brief says so (lead has a site and needs redesign/SEO), after a contact
 route exists. Captures evidence first, derives findings from it, and refuses to store any
@@ -21,7 +21,7 @@ from playwright.async_api import Error as PlaywrightError
 from sqlalchemy import select
 
 from app.adapters.base import AdapterUnavailableError
-from app.adapters.fetcher import FetchError, FetchResult
+from app.adapters.fetcher import FetchError, FetchResult, RobotsDisallowedError
 from app.adapters.google import PageSpeedResult, parse_pagespeed
 from app.adapters.llm import LLMRequest
 from app.agents.audit import checks
@@ -150,9 +150,11 @@ class AuditAgent:
         # Static fetch through the safe fetcher (robots.txt respected, SSRF-guarded).
         try:
             page = await ctx.adapters.fetcher.get(url)
+        except RobotsDisallowedError:
+            # The site opted out of crawling: respect it, continue without an audit.
+            return AgentOutcome(True, None, "audit skipped: robots.txt disallows crawling")
         except FetchError as exc:
-            business.site_status, business.site_checked_at = "unreachable", datetime.now(UTC)
-            return AgentOutcome(False, None, f"site could not be fetched: {exc}")
+            return await self._unreachable(ctx, lead, business, url=url, exc=exc, keep=keep)
         await keep(
             "html",
             EvidenceKind.PAGE,
@@ -260,7 +262,66 @@ class AuditAgent:
             paid=True,
         )
 
-    # â”€â”€ evidence-gathering steps â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    async def _unreachable(
+        self,
+        ctx: AgentContext,
+        lead: Lead,
+        business: Business,
+        *,
+        url: str,
+        exc: Exception,
+        keep: Callable[..., Any],
+    ) -> AgentOutcome:
+        """A site that is down is itself the finding; the failed fetch is the evidence."""
+        checked_at = datetime.now(UTC)
+        evidence_id = await keep(
+            "fetch_error",
+            EvidenceKind.METRIC,
+            url=url,
+            data={
+                "error": f"{type(exc).__name__}: {exc}"[:500],
+                "checked_at": checked_at.isoformat(),
+            },
+        )
+        findings = bind_evidence(
+            [
+                checks.FindingDraft(
+                    "performance",
+                    "critical",
+                    "Website could not be reached",
+                    f"The site at {url} did not respond when checked on {checked_at:%d %b %Y}.",
+                    "fetch_error",
+                    {"url": url},
+                    "site_unreachable",
+                )
+            ],
+            {"fetch_error": evidence_id},
+        )
+        business.site_status, business.site_checked_at = "unreachable", checked_at
+        values: dict[str, Any] = {
+            "url": url,
+            "scores": {},
+            "findings": summarize_for_storage(findings),
+            "screenshots": {},
+            "competitor_comparison": [],
+            "before_after_summary": "Today: the website could not be reached. After the work: "
+            "a fast, reliable, mobile-first site.",
+            "report_pdf_path": None,
+        }
+        audit = (
+            await ctx.session.execute(select(Audit).where(Audit.lead_id == lead.id))
+        ).scalar_one_or_none()
+        if audit is None:
+            ctx.session.add(Audit(lead_id=lead.id, **values))
+        else:
+            for k, v in values.items():
+                setattr(audit, k, v)
+        await ctx.session.flush()
+        return AgentOutcome(
+            True, LeadStatus.AUDITED, f"site unreachable: {exc}"[:300], {"findings": 1}
+        )
+
+    # ── evidence-gathering steps ─────────────────────────────────────────
 
     async def _capture_with_evidence(self, url: str, keep: Callable[..., Any]) -> Capture | None:
         capture = await self._capture(url)
