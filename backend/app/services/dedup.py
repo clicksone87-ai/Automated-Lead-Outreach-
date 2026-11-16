@@ -182,6 +182,8 @@ class BusinessCandidate:
     phone: str | None = None
     email: str | None = None
     has_website: bool | None = None
+    #: False for identities that must match exactly (e.g. platform handles)
+    allow_fuzzy: bool = True
 
 
 @dataclass(slots=True)
@@ -230,7 +232,7 @@ async def find_match(session: AsyncSession, c: BusinessCandidate) -> tuple[Busin
             if hit:
                 return hit, "phone"
     norm = normalize_name(c.name)
-    if norm:
+    if norm and c.allow_fuzzy:
         sim = func.similarity(Business.normalized_name, norm)
         stmt = (
             select(Business, sim.label("sim"))
