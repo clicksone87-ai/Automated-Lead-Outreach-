@@ -1,4 +1,11 @@
-"""Per-lead agents. Importing this package registers them with the orchestrator."""
+"""Per-lead agents. Importing this package registers them with the orchestrator.
 
-from app.agents.contact_enrichment import agent as contact_enrichment  # noqa: F401
-from app.agents.requirements import agent as requirements  # noqa: F401
+Aliases are private on purpose: binding e.g. `audit` here would shadow the
+`app.agents.audit` subpackage attribute with its `agent` module.
+"""
+
+from app.agents.audit import agent as _audit_agent
+from app.agents.contact_enrichment import agent as _contact_agent
+from app.agents.requirements import agent as _requirements_agent
+
+REGISTERED_MODULES = (_requirements_agent, _contact_agent, _audit_agent)
