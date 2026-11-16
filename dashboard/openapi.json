@@ -1,1 +1,3158 @@
-{"openapi": "3.1.0", "info": {"title": "Leads System API", "version": "0.1.0"}, "paths": {"/api/health": {"get": {"summary": "Health", "operationId": "health_api_health_get", "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthOut"}}}}}}}, "/api/overview": {"get": {"summary": "Overview", "operationId": "overview_api_overview_get", "parameters": [{"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OverviewOut"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/leads": {"get": {"summary": "List Leads", "operationId": "list_leads_api_leads_get", "parameters": [{"name": "page", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "default": 1, "title": "Page"}}, {"name": "page_size", "in": "query", "required": false, "schema": {"type": "integer", "maximum": 200, "minimum": 1, "default": 50, "title": "Page Size"}}, {"name": "sort", "in": "query", "required": false, "schema": {"type": "string", "default": "-created_at", "title": "Sort"}}, {"name": "status", "in": "query", "required": false, "schema": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}], "title": "Status"}}, {"name": "stage", "in": "query", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Stage"}}, {"name": "source", "in": "query", "required": false, "schema": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}], "title": "Source"}}, {"name": "country", "in": "query", "required": false, "schema": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}], "title": "Country"}}, {"name": "language", "in": "query", "required": false, "schema": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}], "title": "Language"}}, {"name": "service", "in": "query", "required": false, "schema": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}], "title": "Service"}}, {"name": "trigger", "in": "query", "required": false, "schema": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}], "title": "Trigger"}}, {"name": "min_score", "in": "query", "required": false, "schema": {"anyOf": [{"type": "integer", "maximum": 100, "minimum": 0}, {"type": "null"}], "title": "Min Score"}}, {"name": "q", "in": "query", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Q"}}, {"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LeadPage"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/leads/{lead_id}": {"get": {"summary": "Lead Detail", "operationId": "lead_detail_api_leads__lead_id__get", "parameters": [{"name": "lead_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid", "title": "Lead Id"}}, {"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LeadDetail"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/leads/{lead_id}/rerun": {"post": {"summary": "Rerun Lead", "operationId": "rerun_lead_api_leads__lead_id__rerun_post", "parameters": [{"name": "lead_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid", "title": "Lead Id"}}, {"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "responses": {"202": {"description": "Successful Response", "content": {"application/json": {"schema": {"type": "object", "additionalProperties": {"type": "boolean"}, "title": "Response Rerun Lead Api Leads  Lead Id  Rerun Post"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/sources": {"get": {"summary": "List Sources", "operationId": "list_sources_api_sources_get", "parameters": [{"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/SourceOut"}, "title": "Response List Sources Api Sources Get"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/sources/{key}": {"patch": {"summary": "Patch Source", "operationId": "patch_source_api_sources__key__patch", "parameters": [{"name": "key", "in": "path", "required": true, "schema": {"type": "string", "title": "Key"}}, {"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SourcePatch"}}}}, "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/SourceOut"}, "title": "Response Patch Source Api Sources  Key  Patch"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/sources/{key}/run": {"post": {"summary": "Run Source Now", "operationId": "run_source_now_api_sources__key__run_post", "parameters": [{"name": "key", "in": "path", "required": true, "schema": {"type": "string", "title": "Key"}}, {"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "responses": {"202": {"description": "Successful Response", "content": {"application/json": {"schema": {"type": "object", "additionalProperties": {"type": "boolean"}, "title": "Response Run Source Now Api Sources  Key  Run Post"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/settings": {"get": {"summary": "Get Settings View", "operationId": "get_settings_view_api_settings_get", "parameters": [{"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SettingsOut"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}, "patch": {"summary": "Patch Settings", "operationId": "patch_settings_api_settings_patch", "parameters": [{"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SettingsPatch"}}}}, "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SettingsOut"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/integrations": {"get": {"summary": "Integrations", "operationId": "integrations_api_integrations_get", "parameters": [{"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/IntegrationOut"}, "title": "Response Integrations Api Integrations Get"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/costs": {"get": {"summary": "Costs", "operationId": "costs_api_costs_get", "parameters": [{"name": "days", "in": "query", "required": false, "schema": {"type": "integer", "maximum": 365, "minimum": 1, "default": 30, "title": "Days"}}, {"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CostsOut"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/activity": {"get": {"summary": "Activity", "operationId": "activity_api_activity_get", "parameters": [{"name": "after_id", "in": "query", "required": false, "schema": {"type": "integer", "default": 0, "title": "After Id"}}, {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer", "maximum": 500, "minimum": 1, "default": 100, "title": "Limit"}}, {"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/ActivityOut"}, "title": "Response Activity Api Activity Get"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/events": {"get": {"summary": "Events", "description": "Server-sent events: new activity rows, polled from the DB every 2 seconds.", "operationId": "events_api_events_get", "parameters": [{"name": "after_id", "in": "query", "required": false, "schema": {"type": "integer", "default": 0, "title": "After Id"}}, {"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/audits": {"get": {"summary": "Audits", "operationId": "audits_api_audits_get", "parameters": [{"name": "page", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "default": 1, "title": "Page"}}, {"name": "page_size", "in": "query", "required": false, "schema": {"type": "integer", "maximum": 100, "minimum": 1, "default": 24, "title": "Page Size"}}, {"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuditPage"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/audits/{lead_id}": {"get": {"summary": "Audit Detail", "operationId": "audit_detail_api_audits__lead_id__get", "parameters": [{"name": "lead_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid", "title": "Lead Id"}}, {"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuditDetail"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/search": {"get": {"summary": "Search", "operationId": "search_api_search_get", "parameters": [{"name": "q", "in": "query", "required": false, "schema": {"type": "string", "default": "", "title": "Q"}}, {"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/SearchHit"}, "title": "Response Search Api Search Get"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/api/files/{path}": {"get": {"summary": "Files", "description": "Serve stored artefacts (screenshots, PDFs, logos) to the dashboard.", "operationId": "files_api_files__path__get", "parameters": [{"name": "path", "in": "path", "required": true, "schema": {"type": "string", "title": "Path"}}, {"name": "authorization", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Authorization"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}}, "components": {"schemas": {"ActivityOut": {"properties": {"id": {"type": "integer", "title": "Id"}, "kind": {"type": "string", "title": "Kind"}, "agent": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Agent"}, "lead_id": {"anyOf": [{"type": "string", "format": "uuid"}, {"type": "null"}], "title": "Lead Id"}, "message": {"type": "string", "title": "Message"}, "data": {"additionalProperties": true, "type": "object", "title": "Data"}, "created_at": {"type": "string", "format": "date-time", "title": "Created At"}}, "type": "object", "required": ["id", "kind", "agent", "lead_id", "message", "data", "created_at"], "title": "ActivityOut"}, "AgentRunOut": {"properties": {"id": {"type": "string", "format": "uuid", "title": "Id"}, "agent": {"type": "string", "title": "Agent"}, "lead_id": {"anyOf": [{"type": "string", "format": "uuid"}, {"type": "null"}], "title": "Lead Id"}, "status": {"type": "string", "title": "Status"}, "attempts": {"type": "integer", "title": "Attempts"}, "error": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Error"}, "output": {"additionalProperties": true, "type": "object", "title": "Output"}, "started_at": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}], "title": "Started At"}, "finished_at": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}], "title": "Finished At"}, "cost_usd": {"type": "number", "title": "Cost Usd"}}, "type": "object", "required": ["id", "agent", "lead_id", "status", "attempts", "error", "output", "started_at", "finished_at", "cost_usd"], "title": "AgentRunOut"}, "AgentStatus": {"properties": {"agent": {"type": "string", "title": "Agent"}, "state": {"type": "string", "title": "State"}, "last_run_at": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}], "title": "Last Run At"}, "runs_24h": {"type": "integer", "title": "Runs 24H"}, "failures_24h": {"type": "integer", "title": "Failures 24H"}, "last_error": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Last Error"}, "cost_today_usd": {"type": "number", "title": "Cost Today Usd"}}, "type": "object", "required": ["agent", "state", "last_run_at", "runs_24h", "failures_24h", "last_error", "cost_today_usd"], "title": "AgentStatus"}, "AuditDetail": {"properties": {"lead_id": {"type": "string", "format": "uuid", "title": "Lead Id"}, "business_name": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Business Name"}, "url": {"type": "string", "title": "Url"}, "scores": {"additionalProperties": {"anyOf": [{"type": "number"}, {"type": "null"}]}, "type": "object", "title": "Scores"}, "findings": {"items": {"additionalProperties": true, "type": "object"}, "type": "array", "title": "Findings"}, "severity_counts": {"additionalProperties": {"type": "integer"}, "type": "object", "title": "Severity Counts"}, "competitor_comparison": {"items": {"additionalProperties": true, "type": "object"}, "type": "array", "title": "Competitor Comparison"}, "before_after_summary": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Before After Summary"}, "report_pdf_path": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Report Pdf Path"}, "desktop_path": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Desktop Path"}, "mobile_path": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Mobile Path"}, "evidence": {"additionalProperties": {"$ref": "#/components/schemas/EvidenceRef"}, "type": "object", "title": "Evidence"}, "created_at": {"type": "string", "format": "date-time", "title": "Created At"}}, "type": "object", "required": ["lead_id", "business_name", "url", "scores", "findings", "severity_counts", "competitor_comparison", "before_after_summary", "report_pdf_path", "desktop_path", "mobile_path", "evidence", "created_at"], "title": "AuditDetail"}, "AuditPage": {"properties": {"items": {"items": {"$ref": "#/components/schemas/AuditRow"}, "type": "array", "title": "Items"}, "total": {"type": "integer", "title": "Total"}}, "type": "object", "required": ["items", "total"], "title": "AuditPage"}, "AuditRow": {"properties": {"lead_id": {"type": "string", "format": "uuid", "title": "Lead Id"}, "business_name": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Business Name"}, "url": {"type": "string", "title": "Url"}, "scores": {"additionalProperties": {"anyOf": [{"type": "number"}, {"type": "null"}]}, "type": "object", "title": "Scores"}, "severity_counts": {"additionalProperties": {"type": "integer"}, "type": "object", "title": "Severity Counts"}, "desktop_path": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Desktop Path"}, "report_pdf_path": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Report Pdf Path"}, "created_at": {"type": "string", "format": "date-time", "title": "Created At"}}, "type": "object", "required": ["lead_id", "business_name", "url", "scores", "severity_counts", "desktop_path", "report_pdf_path", "created_at"], "title": "AuditRow"}, "BudgetOut": {"properties": {"spent_today": {"type": "number", "title": "Spent Today"}, "spent_month": {"type": "number", "title": "Spent Month"}, "daily_cap": {"type": "number", "title": "Daily Cap"}, "monthly_cap": {"type": "number", "title": "Monthly Cap"}, "paused": {"type": "boolean", "title": "Paused"}}, "type": "object", "required": ["spent_today", "spent_month", "daily_cap", "monthly_cap", "paused"], "title": "BudgetOut"}, "BusinessOut": {"properties": {"id": {"type": "string", "format": "uuid", "title": "Id"}, "name": {"type": "string", "title": "Name"}, "domain": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Domain"}, "country": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Country"}, "language": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Language"}, "timezone": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Timezone"}, "industry": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Industry"}, "address": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Address"}, "phone": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Phone"}, "has_website": {"anyOf": [{"type": "boolean"}, {"type": "null"}], "title": "Has Website"}, "status": {"type": "string", "title": "Status"}, "cooldown_until": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}], "title": "Cooldown Until"}, "registry_number": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Registry Number"}, "registry_source": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Registry Source"}}, "type": "object", "required": ["id", "name", "domain", "country", "language", "timezone", "industry", "address", "phone", "has_website", "status", "cooldown_until", "registry_number", "registry_source"], "title": "BusinessOut"}, "ContactOut": {"properties": {"id": {"type": "string", "format": "uuid", "title": "Id"}, "type": {"type": "string", "title": "Type"}, "value": {"type": "string", "title": "Value"}, "source_url": {"type": "string", "title": "Source Url"}, "verification_status": {"type": "string", "title": "Verification Status"}, "verified_at": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}], "title": "Verified At"}}, "type": "object", "required": ["id", "type", "value", "source_url", "verification_status", "verified_at"], "title": "ContactOut"}, "CostPoint": {"properties": {"day": {"type": "string", "title": "Day"}, "amount_usd": {"type": "number", "title": "Amount Usd"}}, "type": "object", "required": ["day", "amount_usd"], "title": "CostPoint"}, "CostsOut": {"properties": {"daily": {"items": {"$ref": "#/components/schemas/CostPoint"}, "type": "array", "title": "Daily"}, "by_provider": {"additionalProperties": {"type": "number"}, "type": "object", "title": "By Provider"}, "by_agent": {"additionalProperties": {"type": "number"}, "type": "object", "title": "By Agent"}, "budget": {"$ref": "#/components/schemas/BudgetOut"}}, "type": "object", "required": ["daily", "by_provider", "by_agent", "budget"], "title": "CostsOut"}, "DeliverabilityOut": {"properties": {"sent_30d": {"type": "integer", "title": "Sent 30D"}, "bounced_30d": {"type": "integer", "title": "Bounced 30D"}, "complained_30d": {"type": "integer", "title": "Complained 30D"}, "bounce_rate": {"type": "number", "title": "Bounce Rate"}, "complaint_rate": {"type": "number", "title": "Complaint Rate"}, "replies_7d": {"type": "integer", "title": "Replies 7D"}, "positive_replies_7d": {"type": "integer", "title": "Positive Replies 7D"}}, "type": "object", "required": ["sent_30d", "bounced_30d", "complained_30d", "bounce_rate", "complaint_rate", "replies_7d", "positive_replies_7d"], "title": "DeliverabilityOut"}, "EvidenceOut": {"properties": {"id": {"type": "string", "format": "uuid", "title": "Id"}, "kind": {"type": "string", "title": "Kind"}, "url": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Url"}, "file_path": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "File Path"}, "excerpt": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Excerpt"}, "data": {"additionalProperties": true, "type": "object", "title": "Data"}, "captured_at": {"type": "string", "format": "date-time", "title": "Captured At"}}, "type": "object", "required": ["id", "kind", "url", "file_path", "excerpt", "data", "captured_at"], "title": "EvidenceOut"}, "EvidenceRef": {"properties": {"id": {"type": "string", "title": "Id"}, "kind": {"type": "string", "title": "Kind"}, "url": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Url"}, "file_path": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "File Path"}}, "type": "object", "required": ["id", "kind", "url", "file_path"], "title": "EvidenceRef"}, "HTTPValidationError": {"properties": {"detail": {"items": {"$ref": "#/components/schemas/ValidationError"}, "type": "array", "title": "Detail"}}, "type": "object", "title": "HTTPValidationError"}, "HealthOut": {"properties": {"status": {"type": "string", "title": "Status"}, "database": {"type": "boolean", "title": "Database"}, "redis": {"type": "boolean", "title": "Redis"}, "app_mode": {"type": "string", "title": "App Mode"}, "demo_mode": {"type": "boolean", "title": "Demo Mode"}, "integrations_missing": {"type": "integer", "title": "Integrations Missing"}}, "type": "object", "required": ["status", "database", "redis", "app_mode", "demo_mode", "integrations_missing"], "title": "HealthOut"}, "IntegrationOut": {"properties": {"key": {"type": "string", "title": "Key"}, "label": {"type": "string", "title": "Label"}, "state": {"type": "string", "title": "State"}, "env_vars": {"items": {"type": "string"}, "type": "array", "title": "Env Vars"}, "paid": {"type": "boolean", "title": "Paid"}, "signup_url": {"type": "string", "title": "Signup Url"}, "mock_in_use": {"type": "boolean", "title": "Mock In Use", "default": false}}, "type": "object", "required": ["key", "label", "state", "env_vars", "paid", "signup_url"], "title": "IntegrationOut"}, "LeadDetail": {"properties": {"lead": {"$ref": "#/components/schemas/LeadRow"}, "raw_text": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Raw Text"}, "pipeline_state": {"additionalProperties": true, "type": "object", "title": "Pipeline State"}, "business": {"anyOf": [{"$ref": "#/components/schemas/BusinessOut"}, {"type": "null"}]}, "evidence": {"items": {"$ref": "#/components/schemas/EvidenceOut"}, "type": "array", "title": "Evidence"}, "brief": {"anyOf": [{"additionalProperties": true, "type": "object"}, {"type": "null"}], "title": "Brief"}, "contacts": {"items": {"$ref": "#/components/schemas/ContactOut"}, "type": "array", "title": "Contacts"}, "audit": {"anyOf": [{"additionalProperties": true, "type": "object"}, {"type": "null"}], "title": "Audit"}, "logos": {"items": {"additionalProperties": true, "type": "object"}, "type": "array", "title": "Logos"}, "preview": {"anyOf": [{"additionalProperties": true, "type": "object"}, {"type": "null"}], "title": "Preview"}, "proposals": {"items": {"additionalProperties": true, "type": "object"}, "type": "array", "title": "Proposals"}, "messages": {"items": {"additionalProperties": true, "type": "object"}, "type": "array", "title": "Messages"}, "replies": {"items": {"additionalProperties": true, "type": "object"}, "type": "array", "title": "Replies"}, "deal": {"anyOf": [{"additionalProperties": true, "type": "object"}, {"type": "null"}], "title": "Deal"}, "agent_runs": {"items": {"$ref": "#/components/schemas/AgentRunOut"}, "type": "array", "title": "Agent Runs"}, "policy_decisions": {"items": {"$ref": "#/components/schemas/PolicyDecisionOut"}, "type": "array", "title": "Policy Decisions"}, "activity": {"items": {"$ref": "#/components/schemas/ActivityOut"}, "type": "array", "title": "Activity"}}, "type": "object", "required": ["lead", "raw_text", "pipeline_state", "business", "evidence", "brief", "contacts", "audit", "logos", "preview", "proposals", "messages", "replies", "deal", "agent_runs", "policy_decisions", "activity"], "title": "LeadDetail"}, "LeadPage": {"properties": {"items": {"items": {"$ref": "#/components/schemas/LeadRow"}, "type": "array", "title": "Items"}, "total": {"type": "integer", "title": "Total"}, "page": {"type": "integer", "title": "Page"}, "page_size": {"type": "integer", "title": "Page Size"}}, "type": "object", "required": ["items", "total", "page", "page_size"], "title": "LeadPage"}, "LeadRow": {"properties": {"id": {"type": "string", "format": "uuid", "title": "Id"}, "title": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Title"}, "business_name": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Business Name"}, "source": {"type": "string", "title": "Source"}, "source_url": {"type": "string", "title": "Source Url"}, "trigger_type": {"type": "string", "title": "Trigger Type"}, "service_needed": {"items": {"type": "string"}, "type": "array", "title": "Service Needed"}, "intent_score": {"anyOf": [{"type": "integer"}, {"type": "null"}], "title": "Intent Score"}, "status": {"type": "string", "title": "Status"}, "status_reason": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Status Reason"}, "country": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Country"}, "language": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Language"}, "timezone": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Timezone"}, "is_demo": {"type": "boolean", "title": "Is Demo", "default": false}, "created_at": {"type": "string", "format": "date-time", "title": "Created At"}, "updated_at": {"type": "string", "format": "date-time", "title": "Updated At"}}, "type": "object", "required": ["id", "title", "source", "source_url", "trigger_type", "service_needed", "intent_score", "status", "status_reason", "country", "language", "timezone", "created_at", "updated_at"], "title": "LeadRow"}, "OverviewOut": {"properties": {"stages": {"items": {"$ref": "#/components/schemas/StageCount"}, "type": "array", "title": "Stages"}, "stopped": {"additionalProperties": {"type": "integer"}, "type": "object", "title": "Stopped"}, "agents": {"items": {"$ref": "#/components/schemas/AgentStatus"}, "type": "array", "title": "Agents"}, "budget": {"$ref": "#/components/schemas/BudgetOut"}, "deliverability": {"$ref": "#/components/schemas/DeliverabilityOut"}, "leads_today": {"type": "integer", "title": "Leads Today"}, "leads_7d": {"type": "integer", "title": "Leads 7D"}, "autonomy_stage": {"type": "integer", "title": "Autonomy Stage"}, "awaiting_approval": {"type": "integer", "title": "Awaiting Approval"}, "inbox_count": {"type": "integer", "title": "Inbox Count"}}, "type": "object", "required": ["stages", "stopped", "agents", "budget", "deliverability", "leads_today", "leads_7d", "autonomy_stage", "awaiting_approval", "inbox_count"], "title": "OverviewOut"}, "PolicyDecisionOut": {"properties": {"id": {"type": "integer", "title": "Id"}, "check": {"type": "string", "title": "Check"}, "action": {"type": "string", "title": "Action"}, "allowed": {"type": "boolean", "title": "Allowed"}, "reason": {"type": "string", "title": "Reason"}, "details": {"additionalProperties": true, "type": "object", "title": "Details"}, "created_at": {"type": "string", "format": "date-time", "title": "Created At"}}, "type": "object", "required": ["id", "check", "action", "allowed", "reason", "details", "created_at"], "title": "PolicyDecisionOut"}, "SearchHit": {"properties": {"kind": {"type": "string", "title": "Kind"}, "id": {"type": "string", "title": "Id"}, "title": {"type": "string", "title": "Title"}, "subtitle": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Subtitle"}, "href": {"type": "string", "title": "Href"}}, "type": "object", "required": ["kind", "id", "title", "href"], "title": "SearchHit"}, "SettingsOut": {"properties": {"runtime": {"additionalProperties": true, "type": "object", "title": "Runtime"}, "integrations": {"items": {"$ref": "#/components/schemas/IntegrationOut"}, "type": "array", "title": "Integrations"}, "country_rules": {"additionalProperties": true, "type": "object", "title": "Country Rules"}, "pricing": {"items": {"additionalProperties": true, "type": "object"}, "type": "array", "title": "Pricing"}, "sender_identity": {"additionalProperties": {"type": "string"}, "type": "object", "title": "Sender Identity"}, "app_mode": {"type": "string", "title": "App Mode"}, "demo_mode": {"type": "boolean", "title": "Demo Mode"}}, "type": "object", "required": ["runtime", "integrations", "country_rules", "pricing", "sender_identity", "app_mode", "demo_mode"], "title": "SettingsOut"}, "SettingsPatch": {"properties": {"changes": {"additionalProperties": true, "type": "object", "title": "Changes"}, "reason": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Reason"}}, "type": "object", "required": ["changes"], "title": "SettingsPatch"}, "SourceOut": {"properties": {"key": {"type": "string", "title": "Key"}, "label": {"type": "string", "title": "Label"}, "description": {"type": "string", "title": "Description"}, "constraints": {"type": "string", "title": "Constraints"}, "integration": {"anyOf": [{"$ref": "#/components/schemas/IntegrationOut"}, {"type": "null"}]}, "enabled": {"type": "boolean", "title": "Enabled"}, "schedule_minutes": {"type": "integer", "title": "Schedule Minutes"}, "config": {"additionalProperties": true, "type": "object", "title": "Config"}, "last_run_at": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}], "title": "Last Run At"}, "last_status": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Last Status"}, "last_error": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Last Error"}, "leads_found_total": {"type": "integer", "title": "Leads Found Total"}, "leads_7d": {"type": "integer", "title": "Leads 7D"}, "runs": {"items": {"additionalProperties": true, "type": "object"}, "type": "array", "title": "Runs"}}, "type": "object", "required": ["key", "label", "description", "constraints", "integration", "enabled", "schedule_minutes", "config", "last_run_at", "last_status", "last_error", "leads_found_total", "leads_7d", "runs"], "title": "SourceOut"}, "SourcePatch": {"properties": {"enabled": {"anyOf": [{"type": "boolean"}, {"type": "null"}], "title": "Enabled"}, "schedule_minutes": {"anyOf": [{"type": "integer", "maximum": 10080.0, "minimum": 15.0}, {"type": "null"}], "title": "Schedule Minutes"}, "config": {"anyOf": [{"additionalProperties": true, "type": "object"}, {"type": "null"}], "title": "Config"}}, "type": "object", "title": "SourcePatch"}, "StageCount": {"properties": {"key": {"type": "string", "title": "Key"}, "label": {"type": "string", "title": "Label"}, "current": {"type": "integer", "title": "Current"}, "reached": {"type": "integer", "title": "Reached"}}, "type": "object", "required": ["key", "label", "current", "reached"], "title": "StageCount"}, "ValidationError": {"properties": {"loc": {"items": {"anyOf": [{"type": "string"}, {"type": "integer"}]}, "type": "array", "title": "Location"}, "msg": {"type": "string", "title": "Message"}, "type": {"type": "string", "title": "Error Type"}, "input": {"title": "Input"}, "ctx": {"type": "object", "title": "Context"}}, "type": "object", "required": ["loc", "msg", "type"], "title": "ValidationError"}}}}
+{
+ "openapi": "3.1.0",
+ "info": {
+  "title": "Leads System API",
+  "version": "0.1.0"
+ },
+ "paths": {
+  "/api/health": {
+   "get": {
+    "summary": "Health",
+    "operationId": "health_api_health_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HealthOut"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/overview": {
+   "get": {
+    "summary": "Overview",
+    "operationId": "overview_api_overview_get",
+    "parameters": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/OverviewOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/leads": {
+   "get": {
+    "summary": "List Leads",
+    "operationId": "list_leads_api_leads_get",
+    "parameters": [
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "default": 1,
+       "title": "Page"
+      }
+     },
+     {
+      "name": "page_size",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 200,
+       "minimum": 1,
+       "default": 50,
+       "title": "Page Size"
+      }
+     },
+     {
+      "name": "sort",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "-created_at",
+       "title": "Sort"
+      }
+     },
+     {
+      "name": "status",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Status"
+      }
+     },
+     {
+      "name": "stage",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Stage"
+      }
+     },
+     {
+      "name": "source",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Source"
+      }
+     },
+     {
+      "name": "country",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Country"
+      }
+     },
+     {
+      "name": "language",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Language"
+      }
+     },
+     {
+      "name": "service",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Service"
+      }
+     },
+     {
+      "name": "trigger",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Trigger"
+      }
+     },
+     {
+      "name": "min_score",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer",
+         "maximum": 100,
+         "minimum": 0
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Min Score"
+      }
+     },
+     {
+      "name": "q",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Q"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LeadPage"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/leads/{lead_id}": {
+   "get": {
+    "summary": "Lead Detail",
+    "operationId": "lead_detail_api_leads__lead_id__get",
+    "parameters": [
+     {
+      "name": "lead_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Lead Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LeadDetail"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/leads/{lead_id}/rerun": {
+   "post": {
+    "summary": "Rerun Lead",
+    "operationId": "rerun_lead_api_leads__lead_id__rerun_post",
+    "parameters": [
+     {
+      "name": "lead_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Lead Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "202": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "boolean"
+         },
+         "title": "Response Rerun Lead Api Leads  Lead Id  Rerun Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/sources": {
+   "get": {
+    "summary": "List Sources",
+    "operationId": "list_sources_api_sources_get",
+    "parameters": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/SourceOut"
+         },
+         "title": "Response List Sources Api Sources Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/sources/{key}": {
+   "patch": {
+    "summary": "Patch Source",
+    "operationId": "patch_source_api_sources__key__patch",
+    "parameters": [
+     {
+      "name": "key",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Key"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SourcePatch"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/SourceOut"
+         },
+         "title": "Response Patch Source Api Sources  Key  Patch"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/sources/{key}/run": {
+   "post": {
+    "summary": "Run Source Now",
+    "operationId": "run_source_now_api_sources__key__run_post",
+    "parameters": [
+     {
+      "name": "key",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Key"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "202": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "boolean"
+         },
+         "title": "Response Run Source Now Api Sources  Key  Run Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/settings": {
+   "get": {
+    "summary": "Get Settings View",
+    "operationId": "get_settings_view_api_settings_get",
+    "parameters": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SettingsOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "patch": {
+    "summary": "Patch Settings",
+    "operationId": "patch_settings_api_settings_patch",
+    "parameters": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SettingsPatch"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SettingsOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/integrations": {
+   "get": {
+    "summary": "Integrations",
+    "operationId": "integrations_api_integrations_get",
+    "parameters": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/IntegrationOut"
+         },
+         "title": "Response Integrations Api Integrations Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/free-tier": {
+   "get": {
+    "summary": "Free Tier",
+    "operationId": "free_tier_api_free_tier_get",
+    "parameters": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/FreeTierOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/costs": {
+   "get": {
+    "summary": "Costs",
+    "operationId": "costs_api_costs_get",
+    "parameters": [
+     {
+      "name": "days",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 365,
+       "minimum": 1,
+       "default": 30,
+       "title": "Days"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CostsOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/activity": {
+   "get": {
+    "summary": "Activity",
+    "operationId": "activity_api_activity_get",
+    "parameters": [
+     {
+      "name": "after_id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 0,
+       "title": "After Id"
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 500,
+       "minimum": 1,
+       "default": 100,
+       "title": "Limit"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/ActivityOut"
+         },
+         "title": "Response Activity Api Activity Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/events": {
+   "get": {
+    "summary": "Events",
+    "description": "Server-sent events: new activity rows, polled from the DB every 2 seconds.",
+    "operationId": "events_api_events_get",
+    "parameters": [
+     {
+      "name": "after_id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 0,
+       "title": "After Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audits": {
+   "get": {
+    "summary": "Audits",
+    "operationId": "audits_api_audits_get",
+    "parameters": [
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "default": 1,
+       "title": "Page"
+      }
+     },
+     {
+      "name": "page_size",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 100,
+       "minimum": 1,
+       "default": 24,
+       "title": "Page Size"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AuditPage"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audits/{lead_id}": {
+   "get": {
+    "summary": "Audit Detail",
+    "operationId": "audit_detail_api_audits__lead_id__get",
+    "parameters": [
+     {
+      "name": "lead_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Lead Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AuditDetail"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/search": {
+   "get": {
+    "summary": "Search",
+    "operationId": "search_api_search_get",
+    "parameters": [
+     {
+      "name": "q",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "",
+       "title": "Q"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/SearchHit"
+         },
+         "title": "Response Search Api Search Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/files/{path}": {
+   "get": {
+    "summary": "Files",
+    "description": "Serve stored artefacts (screenshots, PDFs, logos) to the dashboard.",
+    "operationId": "files_api_files__path__get",
+    "parameters": [
+     {
+      "name": "path",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Path"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "components": {
+  "schemas": {
+   "ActivityOut": {
+    "properties": {
+     "id": {
+      "type": "integer",
+      "title": "Id"
+     },
+     "kind": {
+      "type": "string",
+      "title": "Kind"
+     },
+     "agent": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Agent"
+     },
+     "lead_id": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "uuid"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Lead Id"
+     },
+     "message": {
+      "type": "string",
+      "title": "Message"
+     },
+     "data": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Data"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "kind",
+     "agent",
+     "lead_id",
+     "message",
+     "data",
+     "created_at"
+    ],
+    "title": "ActivityOut"
+   },
+   "AgentRunOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Id"
+     },
+     "agent": {
+      "type": "string",
+      "title": "Agent"
+     },
+     "lead_id": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "uuid"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Lead Id"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "attempts": {
+      "type": "integer",
+      "title": "Attempts"
+     },
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "output": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Output"
+     },
+     "started_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Started At"
+     },
+     "finished_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Finished At"
+     },
+     "cost_usd": {
+      "type": "number",
+      "title": "Cost Usd"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "agent",
+     "lead_id",
+     "status",
+     "attempts",
+     "error",
+     "output",
+     "started_at",
+     "finished_at",
+     "cost_usd"
+    ],
+    "title": "AgentRunOut"
+   },
+   "AgentStatus": {
+    "properties": {
+     "agent": {
+      "type": "string",
+      "title": "Agent"
+     },
+     "state": {
+      "type": "string",
+      "title": "State"
+     },
+     "last_run_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Run At"
+     },
+     "runs_24h": {
+      "type": "integer",
+      "title": "Runs 24H"
+     },
+     "failures_24h": {
+      "type": "integer",
+      "title": "Failures 24H"
+     },
+     "last_error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Error"
+     },
+     "cost_today_usd": {
+      "type": "number",
+      "title": "Cost Today Usd"
+     }
+    },
+    "type": "object",
+    "required": [
+     "agent",
+     "state",
+     "last_run_at",
+     "runs_24h",
+     "failures_24h",
+     "last_error",
+     "cost_today_usd"
+    ],
+    "title": "AgentStatus"
+   },
+   "AuditDetail": {
+    "properties": {
+     "lead_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Lead Id"
+     },
+     "business_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Business Name"
+     },
+     "url": {
+      "type": "string",
+      "title": "Url"
+     },
+     "scores": {
+      "additionalProperties": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "type": "object",
+      "title": "Scores"
+     },
+     "findings": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "title": "Findings"
+     },
+     "severity_counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "type": "object",
+      "title": "Severity Counts"
+     },
+     "competitor_comparison": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "title": "Competitor Comparison"
+     },
+     "before_after_summary": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Before After Summary"
+     },
+     "report_pdf_path": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Report Pdf Path"
+     },
+     "desktop_path": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Desktop Path"
+     },
+     "mobile_path": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Mobile Path"
+     },
+     "evidence": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/EvidenceRef"
+      },
+      "type": "object",
+      "title": "Evidence"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "lead_id",
+     "business_name",
+     "url",
+     "scores",
+     "findings",
+     "severity_counts",
+     "competitor_comparison",
+     "before_after_summary",
+     "report_pdf_path",
+     "desktop_path",
+     "mobile_path",
+     "evidence",
+     "created_at"
+    ],
+    "title": "AuditDetail"
+   },
+   "AuditPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/AuditRow"
+      },
+      "type": "array",
+      "title": "Items"
+     },
+     "total": {
+      "type": "integer",
+      "title": "Total"
+     }
+    },
+    "type": "object",
+    "required": [
+     "items",
+     "total"
+    ],
+    "title": "AuditPage"
+   },
+   "AuditRow": {
+    "properties": {
+     "lead_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Lead Id"
+     },
+     "business_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Business Name"
+     },
+     "url": {
+      "type": "string",
+      "title": "Url"
+     },
+     "scores": {
+      "additionalProperties": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "type": "object",
+      "title": "Scores"
+     },
+     "severity_counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "type": "object",
+      "title": "Severity Counts"
+     },
+     "desktop_path": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Desktop Path"
+     },
+     "report_pdf_path": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Report Pdf Path"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "lead_id",
+     "business_name",
+     "url",
+     "scores",
+     "severity_counts",
+     "desktop_path",
+     "report_pdf_path",
+     "created_at"
+    ],
+    "title": "AuditRow"
+   },
+   "BudgetOut": {
+    "properties": {
+     "spent_today": {
+      "type": "number",
+      "title": "Spent Today"
+     },
+     "spent_month": {
+      "type": "number",
+      "title": "Spent Month"
+     },
+     "daily_cap": {
+      "type": "number",
+      "title": "Daily Cap"
+     },
+     "monthly_cap": {
+      "type": "number",
+      "title": "Monthly Cap"
+     },
+     "paused": {
+      "type": "boolean",
+      "title": "Paused"
+     }
+    },
+    "type": "object",
+    "required": [
+     "spent_today",
+     "spent_month",
+     "daily_cap",
+     "monthly_cap",
+     "paused"
+    ],
+    "title": "BudgetOut"
+   },
+   "BusinessOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Id"
+     },
+     "name": {
+      "type": "string",
+      "title": "Name"
+     },
+     "domain": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Domain"
+     },
+     "country": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Country"
+     },
+     "language": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Language"
+     },
+     "timezone": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Timezone"
+     },
+     "industry": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Industry"
+     },
+     "address": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Address"
+     },
+     "phone": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Phone"
+     },
+     "has_website": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Has Website"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "cooldown_until": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cooldown Until"
+     },
+     "registry_number": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Registry Number"
+     },
+     "registry_source": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Registry Source"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "name",
+     "domain",
+     "country",
+     "language",
+     "timezone",
+     "industry",
+     "address",
+     "phone",
+     "has_website",
+     "status",
+     "cooldown_until",
+     "registry_number",
+     "registry_source"
+    ],
+    "title": "BusinessOut"
+   },
+   "ContactOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Id"
+     },
+     "type": {
+      "type": "string",
+      "title": "Type"
+     },
+     "value": {
+      "type": "string",
+      "title": "Value"
+     },
+     "source_url": {
+      "type": "string",
+      "title": "Source Url"
+     },
+     "verification_status": {
+      "type": "string",
+      "title": "Verification Status"
+     },
+     "verified_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Verified At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "type",
+     "value",
+     "source_url",
+     "verification_status",
+     "verified_at"
+    ],
+    "title": "ContactOut"
+   },
+   "CostPoint": {
+    "properties": {
+     "day": {
+      "type": "string",
+      "title": "Day"
+     },
+     "amount_usd": {
+      "type": "number",
+      "title": "Amount Usd"
+     }
+    },
+    "type": "object",
+    "required": [
+     "day",
+     "amount_usd"
+    ],
+    "title": "CostPoint"
+   },
+   "CostsOut": {
+    "properties": {
+     "daily": {
+      "items": {
+       "$ref": "#/components/schemas/CostPoint"
+      },
+      "type": "array",
+      "title": "Daily"
+     },
+     "by_provider": {
+      "additionalProperties": {
+       "type": "number"
+      },
+      "type": "object",
+      "title": "By Provider"
+     },
+     "by_agent": {
+      "additionalProperties": {
+       "type": "number"
+      },
+      "type": "object",
+      "title": "By Agent"
+     },
+     "budget": {
+      "$ref": "#/components/schemas/BudgetOut"
+     }
+    },
+    "type": "object",
+    "required": [
+     "daily",
+     "by_provider",
+     "by_agent",
+     "budget"
+    ],
+    "title": "CostsOut"
+   },
+   "DeliverabilityOut": {
+    "properties": {
+     "sent_30d": {
+      "type": "integer",
+      "title": "Sent 30D"
+     },
+     "bounced_30d": {
+      "type": "integer",
+      "title": "Bounced 30D"
+     },
+     "complained_30d": {
+      "type": "integer",
+      "title": "Complained 30D"
+     },
+     "bounce_rate": {
+      "type": "number",
+      "title": "Bounce Rate"
+     },
+     "complaint_rate": {
+      "type": "number",
+      "title": "Complaint Rate"
+     },
+     "replies_7d": {
+      "type": "integer",
+      "title": "Replies 7D"
+     },
+     "positive_replies_7d": {
+      "type": "integer",
+      "title": "Positive Replies 7D"
+     }
+    },
+    "type": "object",
+    "required": [
+     "sent_30d",
+     "bounced_30d",
+     "complained_30d",
+     "bounce_rate",
+     "complaint_rate",
+     "replies_7d",
+     "positive_replies_7d"
+    ],
+    "title": "DeliverabilityOut"
+   },
+   "EvidenceOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Id"
+     },
+     "kind": {
+      "type": "string",
+      "title": "Kind"
+     },
+     "url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Url"
+     },
+     "file_path": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "File Path"
+     },
+     "excerpt": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Excerpt"
+     },
+     "data": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Data"
+     },
+     "captured_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Captured At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "kind",
+     "url",
+     "file_path",
+     "excerpt",
+     "data",
+     "captured_at"
+    ],
+    "title": "EvidenceOut"
+   },
+   "EvidenceRef": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "kind": {
+      "type": "string",
+      "title": "Kind"
+     },
+     "url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Url"
+     },
+     "file_path": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "File Path"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "kind",
+     "url",
+     "file_path"
+    ],
+    "title": "EvidenceRef"
+   },
+   "FreeTierOut": {
+    "properties": {
+     "app_tier": {
+      "type": "string",
+      "title": "App Tier"
+     },
+     "testing_mode": {
+      "type": "boolean",
+      "title": "Testing Mode"
+     },
+     "quotas": {
+      "items": {
+       "$ref": "#/components/schemas/QuotaOut"
+      },
+      "type": "array",
+      "title": "Quotas"
+     },
+     "serper_credits_live": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Serper Credits Live"
+     },
+     "apify_used_usd_live": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Apify Used Usd Live"
+     },
+     "apify_limit_usd_live": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Apify Limit Usd Live"
+     },
+     "apify_cycle_end": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Apify Cycle End"
+     },
+     "mailpit_messages": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Mailpit Messages"
+     },
+     "mailpit_url": {
+      "type": "string",
+      "title": "Mailpit Url",
+      "default": "http://localhost:8025"
+     }
+    },
+    "type": "object",
+    "required": [
+     "app_tier",
+     "testing_mode",
+     "quotas"
+    ],
+    "title": "FreeTierOut"
+   },
+   "HTTPValidationError": {
+    "properties": {
+     "detail": {
+      "items": {
+       "$ref": "#/components/schemas/ValidationError"
+      },
+      "type": "array",
+      "title": "Detail"
+     }
+    },
+    "type": "object",
+    "title": "HTTPValidationError"
+   },
+   "HealthOut": {
+    "properties": {
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "database": {
+      "type": "boolean",
+      "title": "Database"
+     },
+     "redis": {
+      "type": "boolean",
+      "title": "Redis"
+     },
+     "app_mode": {
+      "type": "string",
+      "title": "App Mode"
+     },
+     "app_tier": {
+      "type": "string",
+      "title": "App Tier",
+      "default": "free"
+     },
+     "testing_mode": {
+      "type": "boolean",
+      "title": "Testing Mode",
+      "default": true
+     },
+     "demo_mode": {
+      "type": "boolean",
+      "title": "Demo Mode"
+     },
+     "integrations_missing": {
+      "type": "integer",
+      "title": "Integrations Missing"
+     }
+    },
+    "type": "object",
+    "required": [
+     "status",
+     "database",
+     "redis",
+     "app_mode",
+     "demo_mode",
+     "integrations_missing"
+    ],
+    "title": "HealthOut"
+   },
+   "IntegrationOut": {
+    "properties": {
+     "key": {
+      "type": "string",
+      "title": "Key"
+     },
+     "label": {
+      "type": "string",
+      "title": "Label"
+     },
+     "state": {
+      "type": "string",
+      "title": "State"
+     },
+     "env_vars": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Env Vars"
+     },
+     "paid": {
+      "type": "boolean",
+      "title": "Paid"
+     },
+     "signup_url": {
+      "type": "string",
+      "title": "Signup Url"
+     },
+     "note": {
+      "type": "string",
+      "title": "Note",
+      "default": ""
+     },
+     "mock_in_use": {
+      "type": "boolean",
+      "title": "Mock In Use",
+      "default": false
+     }
+    },
+    "type": "object",
+    "required": [
+     "key",
+     "label",
+     "state",
+     "env_vars",
+     "paid",
+     "signup_url"
+    ],
+    "title": "IntegrationOut"
+   },
+   "LeadDetail": {
+    "properties": {
+     "lead": {
+      "$ref": "#/components/schemas/LeadRow"
+     },
+     "raw_text": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Raw Text"
+     },
+     "pipeline_state": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Pipeline State"
+     },
+     "business": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/BusinessOut"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "evidence": {
+      "items": {
+       "$ref": "#/components/schemas/EvidenceOut"
+      },
+      "type": "array",
+      "title": "Evidence"
+     },
+     "brief": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Brief"
+     },
+     "contacts": {
+      "items": {
+       "$ref": "#/components/schemas/ContactOut"
+      },
+      "type": "array",
+      "title": "Contacts"
+     },
+     "audit": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Audit"
+     },
+     "logos": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "title": "Logos"
+     },
+     "preview": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Preview"
+     },
+     "proposals": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "title": "Proposals"
+     },
+     "messages": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "title": "Messages"
+     },
+     "replies": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "title": "Replies"
+     },
+     "deal": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Deal"
+     },
+     "agent_runs": {
+      "items": {
+       "$ref": "#/components/schemas/AgentRunOut"
+      },
+      "type": "array",
+      "title": "Agent Runs"
+     },
+     "policy_decisions": {
+      "items": {
+       "$ref": "#/components/schemas/PolicyDecisionOut"
+      },
+      "type": "array",
+      "title": "Policy Decisions"
+     },
+     "activity": {
+      "items": {
+       "$ref": "#/components/schemas/ActivityOut"
+      },
+      "type": "array",
+      "title": "Activity"
+     }
+    },
+    "type": "object",
+    "required": [
+     "lead",
+     "raw_text",
+     "pipeline_state",
+     "business",
+     "evidence",
+     "brief",
+     "contacts",
+     "audit",
+     "logos",
+     "preview",
+     "proposals",
+     "messages",
+     "replies",
+     "deal",
+     "agent_runs",
+     "policy_decisions",
+     "activity"
+    ],
+    "title": "LeadDetail"
+   },
+   "LeadPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/LeadRow"
+      },
+      "type": "array",
+      "title": "Items"
+     },
+     "total": {
+      "type": "integer",
+      "title": "Total"
+     },
+     "page": {
+      "type": "integer",
+      "title": "Page"
+     },
+     "page_size": {
+      "type": "integer",
+      "title": "Page Size"
+     }
+    },
+    "type": "object",
+    "required": [
+     "items",
+     "total",
+     "page",
+     "page_size"
+    ],
+    "title": "LeadPage"
+   },
+   "LeadRow": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Id"
+     },
+     "title": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Title"
+     },
+     "business_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Business Name"
+     },
+     "source": {
+      "type": "string",
+      "title": "Source"
+     },
+     "source_url": {
+      "type": "string",
+      "title": "Source Url"
+     },
+     "trigger_type": {
+      "type": "string",
+      "title": "Trigger Type"
+     },
+     "service_needed": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Service Needed"
+     },
+     "intent_score": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Intent Score"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "status_reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Status Reason"
+     },
+     "country": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Country"
+     },
+     "language": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Language"
+     },
+     "timezone": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Timezone"
+     },
+     "is_demo": {
+      "type": "boolean",
+      "title": "Is Demo",
+      "default": false
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     },
+     "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Updated At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "title",
+     "source",
+     "source_url",
+     "trigger_type",
+     "service_needed",
+     "intent_score",
+     "status",
+     "status_reason",
+     "country",
+     "language",
+     "timezone",
+     "created_at",
+     "updated_at"
+    ],
+    "title": "LeadRow"
+   },
+   "OverviewOut": {
+    "properties": {
+     "stages": {
+      "items": {
+       "$ref": "#/components/schemas/StageCount"
+      },
+      "type": "array",
+      "title": "Stages"
+     },
+     "stopped": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "type": "object",
+      "title": "Stopped"
+     },
+     "agents": {
+      "items": {
+       "$ref": "#/components/schemas/AgentStatus"
+      },
+      "type": "array",
+      "title": "Agents"
+     },
+     "budget": {
+      "$ref": "#/components/schemas/BudgetOut"
+     },
+     "deliverability": {
+      "$ref": "#/components/schemas/DeliverabilityOut"
+     },
+     "leads_today": {
+      "type": "integer",
+      "title": "Leads Today"
+     },
+     "leads_7d": {
+      "type": "integer",
+      "title": "Leads 7D"
+     },
+     "autonomy_stage": {
+      "type": "integer",
+      "title": "Autonomy Stage"
+     },
+     "awaiting_approval": {
+      "type": "integer",
+      "title": "Awaiting Approval"
+     },
+     "inbox_count": {
+      "type": "integer",
+      "title": "Inbox Count"
+     }
+    },
+    "type": "object",
+    "required": [
+     "stages",
+     "stopped",
+     "agents",
+     "budget",
+     "deliverability",
+     "leads_today",
+     "leads_7d",
+     "autonomy_stage",
+     "awaiting_approval",
+     "inbox_count"
+    ],
+    "title": "OverviewOut"
+   },
+   "PolicyDecisionOut": {
+    "properties": {
+     "id": {
+      "type": "integer",
+      "title": "Id"
+     },
+     "check": {
+      "type": "string",
+      "title": "Check"
+     },
+     "action": {
+      "type": "string",
+      "title": "Action"
+     },
+     "allowed": {
+      "type": "boolean",
+      "title": "Allowed"
+     },
+     "reason": {
+      "type": "string",
+      "title": "Reason"
+     },
+     "details": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Details"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "check",
+     "action",
+     "allowed",
+     "reason",
+     "details",
+     "created_at"
+    ],
+    "title": "PolicyDecisionOut"
+   },
+   "QuotaOut": {
+    "properties": {
+     "scope": {
+      "type": "string",
+      "title": "Scope"
+     },
+     "provider": {
+      "type": "string",
+      "title": "Provider"
+     },
+     "period": {
+      "type": "string",
+      "title": "Period"
+     },
+     "unit": {
+      "type": "string",
+      "title": "Unit"
+     },
+     "cap": {
+      "type": "number",
+      "title": "Cap"
+     },
+     "used": {
+      "type": "number",
+      "title": "Used"
+     },
+     "remaining": {
+      "type": "number",
+      "title": "Remaining"
+     }
+    },
+    "type": "object",
+    "required": [
+     "scope",
+     "provider",
+     "period",
+     "unit",
+     "cap",
+     "used",
+     "remaining"
+    ],
+    "title": "QuotaOut"
+   },
+   "SearchHit": {
+    "properties": {
+     "kind": {
+      "type": "string",
+      "title": "Kind"
+     },
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "title": {
+      "type": "string",
+      "title": "Title"
+     },
+     "subtitle": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Subtitle"
+     },
+     "href": {
+      "type": "string",
+      "title": "Href"
+     }
+    },
+    "type": "object",
+    "required": [
+     "kind",
+     "id",
+     "title",
+     "href"
+    ],
+    "title": "SearchHit"
+   },
+   "SettingsOut": {
+    "properties": {
+     "runtime": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Runtime"
+     },
+     "integrations": {
+      "items": {
+       "$ref": "#/components/schemas/IntegrationOut"
+      },
+      "type": "array",
+      "title": "Integrations"
+     },
+     "country_rules": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Country Rules"
+     },
+     "pricing": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "title": "Pricing"
+     },
+     "sender_identity": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "type": "object",
+      "title": "Sender Identity"
+     },
+     "app_mode": {
+      "type": "string",
+      "title": "App Mode"
+     },
+     "demo_mode": {
+      "type": "boolean",
+      "title": "Demo Mode"
+     }
+    },
+    "type": "object",
+    "required": [
+     "runtime",
+     "integrations",
+     "country_rules",
+     "pricing",
+     "sender_identity",
+     "app_mode",
+     "demo_mode"
+    ],
+    "title": "SettingsOut"
+   },
+   "SettingsPatch": {
+    "properties": {
+     "changes": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Changes"
+     },
+     "reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reason"
+     }
+    },
+    "type": "object",
+    "required": [
+     "changes"
+    ],
+    "title": "SettingsPatch"
+   },
+   "SourceOut": {
+    "properties": {
+     "key": {
+      "type": "string",
+      "title": "Key"
+     },
+     "label": {
+      "type": "string",
+      "title": "Label"
+     },
+     "description": {
+      "type": "string",
+      "title": "Description"
+     },
+     "constraints": {
+      "type": "string",
+      "title": "Constraints"
+     },
+     "integration": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/IntegrationOut"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "enabled": {
+      "type": "boolean",
+      "title": "Enabled"
+     },
+     "schedule_minutes": {
+      "type": "integer",
+      "title": "Schedule Minutes"
+     },
+     "config": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Config"
+     },
+     "last_run_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Run At"
+     },
+     "last_status": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Status"
+     },
+     "last_error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Error"
+     },
+     "leads_found_total": {
+      "type": "integer",
+      "title": "Leads Found Total"
+     },
+     "leads_7d": {
+      "type": "integer",
+      "title": "Leads 7D"
+     },
+     "runs": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "title": "Runs"
+     }
+    },
+    "type": "object",
+    "required": [
+     "key",
+     "label",
+     "description",
+     "constraints",
+     "integration",
+     "enabled",
+     "schedule_minutes",
+     "config",
+     "last_run_at",
+     "last_status",
+     "last_error",
+     "leads_found_total",
+     "leads_7d",
+     "runs"
+    ],
+    "title": "SourceOut"
+   },
+   "SourcePatch": {
+    "properties": {
+     "enabled": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Enabled"
+     },
+     "schedule_minutes": {
+      "anyOf": [
+       {
+        "type": "integer",
+        "maximum": 10080.0,
+        "minimum": 15.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Schedule Minutes"
+     },
+     "config": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Config"
+     }
+    },
+    "type": "object",
+    "title": "SourcePatch"
+   },
+   "StageCount": {
+    "properties": {
+     "key": {
+      "type": "string",
+      "title": "Key"
+     },
+     "label": {
+      "type": "string",
+      "title": "Label"
+     },
+     "current": {
+      "type": "integer",
+      "title": "Current"
+     },
+     "reached": {
+      "type": "integer",
+      "title": "Reached"
+     }
+    },
+    "type": "object",
+    "required": [
+     "key",
+     "label",
+     "current",
+     "reached"
+    ],
+    "title": "StageCount"
+   },
+   "ValidationError": {
+    "properties": {
+     "loc": {
+      "items": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "integer"
+        }
+       ]
+      },
+      "type": "array",
+      "title": "Location"
+     },
+     "msg": {
+      "type": "string",
+      "title": "Message"
+     },
+     "type": {
+      "type": "string",
+      "title": "Error Type"
+     },
+     "input": {
+      "title": "Input"
+     },
+     "ctx": {
+      "type": "object",
+      "title": "Context"
+     }
+    },
+    "type": "object",
+    "required": [
+     "loc",
+     "msg",
+     "type"
+    ],
+    "title": "ValidationError"
+   }
+  }
+ }
+}

@@ -184,7 +184,7 @@ function LeadsView() {
           empty={
             <EmptyState
               icon={Users}
-              title={activeFilters.length ? "No leads match these filters" : "No leads yet"}
+              title={activeFilters.length ? "No leads match these filters" : "No data yet"}
               description={
                 activeFilters.length
                   ? "Try removing a filter."

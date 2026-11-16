@@ -17,6 +17,7 @@ export const qk = {
   search: (q: string) => ["search", q] as const,
   audits: (page: number) => ["audits", page] as const,
   audit: (leadId: string) => ["audit", leadId] as const,
+  freeTier: ["free-tier"] as const,
 };
 
 export interface LeadFilters {
@@ -69,6 +70,10 @@ export function useLead(id: string | null) {
 
 export function useSources() {
   return useQuery({ queryKey: qk.sources, queryFn: () => unwrap(api.GET("/api/sources")), ...LIVE });
+}
+
+export function useFreeTier() {
+  return useQuery({ queryKey: qk.freeTier, queryFn: () => unwrap(api.GET("/api/free-tier")), refetchInterval: 30_000 });
 }
 
 export function useSettings() {

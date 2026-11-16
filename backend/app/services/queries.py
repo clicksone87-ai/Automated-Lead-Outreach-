@@ -56,12 +56,14 @@ from app.schemas import (
     DeliverabilityOut,
     EvidenceOut,
     EvidenceRef,
+    FreeTierOut,
     IntegrationOut,
     LeadDetail,
     LeadPage,
     LeadRow,
     OverviewOut,
     PolicyDecisionOut,
+    QuotaOut,
     SearchHit,
     SettingsOut,
     SourceOut,
@@ -108,6 +110,7 @@ def integrations_out(settings: Settings, adapters: Adapters) -> list[Integration
             env_vars=list(s.env_vars),
             paid=s.paid,
             signup_url=s.signup_url,
+            note=s.note,
             mock_in_use=s.key in adapters.mocks_in_use,
         )
         for s in integration_status(settings).values()
@@ -593,8 +596,6 @@ async def sources(session: AsyncSession, settings: Settings, adapters: Adapters)
     )
     out = []
     for key, src in SOURCES.items():
-        if key == "mock_demo" and not settings.demo_mode:
-            continue
         row = rows.get(key)
         runs = (
             (
@@ -685,7 +686,45 @@ async def settings_view(
             "sending_domain": settings.sending_domain,
         },
         app_mode=str(settings.app_mode),
-        demo_mode=settings.demo_mode,
+        demo_mode=settings.mocks_allowed,
+    )
+
+
+_LIVE_CACHE: dict[str, tuple[float, Any]] = {}
+
+
+async def _cached(key: str, ttl: float, fn: Any) -> Any:
+    import time  # noqa: PLC0415
+
+    hit = _LIVE_CACHE.get(key)
+    if hit and time.monotonic() - hit[0] < ttl:
+        return hit[1]
+    value = await fn()
+    _LIVE_CACHE[key] = (time.monotonic(), value)
+    return value
+
+
+async def free_tier(session: AsyncSession, settings: Settings, adapters: Adapters) -> FreeTierOut:
+    """Free-tier usage vs caps + live provider balances (cached 60 s; no credit consumed)."""
+    from app.orchestrator import quota  # noqa: PLC0415
+
+    report = await quota.report(session, settings)
+    serper = adapters.serper
+    credits = await _cached("serper", 60, serper.credits) if serper else None
+    apify_usage = (
+        await _cached("apify", 60, adapters.apify.monthly_usage) if adapters.apify else None
+    )
+    info_fn = getattr(adapters.mailbox, "info", None)
+    mail_info = await _cached("mailpit", 30, info_fn) if info_fn else None
+    return FreeTierOut(
+        app_tier=str(settings.app_tier),
+        testing_mode=settings.testing_tier,
+        quotas=[QuotaOut.model_validate(r) for r in report],
+        serper_credits_live=credits,
+        apify_used_usd_live=apify_usage["used_usd"] if apify_usage else None,
+        apify_limit_usd_live=apify_usage["limit_usd"] if apify_usage else None,
+        apify_cycle_end=apify_usage["cycle_end"] if apify_usage else None,
+        mailpit_messages=int(mail_info.get("Messages", 0)) if mail_info else None,
     )
 
 

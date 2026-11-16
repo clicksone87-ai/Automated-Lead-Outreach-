@@ -24,6 +24,7 @@ from app.schemas import (
     AuditDetail,
     AuditPage,
     CostsOut,
+    FreeTierOut,
     HealthOut,
     IntegrationOut,
     LeadDetail,
@@ -55,13 +56,15 @@ async def health(session: SessionDep, settings: SettingsDep) -> HealthOut:
         await client.aclose()
     except Exception:
         redis_ok = False
-    missing = sum(1 for s in integration_status(settings).values() if not s.configured)
+    missing = sum(1 for s in integration_status(settings).values() if s.state == "needs_api_key")
     return HealthOut(
         status="ok" if db_ok and redis_ok else "degraded",
         database=db_ok,
         redis=redis_ok,
         app_mode=str(settings.app_mode),
-        demo_mode=settings.demo_mode,
+        app_tier=str(settings.app_tier),
+        testing_mode=settings.testing_tier,
+        demo_mode=settings.mocks_allowed,
         integrations_missing=missing,
     )
 
@@ -175,6 +178,13 @@ async def patch_settings(
 @router.get("/integrations", response_model=list[IntegrationOut])
 async def integrations(settings: SettingsDep, adapters: AdaptersDep) -> list[IntegrationOut]:
     return queries.integrations_out(settings, adapters)
+
+
+@router.get("/free-tier", response_model=FreeTierOut)
+async def free_tier(
+    session: SessionDep, settings: SettingsDep, adapters: AdaptersDep
+) -> FreeTierOut:
+    return await queries.free_tier(session, settings, adapters)
 
 
 @router.get("/costs", response_model=CostsOut)

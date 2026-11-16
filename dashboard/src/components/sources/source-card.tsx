@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import type { SourceOut } from "@/lib/api";
 import { agoShort, dateTime, titleCase } from "@/lib/format";
 import { usePatchSource, useRunSource } from "@/lib/queries";
-import { SOURCE_STATUS } from "@/lib/status";
+import { INTEGRATION_STATE, SOURCE_STATUS } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
 const SCHEDULES = [15, 20, 30, 60, 120, 360, 720, 1440];
@@ -87,6 +87,8 @@ export function SourceCard({ source, index }: { source: SourceOut; index: number
   const integ = source.integration;
   const needsKey = integ?.state === "needs_api_key";
   const isMock = integ?.state === "mock";
+  const offState = integ && integ.state !== "ready" && integ.state !== "mock" ? INTEGRATION_STATE[integ.state] : undefined;
+  const unusable = Boolean(offState);
   const status = source.last_status ? SOURCE_STATUS[source.last_status] : undefined;
   const urlKey = "feeds" in source.config ? "feeds" : "listing_urls" in source.config ? "listing_urls" : null;
   const numericKeys = Object.entries(source.config).filter(([, v]) => typeof v === "number");
@@ -108,7 +110,8 @@ export function SourceCard({ source, index }: { source: SourceOut; index: number
       transition={{ delay: index * 0.03, duration: 0.3 }}
       className={cn(
         "flex flex-col rounded-xl border bg-card shadow-soft transition-colors",
-        source.enabled && !needsKey && "border-primary/25",
+        source.enabled && !unusable && "border-primary/25",
+        unusable && "opacity-80",
       )}
     >
       <div className="flex items-start gap-3 p-5">
@@ -116,11 +119,13 @@ export function SourceCard({ source, index }: { source: SourceOut; index: number
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold">{source.label}</h3>
             {needsKey ? (
-              <StatusPill tone="warning" dot={false}>
-                <KeyRound className="size-3" aria-hidden /> Needs API key
+              <StatusPill tone="neutral" dot={false}>
+                <KeyRound className="size-3" aria-hidden /> Off · needs API key
               </StatusPill>
+            ) : offState ? (
+              <StatusPill tone={offState.tone} dot={false}>{offState.label}</StatusPill>
             ) : isMock ? (
-              <StatusPill tone="warning">Mock (demo mode)</StatusPill>
+              <StatusPill tone="warning">Test fixture</StatusPill>
             ) : status ? (
               <StatusPill tone={status.tone}>{status.label}</StatusPill>
             ) : (
@@ -169,7 +174,13 @@ export function SourceCard({ source, index }: { source: SourceOut; index: number
         </div>
       </dl>
 
-      {source.last_error && source.last_status === "error" && (
+      {integ?.state === "off_testing_mode" && (
+        <p className="mx-5 mb-4 rounded-lg border bg-surface-sunken px-3 py-2 text-xs text-muted-foreground">
+          Paid integration — off while <span className="font-mono">APP_TIER=free</span>. It does nothing and never falls back to mock data.
+        </p>
+      )}
+
+      {source.last_error && (source.last_status === "error" || source.last_status === "degraded") && (
         <p className="mx-5 mb-3 truncate rounded-md bg-danger-soft px-2 py-1 font-mono text-[11px] text-danger-soft-foreground" title={source.last_error}>
           {source.last_error}
         </p>
@@ -193,7 +204,7 @@ export function SourceCard({ source, index }: { source: SourceOut; index: number
           variant="outline"
           size="sm"
           onClick={() => run.mutate(source.key)}
-          disabled={run.isPending || (needsKey && !isMock)}
+          disabled={run.isPending || (unusable && !isMock)}
         >
           <Play className="size-3.5" /> Run now
         </Button>

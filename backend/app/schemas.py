@@ -16,10 +16,12 @@ class ORM(BaseModel):
 class IntegrationOut(BaseModel):
     key: str
     label: str
+    #: ready | needs_api_key | off_testing_mode | off  (mock: test suite only)
     state: str
     env_vars: list[str]
     paid: bool
     signup_url: str
+    note: str = ""
     mock_in_use: bool = False
 
 
@@ -28,8 +30,33 @@ class HealthOut(BaseModel):
     database: bool
     redis: bool
     app_mode: str
+    app_tier: str = "free"
+    testing_mode: bool = True
     demo_mode: bool
     integrations_missing: int
+
+
+class QuotaOut(BaseModel):
+    scope: str
+    provider: str
+    period: str
+    unit: str
+    cap: float
+    used: float
+    remaining: float
+
+
+class FreeTierOut(BaseModel):
+    app_tier: str
+    testing_mode: bool
+    quotas: list[QuotaOut]
+    #: live balances read from the providers (None when unavailable)
+    serper_credits_live: int | None = None
+    apify_used_usd_live: float | None = None
+    apify_limit_usd_live: float | None = None
+    apify_cycle_end: str | None = None
+    mailpit_messages: int | None = None
+    mailpit_url: str = "http://localhost:8025"
 
 
 class BusinessOut(ORM):

@@ -32,7 +32,7 @@ export default function AuditsPage() {
       ) : data.items.length === 0 ? (
         <EmptyState
           icon={FileSearch}
-          title="No audits yet"
+          title="No data yet"
           description="Audits run automatically for qualified leads that have a website and a verified contact route."
         />
       ) : (

@@ -32,7 +32,7 @@ export function ActivityFeed({ events }: { events: Activity[] }) {
     return (
       <EmptyState
         icon={Radar}
-        title="No activity yet"
+        title="No data yet"
         description="Agent runs, discovered leads and source runs will stream here live."
       />
     );

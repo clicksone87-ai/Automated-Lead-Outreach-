@@ -67,7 +67,7 @@ export default function OverviewPage() {
                 index={3}
                 label="Spend today"
                 value={usd(o.budget.spent_today)}
-                hint={o.budget.paused ? "Cap reached — paid agents paused" : `of ${usd(o.budget.daily_cap)} daily cap`}
+                hint={o.budget.daily_cap === 0 ? "Testing mode: paid calls blocked ($0 budget)" : o.budget.paused ? "Cap reached — paid agents paused" : `of ${usd(o.budget.daily_cap)} daily cap`}
                 icon={Wallet}
                 footer={<Meter value={o.budget.spent_today} max={o.budget.daily_cap} label="Daily budget used" />}
               />
@@ -164,18 +164,20 @@ export default function OverviewPage() {
                       label="Bounce rate"
                       value={o.deliverability.bounce_rate}
                       limit={BOUNCE_LIMIT}
+                      empty={o.deliverability.sent_30d === 0}
                       detail={`${o.deliverability.bounced_30d} of ${o.deliverability.sent_30d} sent`}
                     />
                     <DeliverabilityTile
                       label="Complaint rate"
                       value={o.deliverability.complaint_rate}
                       limit={COMPLAINT_LIMIT}
+                      empty={o.deliverability.sent_30d === 0}
                       digits={2}
                       detail={`${o.deliverability.complained_30d} complaints`}
                     />
                     <div className="col-span-2 rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
                       {o.deliverability.sent_30d === 0
-                        ? "No emails sent yet. Metrics appear once outreach starts (Phase 4)."
+                        ? "No data yet — metrics appear once emails are sent (in testing mode they land in Mailpit)."
                         : `${o.deliverability.sent_30d} emails sent in the last 30 days.`}
                     </div>
                   </>
@@ -197,14 +199,25 @@ function DeliverabilityTile({
   limit,
   detail,
   digits = 1,
+  empty = false,
 }: {
   label: string;
   value: number;
   limit: number;
   detail: string;
   digits?: number;
+  empty?: boolean;
 }) {
   const ok = value < limit;
+  if (empty) {
+    return (
+      <div className="space-y-2 rounded-lg border bg-surface-raised p-4">
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+        <div className="text-sm font-medium text-muted-foreground">No data yet</div>
+        <div className="text-[11px] text-muted-foreground">limit {pct(limit, digits)}</div>
+      </div>
+    );
+  }
   return (
     <div className="space-y-2 rounded-lg border bg-surface-raised p-4">
       <div className="flex items-center justify-between">

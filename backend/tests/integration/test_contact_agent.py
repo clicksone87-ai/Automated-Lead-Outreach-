@@ -10,6 +10,7 @@ import httpx
 import pytest
 from sqlalchemy import func, select
 
+from app.adapters.apify import ApifyRun
 from app.adapters.fetcher import SafeFetcher
 from app.adapters.registry import build_adapters
 from app.adapters.verification import VerificationResult
@@ -184,3 +185,52 @@ async def test_email_published_in_post_is_used_and_rerun_is_idempotent() -> None
     async with session_scope() as s:
         c = (await s.execute(select(Contact))).scalar_one()
         assert c.source_url == "https://forum.test/t/1"
+
+
+class _FakeApify:
+    """Stands in for the Apify client: one public Instagram profile."""
+
+    def __init__(self, profile: dict[str, Any]) -> None:
+        self.profile = profile
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    async def run_actor(
+        self, session: Any, actor: str, actor_input: dict[str, Any], **kw: Any
+    ) -> Any:
+        self.calls.append((actor, actor_input))
+        return ApifyRun("r1", "SUCCEEDED", [self.profile], 0.0026)
+
+
+async def test_instagram_bio_route_uses_published_email_and_site() -> None:
+    lead_id = await _setup(
+        domain=None, text="Looking for someone to design a logo", source="social_instagram"
+    )
+    async with session_scope() as s:
+        s.add(Evidence(lead_id=lead_id, kind="post", url="https://www.instagram.com/p/x/",
+                       content_hash=uuid.uuid4().hex, data={"handle": "acme_plumbing"}))  # fmt: skip
+    apify = _FakeApify(
+        {
+            "username": "acme_plumbing",
+            "biography": "Family plumbers. Bookings: hello@acme-plumbing.com",
+            "externalUrl": "https://acme-plumbing.com/",
+        }
+    )
+    verifier = FakeVerifier({"hello@acme-plumbing.com": VerificationStatus.VALID})
+    settings = Settings(_env_file=None, demo_mode=False, data_dir=Path("./.test-data"))  # type: ignore[call-arg]
+    adapters = build_adapters(settings)
+    adapters.fetcher = _fetcher({"https://acme-plumbing.com/": HOME})
+    adapters.verification = verifier
+    adapters.apify = apify  # type: ignore[assignment]
+    async with session_scope() as s:
+        outcome = await runs.execute(
+            AgentContext(s, adapters, settings), ContactEnrichmentAgent(), lead_id
+        )
+    assert outcome.status == LeadStatus.CONTACT_FOUND
+    assert apify.calls == [("apify/instagram-profile-scraper", {"usernames": ["acme_plumbing"]})]
+    async with session_scope() as s:
+        email = (await s.execute(select(Contact).where(Contact.type == "email"))).scalar_one()
+        assert email.value == "hello@acme-plumbing.com"
+        assert email.source_url == "https://www.instagram.com/acme_plumbing/"
+        lead = await s.get(Lead, lead_id)
+        biz = await s.get(Business, lead.business_id)  # type: ignore[union-attr]
+        assert biz.domain == "acme-plumbing.com"  # type: ignore[union-attr]

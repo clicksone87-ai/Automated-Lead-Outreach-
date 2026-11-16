@@ -33,8 +33,20 @@ export const AGENT_STATE: Record<string, { label: string; tone: Tone }> = {
   running: { label: "Running", tone: "accent" },
   idle: { label: "Idle", tone: "neutral" },
   failed: { label: "Failed", tone: "danger" },
-  needs_api_key: { label: "Needs API key", tone: "warning" },
-  paused_budget: { label: "Paused (budget)", tone: "warning" },
+  needs_api_key: { label: "Off · needs API key", tone: "neutral" },
+  off_testing_mode: { label: "Off in testing mode", tone: "neutral" },
+  off: { label: "Off", tone: "neutral" },
+  degraded: { label: "Degraded", tone: "warning" },
+  paused_budget: { label: "Paused (free cap / budget)", tone: "warning" },
+};
+
+/** Integration state → what the Sources page shows (no key or paid-only = Off). */
+export const INTEGRATION_STATE: Record<string, { label: string; tone: Tone }> = {
+  ready: { label: "Ready", tone: "success" },
+  needs_api_key: { label: "Off · needs API key", tone: "neutral" },
+  off_testing_mode: { label: "Off in testing mode", tone: "neutral" },
+  off: { label: "Off", tone: "neutral" },
+  mock: { label: "Test fixture", tone: "warning" },
 };
 
 export const SOURCE_STATUS: Record<string, { label: string; tone: Tone }> = {

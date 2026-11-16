@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu, Moon, Search, ShieldCheck, Sun } from "lucide-react";
+import { FlaskConical, Menu, Moon, Search, ShieldCheck, Sun } from "lucide-react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
 import { Meter } from "@/components/common/meters";
@@ -50,9 +50,29 @@ function HealthIndicator() {
           {health && health.integrations_missing > 0 && (
             <div className="text-muted-foreground">{health.integrations_missing} integrations need API keys</div>
           )}
-          {health?.demo_mode && <div className="text-warning">Demo mode: mock adapters active</div>}
+          {health?.demo_mode && <div className="text-warning">Test fixtures active</div>}
         </div>
       </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function TestingModeBadge() {
+  const { data: health } = useHealth();
+  if (!health?.testing_mode) return null;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Link
+          href="/sources"
+          className="flex h-8 items-center gap-1.5 rounded-lg bg-warning-soft px-2.5 text-xs font-semibold text-warning-soft-foreground ring-1 ring-inset ring-warning/30"
+        >
+          <FlaskConical className="size-3.5" aria-hidden />
+          <span className="hidden sm:inline">Testing mode — free tier</span>
+          <span className="sm:hidden">Testing</span>
+        </Link>
+      </TooltipTrigger>
+      <TooltipContent>Live free-tier APIs only. Paid integrations are off and every email goes to Mailpit (nothing is really sent).</TooltipContent>
     </Tooltip>
   );
 }
@@ -60,6 +80,7 @@ function HealthIndicator() {
 function BudgetIndicator() {
   const { data } = useOverview();
   const budget = data?.budget;
+  const blocked = budget !== undefined && budget.monthly_cap === 0;
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -71,14 +92,16 @@ function BudgetIndicator() {
           <div className="flex items-center justify-between gap-3 text-[11px] font-medium">
             <span className="text-muted-foreground">Budget (month)</span>
             <span className="tabular">
-              {budget ? `${usd(budget.spent_month)} / ${usd(budget.monthly_cap, 0)}` : "—"}
+              {!budget ? "—" : blocked ? "Paid calls blocked" : `${usd(budget.spent_month)} / ${usd(budget.monthly_cap, 0)}`}
             </span>
           </div>
           <Meter value={budget?.spent_month ?? 0} max={budget?.monthly_cap ?? 1} label="Monthly budget used" />
         </Link>
       </TooltipTrigger>
       <TooltipContent>
-        {budget
+        {blocked
+          ? "Budget is $0: no paid call can run. Free tiers are tracked on the Sources page."
+          : budget
           ? `Today ${usd(budget.spent_today)} of ${usd(budget.daily_cap)} daily cap${budget.paused ? " — paid agents paused" : ""}`
           : "Loading budget…"}
       </TooltipContent>
@@ -124,6 +147,7 @@ export function Topbar({ onOpenSearch, onOpenMobileNav }: { onOpenSearch: () => 
         <kbd className="ml-auto hidden rounded border bg-background px-1.5 font-mono text-[10px] sm:inline">⌘K</kbd>
       </button>
       <div className="ml-auto flex items-center gap-2">
+        <TestingModeBadge />
         <AutonomyBadge />
         <BudgetIndicator />
         <HealthIndicator />

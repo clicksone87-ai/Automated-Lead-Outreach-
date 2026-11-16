@@ -20,7 +20,7 @@ from typing import ClassVar
 from sqlalchemy import select
 
 from app.adapters.llm import LLMRequest
-from app.agents.discovery.base import detect_services
+from app.agents.discovery.base import detect_services, looks_like_request
 from app.agents.requirements.schemas import Brief, IntentBreakdown, RequirementsLLM
 from app.agents.requirements.scoring import combine, rule_signals
 from app.db.models import Brief as BriefRow
@@ -168,6 +168,14 @@ class RequirementsAgent:
         """LLM classification — explicit requests only (proactive triggers cost nothing)."""
         out = _Classification()
         if lead.trigger_type != TriggerType.EXPLICIT_REQUEST or not text.strip():
+            return out
+        if not looks_like_request(text):
+            # Free-tier guard: a post with no request for a logo/website/redesign/SEO is scored
+            # by rules with zero intent and never reaches the (rate-limited) LLM.
+            out.llm_score = 0
+            out.assumptions.append(
+                "pre-filter: no request for a logo, website, redesign or SEO found; LLM not called"
+            )
             return out
         llm = await ctx.adapters.llm.structured(
             ctx.session,

@@ -175,6 +175,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/free-tier": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Free Tier */
+        get: operations["free_tier_api_free_tier_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/costs": {
         parameters: {
             query?: never;
@@ -591,6 +608,30 @@ export interface components {
             /** File Path */
             file_path: string | null;
         };
+        /** FreeTierOut */
+        FreeTierOut: {
+            /** App Tier */
+            app_tier: string;
+            /** Testing Mode */
+            testing_mode: boolean;
+            /** Quotas */
+            quotas: components["schemas"]["QuotaOut"][];
+            /** Serper Credits Live */
+            serper_credits_live?: number | null;
+            /** Apify Used Usd Live */
+            apify_used_usd_live?: number | null;
+            /** Apify Limit Usd Live */
+            apify_limit_usd_live?: number | null;
+            /** Apify Cycle End */
+            apify_cycle_end?: string | null;
+            /** Mailpit Messages */
+            mailpit_messages?: number | null;
+            /**
+             * Mailpit Url
+             * @default http://localhost:8025
+             */
+            mailpit_url: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -606,6 +647,16 @@ export interface components {
             redis: boolean;
             /** App Mode */
             app_mode: string;
+            /**
+             * App Tier
+             * @default free
+             */
+            app_tier: string;
+            /**
+             * Testing Mode
+             * @default true
+             */
+            testing_mode: boolean;
             /** Demo Mode */
             demo_mode: boolean;
             /** Integrations Missing */
@@ -625,6 +676,11 @@ export interface components {
             paid: boolean;
             /** Signup Url */
             signup_url: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
             /**
              * Mock In Use
              * @default false
@@ -786,6 +842,23 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** QuotaOut */
+        QuotaOut: {
+            /** Scope */
+            scope: string;
+            /** Provider */
+            provider: string;
+            /** Period */
+            period: string;
+            /** Unit */
+            unit: string;
+            /** Cap */
+            cap: number;
+            /** Used */
+            used: number;
+            /** Remaining */
+            remaining: number;
         };
         /** SearchHit */
         SearchHit: {
@@ -1262,6 +1335,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntegrationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    free_tier_api_free_tier_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FreeTierOut"];
                 };
             };
             /** @description Validation Error */

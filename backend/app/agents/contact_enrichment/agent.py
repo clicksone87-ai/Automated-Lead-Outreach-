@@ -4,7 +4,9 @@ Finds a usable contact route BEFORE any drafting money is spent:
   1. an email the author published in the lead's own post,
   2. emails / contact forms on the business's own website (homepage + contact/about/imprint
      pages found via links), fetched through the safe fetcher,
-  3. for platform posts: the platform's public reply (handled manually, never automated).
+  3. social bio: the public Instagram profile of the post author (licensed provider, Apify):
+     emails published in the bio / business email field, and the linked website,
+  4. for platform posts: the platform's public reply (handled manually, never automated).
 Emails are verified through the verification adapter; invalid/unknown ones are never used.
 Every contact stores the URL it was found on. Addresses are never guessed.
 """
@@ -21,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.apify import ApifyRunError
 from app.adapters.fetcher import FetchError
 from app.agents.contact_enrichment.extract import (
     candidate_pages,
@@ -39,11 +42,26 @@ from app.db.models import (
     VerificationStatus,
 )
 from app.orchestrator.agents import AgentContext, AgentOutcome, register
+from app.orchestrator.budget import BudgetExceededError
 from app.services import evidence
+from app.services.dedup import PLATFORM_DOMAINS, normalize_domain
 
 logger = logging.getLogger(__name__)
 
-PLATFORM_SOURCES = {"reddit", "x", "meta", "rss", "search_api", "mock_demo"}
+PLATFORM_SOURCES = {
+    "reddit",
+    "x",
+    "meta",
+    "rss",
+    "search_api",
+    "mock_demo",
+    "social_x",
+    "social_instagram",
+    "social_facebook",
+    "social_reddit",
+}
+INSTAGRAM_PROFILE_ACTOR = "apify/instagram-profile-scraper"
+LINK_HUBS = {"linktr.ee", "linkin.bio", "beacons.ai", "lnk.bio", "taplink.cc", "bio.link"}
 MAX_PAGES = 6
 MAX_VERIFICATIONS = 3
 USABLE = {VerificationStatus.VALID, VerificationStatus.CATCH_ALL}
@@ -69,6 +87,8 @@ class ContactEnrichmentAgent:
         assert business is not None
 
         candidates = self._from_post(lead)
+        if not candidates and lead.source == "social_instagram":
+            candidates += await self._instagram_bio(ctx, lead, business)
         forms: list[tuple[str, str]] = []
         if business.domain:
             site_candidates, forms = await self._crawl_site(ctx, lead, business)
@@ -151,6 +171,80 @@ class ContactEnrichmentAgent:
     def _from_post(lead: Lead) -> list[Candidate]:
         text = "\n".join(filter(None, [lead.title, lead.raw_text]))
         return [Candidate(f.email, lead.source_url, f.context) for f in extract_emails(text)]
+
+    async def _instagram_bio(
+        self, ctx: AgentContext, lead: Lead, business: Business
+    ) -> list[Candidate]:
+        """Social-bio route: the post author's public Instagram profile (one profile, capped).
+        Emails published there become candidates (source = the profile URL); a linked website
+        becomes the business domain so the normal site crawl can run. Never guesses."""
+        apify = ctx.adapters.apify
+        handle = await self._author_handle(ctx, lead)
+        if apify is None or not handle:
+            return []
+        try:
+            run = await apify.run_actor(
+                ctx.session,
+                INSTAGRAM_PROFILE_ACTOR,
+                {"usernames": [handle]},
+                source="social_instagram",
+                max_items=1,
+                max_charge_usd=0.01,
+            )
+        except (ApifyRunError, BudgetExceededError) as exc:
+            logger.info("instagram bio lookup skipped for %s: %s", handle, exc)
+            return []
+        if not run.items:
+            return []
+        p = run.items[0]
+        profile_url = f"https://www.instagram.com/{handle}/"
+        text_parts = [str(p.get("biography") or "")]
+        for key in ("businessEmail", "publicEmail", "email", "contactEmail"):
+            if p.get(key):
+                text_parts.append(str(p[key]))
+        await evidence.capture(
+            ctx.session,
+            ctx.adapters.storage,
+            kind=EvidenceKind.PAGE,
+            lead_id=lead.id,
+            business_id=business.id,
+            url=profile_url,
+            text="\n".join(text_parts),
+            file_ext="txt",
+            data={"purpose": "social_bio", "platform": "instagram", "provider": "apify",
+                  "external_url": p.get("externalUrl"), "full_name": p.get("fullName")},
+        )  # fmt: skip
+        external = (
+            normalize_domain(str(p.get("externalUrl") or "")) if p.get("externalUrl") else None
+        )
+        if (
+            external
+            and not business.domain
+            and external not in PLATFORM_DOMAINS
+            and external not in LINK_HUBS
+        ):
+            business.domain, business.has_website = external, True
+        return [
+            Candidate(f.email, profile_url, f.context)
+            for f in extract_emails("\n".join(text_parts))
+        ]
+
+    @staticmethod
+    async def _author_handle(ctx: AgentContext, lead: Lead) -> str | None:
+        from app.db.models import Evidence  # noqa: PLC0415
+
+        rows = (
+            await ctx.session.execute(
+                select(Evidence.data).where(
+                    Evidence.lead_id == lead.id, Evidence.kind == EvidenceKind.POST
+                )
+            )
+        ).scalars()
+        for data in rows:
+            handle = (data or {}).get("handle") or (data or {}).get("author")
+            if handle:
+                return str(handle).lstrip("@")
+        return None
 
     async def _crawl_site(
         self, ctx: AgentContext, lead: Lead, business: Business

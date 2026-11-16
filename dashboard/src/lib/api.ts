@@ -31,6 +31,7 @@ export type SearchHit = Schemas["SearchHit"];
 export type AuditRow = Schemas["AuditRow"];
 export type AuditPage = Schemas["AuditPage"];
 export type AuditDetail = Schemas["AuditDetail"];
+export type FreeTier = Schemas["FreeTierOut"];
 
 export class ApiError extends Error {
   constructor(

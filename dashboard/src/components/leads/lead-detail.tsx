@@ -198,7 +198,7 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
           {data.brief ? (
             <BriefView brief={data.brief} />
           ) : (
-            <NotYet icon={FileText} title="No brief yet" description="The Requirements agent writes a structured brief once it qualifies this lead." />
+            <NotYet icon={FileText} title="No data yet" description="The Requirements agent writes a structured brief once it qualifies this lead." />
           )}
         </TabsContent>
 
@@ -218,7 +218,7 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
               </div>
             ))
           ) : (
-            <NotYet icon={Mail} title="No contact route yet" description="Contact Enrichment finds a verified route (with its source page) before any drafts are made." />
+            <NotYet icon={Mail} title="No data yet" description="Contact Enrichment finds a verified route (with its source page) before any drafts are made." />
           )}
         </TabsContent>
 
@@ -228,7 +228,7 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
             {data.audit ? (
               <AuditSummaryCard audit={data.audit} leadId={lead.id} />
             ) : (
-              <NotYet icon={Globe} title="No audit" description="Runs for qualified leads with a website and a verified contact." />
+              <NotYet icon={Globe} title="No data yet" description="Runs for qualified leads with a website and a verified contact." />
             )}
           </Panel>
           <Panel as="div">
@@ -236,7 +236,7 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
             {data.logos.length ? (
               <div className="p-4 text-sm">{data.logos.length} concepts</div>
             ) : (
-              <NotYet icon={Palette} title="No logos" description="Created only after qualification and a verified contact route." />
+              <NotYet icon={Palette} title="No data yet" description="Created only after qualification and a verified contact route." />
             )}
           </Panel>
           <Panel as="div">
@@ -244,7 +244,7 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
             {data.preview ? (
               <div className="p-4 text-sm">Template {String(data.preview.template_id)}</div>
             ) : (
-              <NotYet icon={ImageIcon} title="No preview" description="Built from a template after branding, then quality-checked." />
+              <NotYet icon={ImageIcon} title="No data yet" description="Built from a template after branding, then quality-checked." />
             )}
           </Panel>
         </TabsContent>
@@ -260,7 +260,7 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
               ))}
             </ul>
           ) : (
-            <NotYet icon={MessageSquare} title="No emails yet" description="Proposals appear here after drafting and (at Stage 1) your approval." />
+            <NotYet icon={MessageSquare} title="No data yet" description="Proposals appear here after drafting and (at Stage 1) your approval." />
           )}
         </TabsContent>
       </Tabs>

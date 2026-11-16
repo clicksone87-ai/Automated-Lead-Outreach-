@@ -233,7 +233,9 @@ class _LyingLLM:
 async def test_fabricated_quotes_and_urls_are_discarded_and_intent_capped() -> None:
     async with session_scope() as s:
         lead = await _lead(
-            s, title="Thinking about websites", text="Anyone have thoughts on websites?"
+            s,
+            title="Thinking about websites",
+            text="Do small shops even need a website these days? Curious, not hiring.",
         )
     outcome = await _run(lead.id, llm=_LyingLLM())
     assert outcome.status == LeadStatus.REJECTED_LOW_INTENT
@@ -244,6 +246,30 @@ async def test_fabricated_quotes_and_urls_are_discarded_and_intent_capped() -> N
         assert brief["intent"]["llm_score"] == 35
         assert any("not found in the source text" in a for a in brief["assumptions"])
         assert any("website URL not present" in a for a in brief["assumptions"])
+
+
+class _CountingLLM(_LyingLLM):
+    calls = 0
+
+    async def structured(self, session: Any, request: Any, schema: type[BaseModel]) -> Any:
+        type(self).calls += 1
+        return await super().structured(session, request, schema)
+
+
+async def test_irrelevant_post_never_reaches_the_llm() -> None:
+    """Free-tier guard: no request for our services → rules only, zero intent, no LLM call."""
+    async with session_scope() as s:
+        lead = await _lead(
+            s, title="Our new van arrived", text="Big week for the team, thanks everyone!"
+        )
+    _CountingLLM.calls = 0
+    outcome = await _run(lead.id, llm=_CountingLLM())
+    assert outcome.status == LeadStatus.REJECTED_LOW_INTENT
+    assert _CountingLLM.calls == 0
+    async with session_scope() as s:
+        brief = (await s.get(Brief, lead.id)).data  # type: ignore[union-attr]
+        assert brief["intent"]["llm_score"] == 0
+        assert any("LLM not called" in a for a in brief["assumptions"])
 
 
 async def test_duplicate_and_suppressed_businesses_stop() -> None:
