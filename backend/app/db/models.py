@@ -7,6 +7,7 @@ Supporting tables beyond §6:
 - `source_runs`        each discovery run of a source
 - `outreach_locks`     one active outreach per business (§9, row-level guarantee)
 - `activity_events`    live activity feed streamed to the dashboard
+- `quality_checks`     every quality-check verdict per produced item (§7, no self-approval)
 """
 
 from __future__ import annotations
@@ -130,6 +131,18 @@ class QAStatus(StrEnum):
     PASSED = "passed"
     FAILED = "failed"
     NEEDS_REVIEW = "needs_review"
+
+
+class PreviewMode(StrEnum):
+    NEW = "new"
+    REDESIGN = "redesign"
+
+
+class QAItemType(StrEnum):
+    LOGO = "logo"
+    PREVIEW = "preview"
+    AUDIT = "audit"
+    PROPOSAL = "proposal"
 
 
 class ApprovalStatus(StrEnum):
@@ -339,6 +352,15 @@ class BrandProfile(Base):
     logo_path: Mapped[str | None] = mapped_column(Text)
     industry: Mapped[str | None] = mapped_column(String(100))
     competitor_styles: Mapped[list[Any]] = mapped_column(JSONB, default=list)
+    # Phase 3: where each value came from (url / evidence_id per colour, font, logo)
+    brand_name: Mapped[str | None] = mapped_column(Text)
+    sources: Mapped[list[Any]] = mapped_column(JSONB, default=list)
+    social_profiles: Mapped[list[Any]] = mapped_column(JSONB, default=list)
+    logo_evidence_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("evidence.id", ondelete="SET NULL")
+    )
+    # local file paths of competitor logos collected for the trademark-similarity check
+    competitor_logos: Mapped[list[Any]] = mapped_column(JSONB, default=list)
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _updated()
 
@@ -357,7 +379,15 @@ class LogoConcept(Base):
     typography: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     qa_status: Mapped[str] = mapped_column(String(20), default=QAStatus.PENDING)
     qa_report: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    # Phase 3
+    language: Mapped[str | None] = mapped_column(String(8))
+    text: Mapped[str | None] = mapped_column(Text)  # exact wording rendered in the logo
+    prompt: Mapped[str | None] = mapped_column(Text)
+    raster_path: Mapped[str | None] = mapped_column(Text)  # original image from the image API
+    similarity: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    attempts: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _updated()
 
     __table_args__ = (UniqueConstraint("lead_id", "variant", name="uq_logo_variant"),)
 
@@ -375,8 +405,46 @@ class Preview(Base):
     screenshots: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     test_results: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     qa_status: Mapped[str] = mapped_column(String(20), default=QAStatus.PENDING)
+    # Phase 3
+    mode: Mapped[str] = mapped_column(String(20), default=PreviewMode.NEW, server_default="new")
+    language: Mapped[str | None] = mapped_column(String(8))
+    content: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)  # typed template input
+    # content provenance for redesigns: each reused text/image with its source url + ownership
+    reused_content: Mapped[list[Any]] = mapped_column(JSONB, default=list)
+    git_commit: Mapped[str | None] = mapped_column(String(64))
+    build_log_path: Mapped[str | None] = mapped_column(Text)
+    pdf_path: Mapped[str | None] = mapped_column(Text)
+    qa_report: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    attempts: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    built_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _updated()
+
+
+class QualityCheck(Base):
+    """One quality-check verdict on one produced item.
+
+    The checker is never the producer (§5.8); a failed item goes back to its producer
+    (`returned_to`) or to human review — a later pass of the same item gets a new row.
+    """
+
+    __tablename__ = "quality_checks"
+
+    id: Mapped[uuid.UUID] = _pk()
+    lead_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("leads.id", ondelete="CASCADE"), index=True
+    )
+    item_type: Mapped[str] = mapped_column(String(20))  # QAItemType
+    item_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    producer: Mapped[str] = mapped_column(String(50))
+    checker: Mapped[str] = mapped_column(String(50))
+    status: Mapped[str] = mapped_column(String(20))  # QAStatus
+    checks: Mapped[list[Any]] = mapped_column(JSONB, default=list)  # [{name, passed, detail}]
+    returned_to: Mapped[str | None] = mapped_column(String(50))  # producer | "human_review"
+    attempt: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = _created()
+
+    __table_args__ = (Index("ix_quality_checks_item", "item_type", "item_id"),)
 
 
 class Proposal(Base):
