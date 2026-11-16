@@ -8,7 +8,8 @@
 param(
   [Parameter(Position = 0)]
   [ValidateSet('up', 'down', 'build', 'logs', 'migrate', 'test', 'test-backend', 'test-dashboard',
-               'lint', 'seed', 'run-cycle', 'backup', 'shell', 'help')]
+               'lint', 'seed', 'run-cycle', 'backup', 'check-providers', 'purge-demo', 'shell',
+               'help')]
   [string]$Target = 'help'
 )
 
@@ -45,8 +46,10 @@ switch ($Target) {
   'seed'           { Invoke-Api @('python', '-m', 'app.cli', 'seed') }
   'run-cycle'      { Invoke-Api @('python', '-m', 'app.cli', 'run-cycle') }
   'backup'         { Invoke-Api @('python', '-m', 'app.cli', 'backup') }
+  'check-providers' { Invoke-Api @('python', '-m', 'app.cli', 'check-providers') }
+  'purge-demo'     { Invoke-Api @('python', '-m', 'app.cli', 'purge-demo') }
   'shell'          { docker compose exec api bash }
   default          {
-    Write-Host 'Targets: up, down, build, logs, migrate, test, test-backend, test-dashboard, lint, seed, run-cycle, backup, shell'
+    Write-Host 'Targets: up, down, build, logs, migrate, test, test-backend, test-dashboard, lint, seed, run-cycle, backup, check-providers, purge-demo, shell'
   }
 }

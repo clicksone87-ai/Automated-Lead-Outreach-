@@ -18,13 +18,28 @@ import pytest
 TEST_DB = os.environ.get(
     "TEST_DATABASE_URL", "postgresql+psycopg://leads:leads@postgres:5432/leads_test"
 )
-os.environ["DATABASE_URL"] = TEST_DB
-os.environ.setdefault("DATA_DIR", str(Path(tempfile.gettempdir()) / "leads-test-data"))
-os.environ["APP_MODE"] = "test"
-os.environ["DEMO_MODE"] = "true"
-for key in list(os.environ):  # never let real keys leak into tests
-    if key.endswith(("_API_KEY", "_TOKEN", "_SECRET")) or key in ("RESEND_API_KEY",):
-        os.environ.pop(key)
+_DATA_DIR = str(Path(tempfile.gettempdir()) / "leads-test-data")
+os.environ["APP_MODE"] = "test"  # must be set before app.config is imported (skips .env)
+
+# Hermetic tests: inside the api container every .env line is a real environment variable
+# (live keys, MONTHLY_BUDGET_USD=0, SMTP_HOST=mailpit, ...). Drop every variable that names a
+# config field, then set only what the suite needs. Tests never make live calls.
+from app.config import Settings  # noqa: E402
+
+for _name in Settings.model_fields:
+    os.environ.pop(_name.upper(), None)
+os.environ.update(
+    {
+        "APP_MODE": "test",
+        "DEMO_MODE": "true",  # mock adapters: honoured only because APP_MODE=test
+        "APP_TIER": "free",
+        "DATABASE_URL": TEST_DB,
+        "DATA_DIR": _DATA_DIR,
+        "SMTP_HOST": "",  # no SMTP → mock email
+        "MAILPIT_API_URL": "",  # no Mailpit → mock mailbox
+        "EMAIL_VERIFICATION_PROVIDER": "zerobounce",  # no key → mock verifier
+    }
+)
 
 
 def _db_available() -> bool:

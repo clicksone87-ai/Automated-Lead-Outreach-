@@ -46,7 +46,7 @@ class LLMRequest:
     system: str = ""
     untrusted: dict[str, str] = field(default_factory=dict)
     images: list[bytes] = field(default_factory=list)  # PNG/JPEG bytes (vision)
-    kind: Literal["text", "vision"] = "text"
+    kind: Literal["text", "vision", "logo"] = "text"
     lead_id: uuid.UUID | None = None
     max_output_tokens: int = 1500
     mock_context: dict[str, Any] = field(default_factory=dict)
@@ -107,7 +107,11 @@ class OpenAILLM:
 
     def __init__(self, api_key: str, text_model: str, vision_model: str) -> None:
         self._client = AsyncOpenAI(api_key=api_key, max_retries=2, timeout=90)
-        self._models = {"text": text_model, "vision": vision_model or text_model}
+        self._models = {
+            "text": text_model,
+            "vision": vision_model or text_model,
+            "logo": text_model,
+        }
 
     async def structured(self, session: AsyncSession, request: LLMRequest, schema: type[T]) -> T:
         model = self._models[request.kind]

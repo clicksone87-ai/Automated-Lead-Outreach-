@@ -70,11 +70,15 @@ async def test_disabled_source_and_missing_key_do_not_crash() -> None:
         await ensure_source_rows(s, get_settings())
         res = await run_source(s, get_adapters(), get_settings(), "reddit")
         assert res.status == "disabled"
+        # Official Reddit API: a paid integration, off in testing mode (APP_TIER=free).
         forced = await run_source(s, get_adapters(), get_settings(), "reddit", force=True)
-        assert forced.status == "needs_api_key"
+        assert forced.status == "off_testing_mode"
         row = await s.get(Source, "reddit")
         assert row is not None
-        assert row.last_status == "needs_api_key"
+        assert row.last_status == "off_testing_mode"
+        # A free source without its key reports needs_api_key and never crashes.
+        ch = await run_source(s, get_adapters(), get_settings(), "companies_house", force=True)
+        assert ch.status == "needs_api_key"
 
 
 class _FlakyAgent:

@@ -7,15 +7,18 @@ from app.agents.discovery.proactive_triggers import NoWebsiteSource, SiteHealthS
 from app.agents.discovery.sources.boards import AlertEmailSource, FreelancerSource
 from app.agents.discovery.sources.mock_demo import MockDemoSource
 from app.agents.discovery.sources.reddit import RedditSource
-from app.agents.discovery.sources.registries import (
-    BrregSource,
-    CompaniesHouseSource,
-    OpenCorporatesSource,
-)
+from app.agents.discovery.sources.registries import CompaniesHouseSource, OpenCorporatesSource
 from app.agents.discovery.sources.rss import RssSource
 from app.agents.discovery.sources.search_api import SearchApiSource
 from app.agents.discovery.sources.social import MetaSource, XSource
+from app.agents.discovery.sources.social_apify import (
+    ApifyFacebookSource,
+    ApifyInstagramSource,
+    ApifyRedditSource,
+    ApifyXSource,
+)
 from app.agents.discovery.sources.web_directory import WebDirectorySource
+from app.config import get_settings
 
 _ALL: list[DiscoverySource] = [
     SearchApiSource(),
@@ -23,7 +26,11 @@ _ALL: list[DiscoverySource] = [
     RssSource(),
     CompaniesHouseSource(),
     OpenCorporatesSource(),
-    BrregSource(),
+    ApifyRedditSource(),
+    ApifyXSource(),
+    ApifyInstagramSource(),
+    ApifyFacebookSource(),
+    # Official platform APIs: kept, but disabled (off in testing mode).
     RedditSource(),
     XSource(),
     MetaSource(),
@@ -31,8 +38,10 @@ _ALL: list[DiscoverySource] = [
     AlertEmailSource(),
     SiteHealthSource(),
     NoWebsiteSource(),
-    MockDemoSource(),
 ]
+# Fixture source for the automated test suite only — never registered in the running system.
+if get_settings().mocks_allowed:
+    _ALL.append(MockDemoSource())
 
 SOURCES: dict[str, DiscoverySource] = {s.key: s for s in _ALL}
 

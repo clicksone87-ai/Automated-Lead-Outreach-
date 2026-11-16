@@ -14,7 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import AdapterUnavailableError
 from app.adapters.registry import Adapters
-from app.agents.discovery.base import DiscoverySource, RawLead, SourceContext, detect_services
+from app.agents.discovery.base import (
+    DiscoverySource,
+    RawLead,
+    SourceContext,
+    SourceDegradedError,
+    detect_services,
+)
 from app.agents.discovery.sources import SOURCES
 from app.config import Settings, integration_status
 from app.db.models import Lead, LeadStatus, RunStatus, Source, SourceRun
@@ -38,7 +44,8 @@ class SourceRunResult:
 async def ensure_source_rows(session: AsyncSession, settings: Settings) -> None:
     """Create a `sources` row for every known source (idempotent)."""
     for src in SOURCES.values():
-        enabled = src.default_enabled or (src.key == "mock_demo" and settings.demo_mode)
+        # The fixture source exists only in the test suite (registered only when mocks are allowed).
+        enabled = src.default_enabled or (src.key == "mock_demo" and settings.mocks_allowed)
         stmt = (
             insert(Source)
             .values(
@@ -71,16 +78,13 @@ async def run_source(  # noqa: PLR0915 - linear bookkeeping, clearer in one plac
     assert row is not None
     if not row.enabled and not force:
         return SourceRunResult(key, "disabled")
-    if key == "mock_demo" and not settings.demo_mode:
-        return SourceRunResult(key, "demo_mode_off")
-
     status = integration_status(settings).get(source.integration)
     uses_mock = adapters.uses_mock(source.integration)
     if status is not None and not status.configured and not uses_mock:
-        row.last_status = "needs_api_key"
-        row.last_error = f"set {', '.join(status.env_vars)}"
+        row.last_status = status.state  # needs_api_key | off_testing_mode | off
+        row.last_error = status.note or None
         row.last_run_at = datetime.now(UTC)
-        return SourceRunResult(key, "needs_api_key")
+        return SourceRunResult(key, status.state)
 
     run = SourceRun(source_key=key, status=RunStatus.RUNNING)
     session.add(run)
@@ -100,6 +104,11 @@ async def run_source(  # noqa: PLR0915 - linear bookkeeping, clearer in one plac
                 lead_id = await ingest(session, adapters, source, item, uses_mock=uses_mock)
                 if lead_id:
                     lead_ids.append(lead_id)
+    except SourceDegradedError as exc:
+        # Provider returned nothing usable / failed: mark degraded, keep the pipeline running.
+        run.status, run.error = RunStatus.FAILED, str(exc)[:2000]
+        row.last_status, row.last_error = "degraded", str(exc)[:2000]
+        row.config = {**cfg, "_state": ctx.state}
     except (AdapterUnavailableError, BudgetExceededError) as exc:
         run.status, run.error = RunStatus.SKIPPED, str(exc)
         row.last_status = (
@@ -112,7 +121,8 @@ async def run_source(  # noqa: PLR0915 - linear bookkeeping, clearer in one plac
         row.last_status, row.last_error = "error", run.error
     else:
         run.status = RunStatus.SUCCEEDED
-        row.last_status, row.last_error = "ok", None
+        degraded = ctx.state.pop("_degraded", None)
+        row.last_status, row.last_error = ("degraded", str(degraded)) if degraded else ("ok", None)
         row.leads_found_total = (row.leads_found_total or 0) + len(lead_ids)
         row.config = {**cfg, "_state": ctx.state}
 

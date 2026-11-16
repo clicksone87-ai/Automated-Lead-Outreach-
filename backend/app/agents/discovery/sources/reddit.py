@@ -26,6 +26,16 @@ API = "https://oauth.reddit.com"
 CONTACTED_STATES = {LeadStatus.SENT, LeadStatus.REPLIED, LeadStatus.WON, LeadStatus.LOST}
 
 
+async def delete_lead_content(session: AsyncSession, lead: Lead) -> None:
+    """Remove a post deleted on Reddit: evidence always; the lead itself unless already
+    contacted (then a minimal record without content stays for suppression/cooldown)."""
+    await session.execute(delete(Evidence).where(Evidence.lead_id == lead.id))
+    if lead.status in CONTACTED_STATES:
+        lead.raw_text, lead.title = None, "[deleted on Reddit]"
+    else:
+        await session.delete(lead)
+
+
 async def _token(client: httpx.AsyncClient, s: Settings) -> str:
     assert s.reddit_client_secret is not None
     resp = await client.post(
@@ -133,11 +143,7 @@ async def sync_deletions(session: AsyncSession, s: Settings, days: int = 30) -> 
                 if not gone:
                     continue
                 removed += 1
-                await session.execute(delete(Evidence).where(Evidence.lead_id == lead.id))
-                if lead.status in CONTACTED_STATES:
-                    lead.raw_text, lead.title = None, "[deleted on Reddit]"
-                else:
-                    await session.delete(lead)
+                await delete_lead_content(session, lead)
     await session.flush()
     logger.info("reddit deletion sync removed %d item(s)", removed)
     return removed

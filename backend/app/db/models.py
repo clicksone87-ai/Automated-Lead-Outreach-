@@ -571,6 +571,16 @@ class Cost(Base):
     )
     amount_usd: Mapped[float] = mapped_column(Numeric(10, 4, asdecimal=False))
     description: Mapped[str | None] = mapped_column(Text)
+    # Free-tier usage (amount_usd stays 0): units consumed (requests/credits) and the value
+    # of free credit used, checked against the provider's own free cap (orchestrator.quota).
+    free_tier: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    units: Mapped[float] = mapped_column(
+        Numeric(12, 4, asdecimal=False), default=0, server_default="0"
+    )
+    credit_usd: Mapped[float] = mapped_column(
+        Numeric(10, 5, asdecimal=False), default=0, server_default="0"
+    )
+    quota_scope: Mapped[str | None] = mapped_column(String(60), index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )

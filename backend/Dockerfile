@@ -2,7 +2,7 @@
 # Includes Playwright Chromium (screenshots/PDF), Node + Lighthouse CLI + axe-core (audits),
 # and git (local repo per website preview).
 
-FROM node:22.11.0-bookworm-slim AS node
+FROM node:22.14.0-bookworm-slim AS node
 
 FROM python:3.12.7-slim-bookworm
 
@@ -19,7 +19,7 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
  && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git curl postgresql-client potrace \
+ && apt-get install -y --no-install-recommends git curl postgresql-client potrace libatomic1 \
  && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g lighthouse@12.2.1 axe-core@4.10.2 \
@@ -30,8 +30,10 @@ COPY pyproject.toml ./
 # Install dependencies first (cached layer), then the app itself.
 RUN mkdir -p app && touch app/__init__.py \
  && pip install ".[dev]" \
- && playwright install --with-deps chromium \
  && rm -rf app
+# Separate layer so a browser-install problem doesn't redo the slow pip layer.
+# (Playwright's bundled Node driver needs libatomic1, installed above.)
+RUN playwright install --with-deps chromium
 
 COPY . .
 RUN pip install --no-deps -e . \

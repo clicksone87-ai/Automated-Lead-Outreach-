@@ -7,12 +7,13 @@ Settings before they are ever quoted to a client.
 
 from __future__ import annotations
 
+from sqlalchemy import delete, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.discovery.runner import ensure_source_rows
 from app.config import Settings
-from app.db.models import PricingPackage, SettingRow
+from app.db.models import Business, Lead, PricingPackage, SettingRow, Source
 from app.services.runtime_settings import RuntimeSettings
 
 STARTER_PRICING: list[tuple[str, str, str, float, float, float]] = [
@@ -74,3 +75,49 @@ async def seed(session: AsyncSession, env: Settings) -> dict[str, int]:
     await ensure_source_rows(session, env)
     await session.flush()
     return {"settings": len(defaults), "pricing_packages": len(STARTER_PRICING)}
+
+
+async def purge_demo_data(session: AsyncSession) -> dict[str, int]:
+    """Delete everything a mock/fixture adapter ever produced (leads tagged with
+    `mock_adapters_used` or from the fixture source), their evidence/briefs/drafts (FK
+    cascades), businesses left without leads that were created by the fixtures, and the
+    fixture source row. Real data is untouched."""
+    mock_leads = (
+        (
+            await session.execute(
+                select(Lead.id, Lead.business_id).where(
+                    or_(
+                        Lead.source == "mock_demo",
+                        Lead.pipeline_state.has_key("mock_adapters_used"),
+                    )
+                )
+            )
+        )
+        .tuples()
+        .all()
+    )
+    lead_ids = [lead_id for lead_id, _ in mock_leads]
+    business_ids = {b for _, b in mock_leads if b is not None}
+    if lead_ids:
+        await session.execute(delete(Lead).where(Lead.id.in_(lead_ids)))
+    orphans: list[object] = []
+    if business_ids:
+        with_leads = set(
+            (
+                await session.execute(
+                    select(Lead.business_id).where(Lead.business_id.in_(business_ids))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        orphans = [b for b in business_ids if b not in with_leads]
+        if orphans:
+            await session.execute(delete(Business).where(Business.id.in_(orphans)))
+    src = await session.execute(delete(Source).where(Source.key == "mock_demo"))
+    await session.flush()
+    return {
+        "leads_deleted": len(lead_ids),
+        "businesses_deleted": len(orphans),
+        "fixture_source_rows_deleted": int(src.rowcount or 0),  # type: ignore[attr-defined]
+    }

@@ -145,7 +145,9 @@ async def test_search_api_source_with_brave_fixture() -> None:
     )
     page = "<html><title>Need a new website</title><body><p>We need a new website for our HVAC company in Denver. Looking for quotes.</p></body></html>"
     async with session_scope() as s:
-        settings = _settings(brave_search_api_key=SecretStr("k"))
+        settings = _settings(
+            brave_search_api_key=SecretStr("k"), app_tier="paid", search_provider="brave"
+        )
         ctx = await _ctx(
             s,
             settings,

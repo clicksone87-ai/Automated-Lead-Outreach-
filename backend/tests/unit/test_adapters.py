@@ -48,10 +48,37 @@ def _settings(**kw: Any) -> Settings:
 
 def test_integration_status_reports_missing_keys() -> None:
     st = integration_status(_settings())
-    assert st["brave"].state == "needs_api_key"
+    assert st["gemini"].state == "needs_api_key"
     assert st["rss"].state == "ready"
-    st2 = integration_status(_settings(brave_search_api_key="k"))
-    assert st2["brave"].state == "ready"
+    assert integration_status(_settings(gemini_api_key="k"))["gemini"].state == "ready"
+    # Paid tier: Brave is a selectable provider that needs its key.
+    paid = integration_status(_settings(app_tier="paid", search_provider="brave"))
+    assert paid["brave"].state == "needs_api_key"
+    paid2 = _settings(app_tier="paid", search_provider="brave", brave_search_api_key="k")
+    assert integration_status(paid2)["brave"].state == "ready"
+
+
+def test_paid_integrations_are_off_in_testing_mode_even_with_keys() -> None:
+    st = integration_status(
+        _settings(
+            app_tier="free",
+            brave_search_api_key="k",
+            google_places_api_key="k",
+            resend_api_key="k",
+            sending_domain="d.com",
+            openai_api_key="k",
+            openai_text_model="m",
+        )
+    )
+    for key in ("brave", "places", "resend", "openai", "zerobounce", "reddit", "x", "meta",
+                "opencorporates"):  # fmt: skip
+        assert st[key].state == "off_testing_mode", key
+    assert not st["brave"].configured
+
+
+def test_inactive_provider_is_off() -> None:
+    st = integration_status(_settings(app_tier="paid", openai_api_key="k", openai_text_model="m"))
+    assert st["openai"].state == "off"  # llm_provider=gemini by default
 
 
 async def test_registry_disabled_without_demo_mode() -> None:
@@ -62,9 +89,17 @@ async def test_registry_disabled_without_demo_mode() -> None:
 
 
 def test_registry_uses_mocks_in_demo_mode() -> None:
-    adapters = build_adapters(_settings(demo_mode=True))
-    assert {"openai", "brave", "resend", "verification"} <= adapters.mocks_in_use
+    adapters = build_adapters(_settings(demo_mode=True, app_mode="test"))
+    assert {"gemini", "serper", "resend", "verification", "pagespeed"} <= adapters.mocks_in_use
     assert adapters.email.is_mock
+
+
+def test_running_system_never_uses_mocks_even_with_demo_mode() -> None:
+    """DEMO_MODE outside the test suite is ignored: no mock adapter, no mock data."""
+    for mode in ("local", "server"):
+        adapters = build_adapters(_settings(demo_mode=True, app_mode=mode))
+        assert adapters.mocks_in_use == set()
+        assert not adapters.llm.is_mock and not adapters.search.is_mock
 
 
 class _Out(BaseModel):

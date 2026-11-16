@@ -1,4 +1,4 @@
-"""Command line: python -m app.cli {seed|run-cycle|backup}."""
+"""Command line: python -m app.cli {seed|run-cycle|backup|check-providers|purge-demo}."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from app.db.models import Lead, LeadStatus, Source
 from app.db.session import session_scope
 from app.logging_setup import configure_logging
 from app.orchestrator import pipeline
-from app.services import backup, seed
+from app.services import backup, provider_check, seed
 
 
 async def _seed() -> dict[str, object]:
@@ -90,13 +90,38 @@ async def _backup() -> dict[str, object]:
     return {"backup": str(await backup.run_backup())}
 
 
+async def _check_providers() -> dict[str, object]:
+    settings, adapters = get_settings(), get_adapters()
+    rows = await provider_check.check_all(settings, adapters)
+    await adapters.fetcher.aclose()
+    sys.stderr.write(provider_check.as_table(rows) + chr(10))
+    return {"providers": provider_check.as_dicts(rows)}
+
+
+async def _purge_demo() -> dict[str, object]:
+    async with session_scope() as session:
+        return dict(await seed.purge_demo_data(session))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="app.cli")
-    parser.add_argument("command", choices=["seed", "run-cycle", "backup"])
+    parser.add_argument(
+        "command", choices=["seed", "run-cycle", "backup", "check-providers", "purge-demo"]
+    )
     args = parser.parse_args(argv)
     configure_logging()
     log_missing_integrations(get_settings())
-    runner = {"seed": _seed, "run-cycle": _run_cycle, "backup": _backup}[args.command]
+    runner = {
+        "seed": _seed,
+        "run-cycle": _run_cycle,
+        "backup": _backup,
+        "check-providers": _check_providers,
+        "purge-demo": _purge_demo,
+    }[args.command]
+    if sys.platform == "win32":
+        # psycopg async needs the selector loop on Windows (containers are Linux); the
+        # audit browser runs Playwright on its own Proactor loop in a thread when needed.
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # type: ignore[attr-defined,unused-ignore]
     result = asyncio.run(runner())
     json.dump(result, sys.stdout, indent=2, default=str)
     sys.stdout.write("\n")

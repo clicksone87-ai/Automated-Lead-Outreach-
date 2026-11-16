@@ -12,6 +12,7 @@ dashboard can show "Needs API key".
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import lru_cache
@@ -29,9 +30,23 @@ class AppMode(StrEnum):
     TEST = "test"
 
 
+class AppTier(StrEnum):
+    """`free`: testing mode on free-tier providers only; paid integrations are forced off."""
+
+    FREE = "free"
+    PAID = "paid"
+
+
+# The automated test suite (APP_MODE=test, set before import) never reads the real .env:
+# tests are hermetic and can never pick up live keys or local limits.
+_ENV_FILES: tuple[str, ...] | None = (
+    None if os.environ.get("APP_MODE") == "test" else (".env", "../.env")
+)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(".env", "../.env"),
+        env_file=_ENV_FILES,
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
@@ -39,12 +54,50 @@ class Settings(BaseSettings):
 
     # Runtime
     app_mode: AppMode = AppMode.LOCAL
+    app_tier: AppTier = AppTier.FREE
     log_level: str = "INFO"
-    # When true, integrations without keys fall back to fixture-backed mocks so the whole
-    # pipeline can run for development/demo. Anything produced with a mock is tagged and
-    # can never be sent to a real recipient (policy: `demo_data` check).
+    # Fixture-backed mocks for integrations without keys. Honoured ONLY when APP_MODE=test
+    # (the automated test suite); the running system never uses mock adapters or mock data.
     demo_mode: bool = False
+
+    # Provider selection
+    llm_provider: str = "gemini"  # gemini | openai
+    search_provider: str = "serper"  # serper | exa | brave (fallback chain: serper → exa)
+    email_provider: str = "smtp"  # smtp (Mailpit in testing) | resend
+
+    # Gemini (free tier) — model names from config, never hard-coded in agents
+    gemini_api_key: SecretStr | None = None
+    gemini_text_model: str = "gemini-3.5-flash-lite"
+    gemini_vision_model: str = "gemini-3.5-flash-lite"
+    gemini_logo_model: str = "gemini-3.5-flash"
+    gemini_fallback_models: str = "gemini-3.5-flash,gemini-3.8-flash"
+    gemini_rpm: int = Field(default=10, ge=1)
+    gemini_daily_request_cap: int = Field(default=500, ge=0)
+
+    # Serper (Google results via API: web + local) and Exa (fallback search)
+    serper_api_key: SecretStr | None = None
+    serper_free_credits: int = Field(default=2500, ge=0)
+    exa_api_key: SecretStr | None = None
+    exa_free_credit_usd: float = Field(default=10.0, ge=0)
+
+    # Apify (licensed third-party provider for public social posts)
+    apify_api_token: SecretStr | None = None
+    apify_monthly_cap_usd: float = Field(default=5.0, ge=0)
+
+    # PageSpeed free quota guard (Google's own limit is far higher)
+    pagespeed_daily_cap: int = Field(default=400, ge=0)
+
+    # SMTP (Mailpit in testing: every email lands in Mailpit, nothing is really sent)
+    smtp_host: str = ""
+    smtp_port: int = 1025
+    smtp_user: str = ""
+    smtp_password: SecretStr | None = None
+    smtp_starttls: bool = False
+    mailpit_api_url: str = "http://mailpit:8025"
+
     database_url: str = "postgresql+psycopg://leads:leads@localhost:5432/leads"
+    # Host port docker compose publishes Postgres on (read by compose; listed for 1:1 mapping)
+    postgres_port: int = 5432
     redis_url: str = "redis://localhost:6379/0"
     data_dir: Path = Path("./data")
     dashboard_origin: str = "http://localhost:3000"
@@ -76,8 +129,8 @@ class Settings(BaseSettings):
     reply_imap_password: SecretStr | None = None
     alerts_imap_folder: str = "Alerts"
 
-    # Email verification
-    email_verification_provider: str = "zerobounce"
+    # Email verification: local (syntax + MX, free) | zerobounce
+    email_verification_provider: str = "local"
     email_verification_api_key: SecretStr | None = None
 
     # Platform sources
@@ -115,6 +168,36 @@ class Settings(BaseSettings):
         return self.app_mode == AppMode.LOCAL
 
     @property
+    def mocks_allowed(self) -> bool:
+        """Mock adapters exist for the automated test suite only."""
+        return self.demo_mode and self.app_mode == AppMode.TEST
+
+    @property
+    def testing_tier(self) -> bool:
+        return self.app_tier == AppTier.FREE
+
+    @property
+    def sender_domain(self) -> str:
+        return self.sending_domain or "test-agency.local"
+
+    @property
+    def from_address(self) -> str:
+        name = self.sender_business_name or self.sender_name or "Outreach"
+        return f"{name} <outreach@{self.sender_domain}>"
+
+    @property
+    def reply_address(self) -> str:
+        return f"replies@{self.sender_domain}"
+
+    @property
+    def alerts_address(self) -> str:
+        return f"alerts@{self.sender_domain}"
+
+    @property
+    def gemini_fallbacks(self) -> list[str]:
+        return [m.strip() for m in self.gemini_fallback_models.split(",") if m.strip()]
+
+    @property
     def previews_dir(self) -> Path:
         return self.data_dir / "previews"
 
@@ -124,18 +207,41 @@ class Settings(BaseSettings):
         return bool(self.public_preview_base_url)
 
 
+# Paid integrations that are forced off while APP_TIER=free (testing mode), keys or not.
+TESTING_OFF: frozenset[str] = frozenset(
+    {
+        "openai",
+        "openai_vision",
+        "openai_image",
+        "brave",
+        "places",
+        "resend",
+        "imap",
+        "zerobounce",
+        "reddit",
+        "x",
+        "meta",
+        "opencorporates",
+    }
+)
+
+
 @dataclass(frozen=True, slots=True)
 class IntegrationStatus:
     key: str
     label: str
     env_vars: tuple[str, ...]
-    configured: bool
+    has_keys: bool
     paid: bool
     signup_url: str
+    #: "ready" | "needs_api_key" | "off_testing_mode" | "off"
+    state: str = "ready"
+    note: str = ""
 
     @property
-    def state(self) -> str:
-        return "ready" if self.configured else "needs_api_key"
+    def configured(self) -> bool:
+        """Usable right now: keys present, provider selected, not forced off."""
+        return self.state == "ready"
 
 
 def _has(value: SecretStr | str | None) -> bool:
@@ -146,8 +252,27 @@ def _has(value: SecretStr | str | None) -> bool:
 
 
 def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
-    """Which external integrations are usable with the current configuration."""
-    specs: list[tuple[str, str, tuple[str, ...], bool, bool, str]] = [
+    """Every external integration with its current state (Sources page, adapter registry)."""
+    llm, search, email = s.llm_provider, s.search_provider, s.email_provider
+    sender_ok = all(
+        _has(v)
+        for v in (s.sender_name, s.sender_business_name, s.sender_postal_address, s.portfolio_url)
+    )
+    reddit_ok = (
+        _has(s.reddit_client_id) and _has(s.reddit_client_secret) and _has(s.reddit_user_agent)
+    )
+    imap_ok = _has(s.reply_imap_host) and _has(s.reply_imap_user) and _has(s.reply_imap_password)
+    # key, label, env vars, keys present, paid, signup url, selected (active) provider
+    specs: list[tuple[str, str, tuple[str, ...], bool, bool, str, bool]] = [
+        (
+            "gemini",
+            "Gemini (free tier)",
+            ("GEMINI_API_KEY",),
+            _has(s.gemini_api_key),
+            False,
+            "https://aistudio.google.com/apikey",
+            llm == "gemini",
+        ),
         (
             "openai",
             "OpenAI",
@@ -155,6 +280,7 @@ def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
             _has(s.openai_api_key) and _has(s.openai_text_model),
             True,
             "https://platform.openai.com/api-keys",
+            llm == "openai",
         ),
         (
             "openai_vision",
@@ -163,6 +289,7 @@ def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
             _has(s.openai_api_key) and _has(s.openai_vision_model),
             True,
             "https://platform.openai.com/api-keys",
+            llm == "openai",
         ),
         (
             "openai_image",
@@ -171,6 +298,25 @@ def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
             _has(s.openai_api_key) and _has(s.openai_image_model),
             True,
             "https://platform.openai.com/api-keys",
+            llm == "openai",
+        ),
+        (
+            "serper",
+            "Serper (Google results API)",
+            ("SERPER_API_KEY",),
+            _has(s.serper_api_key),
+            False,
+            "https://serper.dev",
+            search in ("serper", "exa"),
+        ),
+        (
+            "exa",
+            "Exa search (fallback)",
+            ("EXA_API_KEY",),
+            _has(s.exa_api_key),
+            False,
+            "https://exa.ai",
+            search in ("serper", "exa"),
         ),
         (
             "brave",
@@ -179,6 +325,16 @@ def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
             _has(s.brave_search_api_key),
             True,
             "https://brave.com/search/api/",
+            search == "brave",
+        ),
+        (
+            "apify",
+            "Apify (public social posts)",
+            ("APIFY_API_TOKEN",),
+            _has(s.apify_api_token),
+            False,
+            "https://console.apify.com/account/integrations",
+            True,
         ),
         (
             "pagespeed",
@@ -187,6 +343,7 @@ def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
             _has(s.google_pagespeed_api_key),
             False,
             "https://developers.google.com/speed/docs/insights/v5/get-started",
+            True,
         ),
         (
             "places",
@@ -195,6 +352,25 @@ def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
             _has(s.google_places_api_key),
             True,
             "https://console.cloud.google.com/google/maps-apis",
+            True,
+        ),
+        (
+            "smtp",
+            "SMTP → Mailpit (nothing really sent)",
+            ("SMTP_HOST", "SMTP_PORT"),
+            _has(s.smtp_host),
+            False,
+            "",
+            email == "smtp",
+        ),
+        (
+            "mailpit",
+            "Mailpit inbox (replies, alerts)",
+            ("MAILPIT_API_URL",),
+            _has(s.mailpit_api_url),
+            False,
+            "",
+            email == "smtp",
         ),
         (
             "resend",
@@ -203,70 +379,80 @@ def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
             _has(s.resend_api_key) and _has(s.sending_domain),
             True,
             "https://resend.com",
+            email == "resend",
         ),
         (
             "sender_identity",
             "Sender identity",
             ("SENDER_NAME", "SENDER_BUSINESS_NAME", "SENDER_POSTAL_ADDRESS", "PORTFOLIO_URL"),
-            all(
-                _has(v)
-                for v in (
-                    s.sender_name,
-                    s.sender_business_name,
-                    s.sender_postal_address,
-                    s.portfolio_url,
-                )
-            ),
+            sender_ok,
             False,
             "",
+            True,
         ),
         (
             "imap",
             "Reply mailbox (IMAP)",
             ("REPLY_IMAP_HOST", "REPLY_IMAP_USER", "REPLY_IMAP_PASSWORD"),
-            _has(s.reply_imap_host) and _has(s.reply_imap_user) and _has(s.reply_imap_password),
+            imap_ok,
             True,
             "",
+            email == "resend",
         ),
         (
             "verification",
+            "Email verification (syntax + MX, local)",
+            ("EMAIL_VERIFICATION_PROVIDER",),
+            True,
+            False,
+            "",
+            s.email_verification_provider == "local",
+        ),
+        (
+            "zerobounce",
             "Email verification (ZeroBounce)",
             ("EMAIL_VERIFICATION_API_KEY",),
             _has(s.email_verification_api_key),
             True,
             "https://www.zerobounce.net",
+            s.email_verification_provider == "zerobounce",
         ),
         (
             "reddit",
-            "Reddit Data API",
+            "Reddit Data API (official)",
             ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USER_AGENT"),
-            _has(s.reddit_client_id) and _has(s.reddit_client_secret) and _has(s.reddit_user_agent),
-            False,
+            reddit_ok,
+            True,
             "https://www.reddit.com/prefs/apps",
+            True,
         ),
         (
             "x",
-            "X API",
+            "X API (official)",
             ("X_BEARER_TOKEN",),
             _has(s.x_bearer_token),
             True,
             "https://developer.x.com",
+            True,
         ),
         (
             "meta",
-            "Meta Graph API",
+            "Meta Graph API (official)",
             ("META_ACCESS_TOKEN",),
             _has(s.meta_access_token),
-            False,
+            True,
             "https://developers.facebook.com",
+            True,
         ),
+        # public project search works without a token
         (
             "freelancer",
             "Freelancer.com API",
             ("FREELANCER_API_TOKEN",),
-            _has(s.freelancer_api_token),
+            True,
             False,
             "https://developers.freelancer.com",
+            True,
         ),
         (
             "opencorporates",
@@ -275,6 +461,7 @@ def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
             _has(s.opencorporates_api_key),
             True,
             "https://api.opencorporates.com",
+            True,
         ),
         (
             "companies_house",
@@ -283,21 +470,29 @@ def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
             _has(s.companies_house_api_key),
             False,
             "https://developer.company-information.service.gov.uk",
+            True,
         ),
         # Open data sources that need no key
-        ("brreg", "Brønnøysund Register", (), True, False, "https://data.brreg.no"),
-        ("rss", "RSS / Atom feeds", (), True, False, ""),
-        ("web", "Public websites & directories", (), True, False, ""),
+        ("rss", "RSS / Atom feeds", (), True, False, "", True),
+        ("web", "Public websites & directories", (), True, False, "", True),
     ]
-    return {
-        key: IntegrationStatus(key, label, env, configured, paid, url)
-        for key, label, env, configured, paid, url in specs
-    }
+    out: dict[str, IntegrationStatus] = {}
+    for key, label, env, has_keys, paid, url, selected in specs:
+        if s.testing_tier and key in TESTING_OFF:
+            state, note = "off_testing_mode", "Off in testing mode"
+        elif not selected:
+            state, note = "off", "Inactive provider"
+        elif not has_keys:
+            state, note = "needs_api_key", f"Set {', '.join(env)}"
+        else:
+            state, note = "ready", ""
+        out[key] = IntegrationStatus(key, label, env, has_keys, paid, url, state, note)
+    return out
 
 
 def log_missing_integrations(s: Settings) -> None:
     for status in integration_status(s).values():
-        if not status.configured:
+        if status.state == "needs_api_key":
             logger.warning(
                 "integration disabled: %s (set %s)", status.label, ", ".join(status.env_vars)
             )

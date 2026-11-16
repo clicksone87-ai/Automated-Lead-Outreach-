@@ -2,7 +2,7 @@
 COMPOSE ?= docker compose
 API = $(COMPOSE) exec -T api
 
-.PHONY: up down build logs migrate test test-backend test-dashboard lint seed run-cycle backup shell
+.PHONY: up down build logs migrate test test-backend test-dashboard lint seed run-cycle backup check-providers purge-demo shell
 
 up:
 	$(COMPOSE) up -d --build
@@ -40,6 +40,12 @@ run-cycle:
 
 backup:
 	$(API) python -m app.cli backup
+
+check-providers:
+	$(API) python -m app.cli check-providers
+
+purge-demo:
+	$(API) python -m app.cli purge-demo
 
 shell:
 	$(COMPOSE) exec api bash

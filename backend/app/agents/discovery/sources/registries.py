@@ -1,8 +1,7 @@
 """Business registries → newly registered businesses (trigger: new_business).
 
 - Companies House (UK): free API key, advanced company search by incorporation date + SIC.
-- OpenCorporates (US states and more): API token; confirm licence terms for commercial use.
-- Brønnøysund (Norway): open data, no key.
+- OpenCorporates (US states and more): API token; confirm licence terms. Off in testing mode.
 """
 
 from __future__ import annotations
@@ -178,68 +177,4 @@ class OpenCorporatesSource:
                             )
                         )
         ctx.state["since"] = datetime.now(UTC).date().isoformat()
-        return leads
-
-
-class BrregSource:
-    key: ClassVar[str] = "brreg"
-    label: ClassVar[str] = "Brønnøysund Register (Norway)"
-    description: ClassVar[str] = "Newly registered Norwegian businesses (open data)."
-    integration: ClassVar[str] = "brreg"
-    default_enabled: ClassVar[bool] = False  # NO is not a target country yet
-    default_schedule_minutes: ClassVar[int] = 720
-    constraints: ClassVar[str] = "Open data (NLOD licence)."
-    default_config: ClassVar[dict[str, Any]] = {"lookback_days": 7}
-    ENDPOINT = "https://data.brreg.no/enhetsregisteret/api/enheter"
-
-    async def fetch(self, ctx: SourceContext) -> list[RawLead]:
-        since = _since(ctx, int(ctx.config.get("lookback_days", 7)))
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(
-                self.ENDPOINT,
-                params={
-                    "fraRegistreringsdatoEnhetsregisteret": since.isoformat(),
-                    "naeringskode": ",".join(NO_NACE_HOME_SERVICES),
-                    "size": "100",
-                },
-            )
-        resp.raise_for_status()
-        ctx.state["since"] = datetime.now(UTC).date().isoformat()
-        leads = []
-        for e in resp.json().get("_embedded", {}).get("enheter", []):
-            number, name = e.get("organisasjonsnummer"), e.get("navn")
-            if not number or not name:
-                continue
-            addr = e.get("forretningsadresse") or {}
-            address = ", ".join(
-                filter(
-                    None,
-                    [*(addr.get("adresse") or []), addr.get("postnummer"), addr.get("poststed")],
-                )
-            )
-            website = e.get("hjemmeside")
-            leads.append(
-                RawLead(
-                    source_item_id=f"brreg:{number}",
-                    source_url=f"https://virksomhet.brreg.no/oppslag/enheter/{number}",
-                    trigger_type=TriggerType.NEW_BUSINESS,
-                    title=f"Ny virksomhet: {name}",
-                    text=f"{name} registrert {e.get('registreringsdatoEnhetsregisteret')}. {address}",
-                    business=RawBusiness(
-                        name=name,
-                        address=address or None,
-                        country_hint="NO",
-                        website=f"https://{website}"
-                        if website and "://" not in website
-                        else website,
-                        registry_number=number,
-                        registry_source="brreg",
-                        industry=ctx.runtime.active_industry,
-                        has_website=bool(website),
-                    ),
-                    evidence_kind=EvidenceKind.REGISTRY_RECORD,
-                    evidence_data={"registry": "brreg", "record": e},
-                    language_hint="nb",
-                )
-            )
         return leads

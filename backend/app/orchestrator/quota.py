@@ -1,0 +1,175 @@
+"""Free-tier quotas — every free-tier provider call goes through `consume()` (or reserve/settle).
+
+With MONTHLY_BUDGET_USD=0 no paid call can run (`budget.charge` refuses any amount > 0).
+Free-tier calls cost $0 against the budget but are tracked against each provider's OWN free
+cap (requests per day, one-time credits, monthly free credit), so the system stays inside
+the free tier. A cap that would be exceeded raises FreeQuotaExceededError, a subclass of
+BudgetExceededError, so agents and sources pause exactly as they do for budget caps.
+"""
+
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Literal
+
+from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import Settings, get_settings
+from app.db.models import Cost, PolicyDecision
+from app.orchestrator.budget import BudgetExceededError
+
+_LOCK_KEY = 0x71756F7461  # "quota"
+Period = Literal["day", "month", "lifetime"]
+Measure = Literal["units", "credit_usd"]
+
+# Apify monthly free credit split per social source (fractions of APIFY_MONTHLY_CAP_USD).
+APIFY_SOURCE_SHARE: dict[str, float] = {
+    "social_reddit": 0.3,
+    "social_facebook": 0.3,
+    "social_x": 0.2,
+    "social_instagram": 0.2,
+}
+
+
+class FreeQuotaExceededError(BudgetExceededError):
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class Quota:
+    provider: str
+    scope: str  # provider, or provider:sub-scope (e.g. apify:social_reddit)
+    period: Period
+    measure: Measure
+    cap: float
+    unit_label: str
+
+
+def quotas(s: Settings) -> dict[str, Quota]:
+    q = [
+        Quota("gemini", "gemini", "day", "units", s.gemini_daily_request_cap, "requests/day"),
+        Quota("serper", "serper", "lifetime", "units", s.serper_free_credits, "credits"),
+        Quota("exa", "exa", "lifetime", "credit_usd", s.exa_free_credit_usd, "USD credit"),
+        Quota("apify", "apify", "month", "credit_usd", s.apify_monthly_cap_usd, "USD/month"),
+        Quota("pagespeed", "pagespeed", "day", "units", s.pagespeed_daily_cap, "requests/day"),
+    ]
+    q += [
+        Quota(
+            "apify",
+            f"apify:{src}",
+            "month",
+            "credit_usd",
+            round(s.apify_monthly_cap_usd * share, 4),
+            "USD/month",
+        )
+        for src, share in APIFY_SOURCE_SHARE.items()
+    ]
+    return {x.scope: x for x in q}
+
+
+def _since(period: Period, now: datetime) -> datetime | None:
+    day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if period == "day":
+        return day
+    if period == "month":
+        return day.replace(day=1)
+    return None
+
+
+async def used(session: AsyncSession, quota: Quota, now: datetime | None = None) -> float:
+    now = now or datetime.now(UTC)
+    col = Cost.units if quota.measure == "units" else Cost.credit_usd
+    stmt = select(func.coalesce(func.sum(col), 0)).where(Cost.free_tier.is_(True))
+    if ":" in quota.scope:
+        stmt = stmt.where(Cost.quota_scope == quota.scope)
+    else:
+        stmt = stmt.where(Cost.provider == quota.provider)
+    since = _since(quota.period, now)
+    if since is not None:
+        stmt = stmt.where(Cost.created_at >= since)
+    return float((await session.execute(stmt)).scalar_one())
+
+
+async def consume(
+    session: AsyncSession,
+    provider: str,
+    *,
+    agent: str,
+    units: float = 1.0,
+    credit_usd: float = 0.0,
+    scope: str | None = None,
+    lead_id: uuid.UUID | None = None,
+    description: str | None = None,
+    settings: Settings | None = None,
+) -> Cost:
+    """Check every applicable free cap, then record the usage. Raises FreeQuotaExceededError."""
+    if units < 0 or credit_usd < 0:
+        raise ValueError("usage must be >= 0")
+    s = settings or get_settings()
+    await session.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _LOCK_KEY})
+    table = quotas(s)
+    applicable = [q for q in (table.get(provider), table.get(scope or "")) if q is not None]
+    for q in applicable:
+        amount = units if q.measure == "units" else credit_usd
+        if amount <= 0:
+            continue
+        spent = await used(session, q)
+        if spent + amount > q.cap + 1e-9:
+            session.add(
+                PolicyDecision(
+                    check="free_quota",
+                    action=f"{agent}:{provider}",
+                    lead_id=lead_id,
+                    allowed=False,
+                    reason=f"{q.scope} free cap {q.cap:g} {q.unit_label} reached (used {spent:g})",
+                    details={"scope": q.scope, "amount": amount},
+                )
+            )
+            await session.flush()
+            raise FreeQuotaExceededError(q.scope, spent, q.cap, amount)
+    row = Cost(
+        provider=provider,
+        agent=agent,
+        lead_id=lead_id,
+        amount_usd=0,
+        free_tier=True,
+        units=units,
+        credit_usd=credit_usd,
+        quota_scope=scope or provider,
+        description=description,
+    )
+    session.add(row)
+    await session.flush()
+    return row
+
+
+async def settle(session: AsyncSession, reserved: Cost, *, units: float, credit_usd: float) -> None:
+    """Replace a reservation's estimate with the actual usage once it is known."""
+    reserved.units = max(0.0, units)
+    reserved.credit_usd = max(0.0, credit_usd)
+    await session.flush()
+
+
+async def report(
+    session: AsyncSession, settings: Settings | None = None
+) -> list[dict[str, object]]:
+    """Usage vs cap for every quota (Sources page / overview)."""
+    s = settings or get_settings()
+    out: list[dict[str, object]] = []
+    for q in quotas(s).values():
+        u = await used(session, q)
+        out.append(
+            {
+                "scope": q.scope,
+                "provider": q.provider,
+                "period": q.period,
+                "unit": q.unit_label,
+                "cap": q.cap,
+                "used": round(u, 5),
+                "remaining": round(max(0.0, q.cap - u), 5),
+            }
+        )
+    return out

@@ -426,7 +426,7 @@ class AuditAgent:
         result: PageSpeedResult | None = None
         source = "pagespeed"
         try:
-            result = await ctx.adapters.pagespeed.run(url, "mobile")
+            result = await ctx.adapters.pagespeed.run(url, "mobile", session=ctx.session)
             if ctx.adapters.pagespeed.is_mock:
                 _mark_mock(lead, "pagespeed")
         except AdapterUnavailableError:

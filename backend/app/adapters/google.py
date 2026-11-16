@@ -44,7 +44,9 @@ class PageSpeedAdapter(Protocol):
     name: ClassVar[str]
     is_mock: ClassVar[bool]
 
-    async def run(self, url: str, strategy: str = "mobile") -> PageSpeedResult: ...
+    async def run(
+        self, url: str, strategy: str = "mobile", *, session: AsyncSession | None = None
+    ) -> PageSpeedResult: ...
 
 
 class PlacesAdapter(Protocol):
@@ -89,7 +91,13 @@ class GooglePageSpeed:
         self._key = api_key
         self._client = client or httpx.AsyncClient(timeout=120)
 
-    async def run(self, url: str, strategy: str = "mobile") -> PageSpeedResult:
+    async def run(
+        self, url: str, strategy: str = "mobile", *, session: AsyncSession | None = None
+    ) -> PageSpeedResult:
+        if session is not None:
+            from app.orchestrator import quota  # noqa: PLC0415
+
+            await quota.consume(session, "pagespeed", agent="audit", description=url[:200])
         pairs = [("url", url), ("strategy", strategy), ("key", self._key)]
         pairs += [("category", c.upper().replace("-", "_")) for c in LIGHTHOUSE_CATEGORIES]
         resp = await self._client.get(self.ENDPOINT, params=tuple(pairs))
@@ -152,7 +160,9 @@ class MockPageSpeed:
     name: ClassVar[str] = "mock_pagespeed"
     is_mock: ClassVar[bool] = True
 
-    async def run(self, url: str, strategy: str = "mobile") -> PageSpeedResult:
+    async def run(
+        self, url: str, strategy: str = "mobile", *, session: AsyncSession | None = None
+    ) -> PageSpeedResult:
         return PageSpeedResult(
             url=url,
             strategy=strategy,
@@ -188,7 +198,9 @@ class DisabledPageSpeed:
     name: ClassVar[str] = "pagespeed_disabled"
     is_mock: ClassVar[bool] = False
 
-    async def run(self, url: str, strategy: str = "mobile") -> PageSpeedResult:
+    async def run(
+        self, url: str, strategy: str = "mobile", *, session: AsyncSession | None = None
+    ) -> PageSpeedResult:
         raise AdapterUnavailableError("PageSpeed Insights", ("GOOGLE_PAGESPEED_API_KEY",))
 
 

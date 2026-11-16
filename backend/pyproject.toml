@@ -29,6 +29,7 @@ dependencies = [
   "sse-starlette>=2.1",
   "python-dateutil>=2.9",
   "tldextract>=5.1",
+  "dnspython>=2.6",
 ]
 
 [project.optional-dependencies]

@@ -1,9 +1,9 @@
-FROM node:22.11.0-bookworm-slim AS deps
+FROM node:22.14.0-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 RUN npm ci
 
-FROM node:22.11.0-bookworm-slim AS build
+FROM node:22.14.0-bookworm-slim AS build
 WORKDIR /app
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ARG NEXT_PUBLIC_API_TOKEN=
@@ -14,7 +14,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-FROM node:22.11.0-bookworm-slim AS run
+FROM node:22.14.0-bookworm-slim AS run
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 RUN useradd --create-home --uid 1001 web

@@ -21,6 +21,10 @@ from app.db.models import EvidenceKind, TriggerType
 from app.services.runtime_settings import RuntimeSettings
 
 
+class SourceDegradedError(Exception):
+    """The provider failed or returned nothing usable; the source is shown as degraded."""
+
+
 class RawBusiness(BaseModel):
     name: str
     website: str | None = None
