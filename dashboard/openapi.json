@@ -756,6 +756,56 @@
     }
    }
   },
+  "/api/gallery": {
+   "get": {
+    "summary": "Gallery",
+    "operationId": "gallery_api_gallery_get",
+    "parameters": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/GalleryItem"
+         },
+         "title": "Response Gallery Api Gallery Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/free-tier": {
    "get": {
     "summary": "Free Tier",
@@ -2205,6 +2255,71 @@
      "quotas"
     ],
     "title": "FreeTierOut"
+   },
+   "GalleryItem": {
+    "properties": {
+     "lead_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Lead Id"
+     },
+     "business_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Business Name"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "language": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Language"
+     },
+     "logos": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "title": "Logos"
+     },
+     "preview": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Preview"
+     }
+    },
+    "type": "object",
+    "required": [
+     "lead_id",
+     "business_name",
+     "status",
+     "language",
+     "logos",
+     "preview"
+    ],
+    "title": "GalleryItem"
    },
    "HTTPValidationError": {
     "properties": {

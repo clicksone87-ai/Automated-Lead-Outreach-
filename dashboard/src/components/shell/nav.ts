@@ -1,5 +1,6 @@
 import {
   FileSearch,
+  Palette,
   Gauge,
   LayoutDashboard,
   Radar,
@@ -37,6 +38,8 @@ export const NAV: NavGroup[] = [
     items: [
       { href: "/audits", label: "Audits", icon: FileSearch, shortcut: "G A",
         description: "Website & SEO audit reports with evidence" },
+      { href: "/previews", label: "Previews & logos", icon: Palette, shortcut: "G P",
+        description: "Logo concepts and private website previews with QA" },
     ],
   },
   {

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import type { CSSProperties, ReactNode } from "react";
 import { Footer, Header, PreviewRibbon } from "@/components/site";
 import { content } from "@/lib/content";
 import "./globals.css";
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   const b = content.brand;
   const style = {
     "--brand": b.primary,
@@ -21,7 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     "--surface": b.surface,
     "--font-heading": b.fontHeading,
     "--font-body": b.fontBody,
-  } as React.CSSProperties;
+  } as CSSProperties;
   return (
     <html lang={content.language} style={style}>
       <body>

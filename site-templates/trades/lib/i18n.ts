@@ -1,5 +1,10 @@
 /** Fixed interface labels per language (copy itself comes from content.json). */
-const LABELS = {
+export interface Labels {
+  call: string; services: string; about: string; areas: string; contact: string; name: string;
+  email: string; message: string; send: string; formDisabled: string; menu: string; rights: string;
+}
+
+const LABELS: Record<string, Labels> = {
   en: {
     call: "Call", services: "Services", about: "About us", areas: "Areas we cover",
     contact: "Get in touch", name: "Your name", email: "Email", message: "How can we help?",
@@ -24,10 +29,8 @@ const LABELS = {
     send: "Enviar mensaje", formDisabled: "Vista previa — este formulario aún no está conectado.",
     menu: "Menú", rights: "Todos los derechos reservados.",
   },
-} as const;
-
-export type Labels = (typeof LABELS)["en"];
+};
 
 export function labels(lang: string): Labels {
-  return (LABELS as Record<string, Labels>)[lang] ?? LABELS.en;
+  return LABELS[lang] ?? (LABELS.en as Labels);
 }

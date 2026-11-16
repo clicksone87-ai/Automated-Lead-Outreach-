@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { content, type Page, type SectionKey, type Variant } from "@/lib/content";
 import { labels } from "@/lib/i18n";
 
@@ -216,7 +217,7 @@ export function Footer() {
   );
 }
 
-const SECTIONS: Record<SectionKey, () => React.ReactNode> = {
+const SECTIONS: Record<SectionKey, () => ReactNode> = {
   hero: Hero,
   services: Services,
   about: About,

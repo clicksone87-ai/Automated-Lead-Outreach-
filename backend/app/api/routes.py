@@ -25,6 +25,7 @@ from app.schemas import (
     AuditPage,
     CostsOut,
     FreeTierOut,
+    GalleryItem,
     HealthOut,
     IntegrationOut,
     LeadDetail,
@@ -178,6 +179,11 @@ async def patch_settings(
 @router.get("/integrations", response_model=list[IntegrationOut])
 async def integrations(settings: SettingsDep, adapters: AdaptersDep) -> list[IntegrationOut]:
     return queries.integrations_out(settings, adapters)
+
+
+@router.get("/gallery", response_model=list[GalleryItem])
+async def gallery(session: SessionDep) -> list[GalleryItem]:
+    return await queries.gallery(session)
 
 
 @router.get("/free-tier", response_model=FreeTierOut)

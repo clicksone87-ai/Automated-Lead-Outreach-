@@ -180,6 +180,7 @@ class RunStatus(StrEnum):
     FAILED = "failed"
     SKIPPED = "skipped"
     RETRYING = "retrying"
+    SUPERSEDED = "superseded"  # a quality check returned this step's output to its producer
 
 
 # ─── Core entities ──────────────────────────────────────────────────────────

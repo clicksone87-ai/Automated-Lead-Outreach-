@@ -57,6 +57,7 @@ from app.schemas import (
     EvidenceOut,
     EvidenceRef,
     FreeTierOut,
+    GalleryItem,
     IntegrationOut,
     LeadDetail,
     LeadPage,
@@ -500,6 +501,10 @@ async def lead_detail(session: AsyncSession, lead_id: uuid.UUID) -> LeadDetail |
                 "typography",
                 "qa_status",
                 "qa_report",
+                "text",
+                "language",
+                "similarity",
+                "attempts",
             )
             for lg in logos
         ],
@@ -512,6 +517,14 @@ async def lead_detail(session: AsyncSession, lead_id: uuid.UUID) -> LeadDetail |
             "test_results",
             "qa_status",
             "source_path",
+            "mode",
+            "language",
+            "git_commit",
+            "pdf_path",
+            "qa_report",
+            "built_at",
+            "reused_content",
+            "attempts",
         )
         if preview
         else None,
@@ -898,3 +911,75 @@ async def list_audits(session: AsyncSession, *, page: int = 1, page_size: int = 
             )
         )
     return AuditPage(items=items, total=int(total))
+
+
+async def gallery(session: AsyncSession, limit: int = 60) -> list[GalleryItem]:
+    """Leads with logo concepts and/or a website preview, newest first (Previews & Logos)."""
+    lead_ids = (
+        (await session.execute(select(LogoConcept.lead_id).union(select(Preview.lead_id))))
+        .scalars()
+        .all()
+    )
+    if not lead_ids:
+        return []
+    leads = (
+        await session.execute(
+            select(Lead, Business.name)
+            .outerjoin(Business, Business.id == Lead.business_id)
+            .where(Lead.id.in_(lead_ids))
+            .order_by(Lead.updated_at.desc())
+            .limit(limit)
+        )
+    ).all()
+    out: list[GalleryItem] = []
+    for lead, name in leads:
+        logos = (
+            (
+                await session.execute(
+                    select(LogoConcept)
+                    .where(LogoConcept.lead_id == lead.id)
+                    .order_by(LogoConcept.variant)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        preview = (
+            await session.execute(select(Preview).where(Preview.lead_id == lead.id))
+        ).scalar_one_or_none()
+        out.append(
+            GalleryItem(
+                lead_id=lead.id,
+                business_name=name,
+                status=lead.status,
+                language=lead.language,
+                logos=[
+                    {
+                        "id": str(lg.id),
+                        "variant": lg.variant,
+                        "png_path": lg.png_path,
+                        "svg_path": lg.svg_path,
+                        "concept_name": (lg.typography or {}).get("concept_name"),
+                        "style": (lg.typography or {}).get("style"),
+                        "qa_status": lg.qa_status,
+                        "similarity": lg.similarity,
+                    }
+                    for lg in logos
+                ],
+                preview=(
+                    {
+                        "preview_url": preview.preview_url,
+                        "screenshots": preview.screenshots,
+                        "qa_status": preview.qa_status,
+                        "mode": preview.mode,
+                        "variant": (preview.content or {}).get("variant"),
+                        "lighthouse": (preview.test_results or {}).get("lighthouse", {}),
+                        "tests_passed": (preview.test_results or {}).get("passed"),
+                        "pdf_path": preview.pdf_path,
+                    }
+                    if preview
+                    else None
+                ),
+            )
+        )
+    return out

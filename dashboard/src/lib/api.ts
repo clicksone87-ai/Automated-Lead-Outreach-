@@ -32,6 +32,7 @@ export type AuditRow = Schemas["AuditRow"];
 export type AuditPage = Schemas["AuditPage"];
 export type AuditDetail = Schemas["AuditDetail"];
 export type FreeTier = Schemas["FreeTierOut"];
+export type GalleryItem = Schemas["GalleryItem"];
 
 export class ApiError extends Error {
   constructor(

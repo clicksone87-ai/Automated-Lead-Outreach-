@@ -317,3 +317,12 @@ class AuditDetail(BaseModel):
     mobile_path: str | None
     evidence: dict[str, EvidenceRef]
     created_at: datetime
+
+
+class GalleryItem(BaseModel):
+    lead_id: uuid.UUID
+    business_name: str | None
+    status: str
+    language: str | None
+    logos: list[dict[str, Any]]
+    preview: dict[str, Any] | None

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Panel, PanelHeader } from "@/components/common/panel";
 import { EmptyState, ErrorState, RowsSkeleton } from "@/components/common/states";
+import { LogoGrid, PreviewCard } from "@/components/deliverables/deliverables";
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -222,7 +223,7 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
           )}
         </TabsContent>
 
-        <TabsContent value="drafts" className="grid gap-4 pt-4 md:grid-cols-3">
+        <TabsContent value="drafts" className="grid gap-4 pt-4">
           <Panel as="div">
             <PanelHeader title="Audit" />
             {data.audit ? (
@@ -234,7 +235,9 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
           <Panel as="div">
             <PanelHeader title="Logo concepts" />
             {data.logos.length ? (
-              <div className="p-4 text-sm">{data.logos.length} concepts</div>
+              <div className="p-4">
+                <LogoGrid logos={data.logos} />
+              </div>
             ) : (
               <NotYet icon={Palette} title="No data yet" description="Created only after qualification and a verified contact route." />
             )}
@@ -242,7 +245,9 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
           <Panel as="div">
             <PanelHeader title="Website preview" />
             {data.preview ? (
-              <div className="p-4 text-sm">Template {String(data.preview.template_id)}</div>
+              <div className="p-4">
+                <PreviewCard preview={data.preview} />
+              </div>
             ) : (
               <NotYet icon={ImageIcon} title="No data yet" description="Built from a template after branding, then quality-checked." />
             )}

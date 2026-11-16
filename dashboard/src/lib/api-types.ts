@@ -175,6 +175,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/gallery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gallery */
+        get: operations["gallery_api_gallery_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/free-tier": {
         parameters: {
             query?: never;
@@ -631,6 +648,28 @@ export interface components {
              * @default http://localhost:8025
              */
             mailpit_url: string;
+        };
+        /** GalleryItem */
+        GalleryItem: {
+            /**
+             * Lead Id
+             * Format: uuid
+             */
+            lead_id: string;
+            /** Business Name */
+            business_name: string | null;
+            /** Status */
+            status: string;
+            /** Language */
+            language: string | null;
+            /** Logos */
+            logos: {
+                [key: string]: unknown;
+            }[];
+            /** Preview */
+            preview: {
+                [key: string]: unknown;
+            } | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1335,6 +1374,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntegrationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gallery_api_gallery_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GalleryItem"][];
                 };
             };
             /** @description Validation Error */
