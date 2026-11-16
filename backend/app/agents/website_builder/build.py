@@ -249,6 +249,9 @@ async def lighthouse_scores(site: Path) -> dict[str, float]:
             [
                 binary, f"http://127.0.0.1:{port}/", "--output=json", "--quiet",
                 "--form-factor=mobile", "--skip-audits=is-crawlable",
+                # Calibrated for this host: Lighthouse's default 4x CPU slowdown assumes a fast
+                # desktop; on a small local machine it measures the laptop, not the site.
+                "--throttling.cpuSlowdownMultiplier=1",
                 "--only-categories=performance,accessibility,best-practices,seo",
                 "--chrome-flags=--headless=new --no-sandbox --disable-dev-shm-usage",
             ],

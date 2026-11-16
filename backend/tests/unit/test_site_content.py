@@ -15,6 +15,7 @@ from app.agents.website_builder.content import (
     nav_pages,
     pick_variant,
     sections_for,
+    trade_label,
 )
 
 NAV = """<html><body><header><nav>
@@ -95,3 +96,16 @@ def test_screenshots_pdf() -> None:
     Image.new("RGB", (40, 30), (255, 0, 0)).save(buf, format="PNG")
     pdf = screenshots_pdf([buf.getvalue(), buf.getvalue()])
     assert pdf.startswith(b"%PDF")
+
+
+def test_nav_skips_utility_pages_and_normalises_labels() -> None:
+    html = '<nav><a href="/SERVICES">SERVICES PROVIDED</a><a href="/sitemap.xml">Sitemap</a><a href="/privacy">Privacy</a><a href="/portfolio">project portfolio</a></nav>'
+    assert nav_pages(html, "https://x.example/") == [
+        ("services", "Services Provided"),
+        ("portfolio", "Project Portfolio"),
+    ]
+
+
+def test_trade_label_from_industry_key() -> None:
+    assert trade_label("home_services") == "Plumber"
+    assert trade_label("roofer") == "Roofer"

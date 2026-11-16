@@ -25,6 +25,7 @@ from app.adapters.apify import ApifyClient
 from app.adapters.base import AdapterUnavailableError
 from app.adapters.email import DisabledEmail, EmailAdapter, MockEmail, ResendEmail
 from app.adapters.email_free import LocalVerifier, MailpitMailbox, SmtpEmail
+from app.adapters.email_render import EmailRenderer, FixtureRenderer, ReactEmailRenderer
 from app.adapters.fetcher import SafeFetcher
 from app.adapters.gemini import GeminiLLM
 from app.adapters.google import (
@@ -77,6 +78,7 @@ class Adapters:
     fetcher: SafeFetcher
     apify: ApifyClient | None = None
     serper: SerperSearch | None = None
+    renderer: EmailRenderer | None = None
     mocks_in_use: set[str] = field(default_factory=set)
 
     def uses_mock(self, *names: str) -> bool:
@@ -197,6 +199,9 @@ def build_adapters(s: Settings) -> Adapters:  # noqa: PLR0915 - one flat decisio
         fetcher=SafeFetcher(s.crawler_user_agent),
         apify=ApifyClient(_key(s.apify_api_token)) if ready("apify") else None,
         serper=serper,
+        renderer=FixtureRenderer()
+        if s.mocks_allowed
+        else ReactEmailRenderer(s.email_templates_dir, s.data_dir / "email-renderer"),
         mocks_in_use=mocks,
     )
     if mocks:

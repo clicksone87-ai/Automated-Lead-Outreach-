@@ -46,6 +46,9 @@ class RuntimeSettings(BaseModel):
     hourly_send_limit: int = Field(default=3, ge=0)
     # Domain warm-up: max sends per day by week since first send (last value repeats)
     warmup_schedule: list[int] = Field(default_factory=lambda: [5, 10, 20, 35, 50])
+    # Mailpit sandbox delivers immediately unless this is on (real sending always respects
+    # the recipient's business hours).
+    sandbox_respect_send_window: bool = False
     daily_budget_usd: float = Field(default=4.0, ge=0)
     monthly_budget_usd: float = Field(default=120.0, ge=0)
     # keys: "agent:<name>" or "provider:<name>"

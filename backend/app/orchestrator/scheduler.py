@@ -6,6 +6,7 @@ enqueued onto the worker queue.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, ClassVar
@@ -14,14 +15,16 @@ from arq import cron
 from sqlalchemy import select
 
 from app.adapters.base import AdapterUnavailableError
+from app.adapters.registry import get_adapters
 from app.agents.discovery.runner import ensure_source_rows
 from app.agents.discovery.sources.reddit import sync_deletions
+from app.agents.discovery.sources.social_apify import sync_reddit_deletions
 from app.config import get_settings, integration_status
 from app.db.models import Source
 from app.db.session import session_scope
 from app.logging_setup import configure_logging
 from app.orchestrator.queue import SCHEDULER_QUEUE, enqueue_source, redis_settings
-from app.services import backup
+from app.services import backup, outreach_jobs
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +50,53 @@ async def tick_sources(ctx: dict[str, Any]) -> int:
 
 
 async def reddit_deletion_sync(ctx: dict[str, Any]) -> int:
+    """Delete stored Reddit posts that were deleted on Reddit (official API or Apify)."""
     s = get_settings()
-    if not integration_status(s)["reddit"].configured:
-        return 0
+    removed = 0
+    async with session_scope() as session:
+        if integration_status(s)["reddit"].configured:
+            with contextlib.suppress(AdapterUnavailableError):
+                removed += await sync_deletions(session, s)
+        apify = get_adapters().apify
+        if apify is not None:
+            try:
+                removed += await sync_reddit_deletions(session, apify)
+            except Exception:  # an actor problem must never break the scheduler
+                logger.exception("apify reddit deletion sync failed")
+    return removed
+
+
+async def _outreach(job: str) -> int:
+    settings, adapters = get_settings(), get_adapters()
     async with session_scope() as session:
         try:
-            return await sync_deletions(session, s)
-        except AdapterUnavailableError:
-            return 0
+            if job == "send_due":
+                return await outreach_jobs.send_due(session, settings, adapters)
+            if job == "poll_delivery":
+                return await outreach_jobs.poll_delivery(session, adapters)
+            if job == "ingest_replies":
+                return await outreach_jobs.ingest_replies(session, settings, adapters)
+            if job == "follow_ups":
+                return await outreach_jobs.follow_ups(session, settings, adapters)
+        except AdapterUnavailableError as exc:
+            logger.info("outreach job %s skipped: %s", job, exc)
+    return 0
+
+
+async def send_due(ctx: dict[str, Any]) -> int:
+    return await _outreach("send_due")
+
+
+async def poll_delivery(ctx: dict[str, Any]) -> int:
+    return await _outreach("poll_delivery")
+
+
+async def ingest_replies(ctx: dict[str, Any]) -> int:
+    return await _outreach("ingest_replies")
+
+
+async def follow_ups(ctx: dict[str, Any]) -> int:
+    return await _outreach("follow_ups")
 
 
 async def daily_backup(ctx: dict[str, Any]) -> str:
@@ -69,8 +111,12 @@ class SchedulerSettings:
     functions: ClassVar[list[Any]] = []
     cron_jobs: ClassVar[list[Any]] = [
         cron(tick_sources, minute=set(range(60)), run_at_startup=True),
-        cron(reddit_deletion_sync, minute={7}),
+        cron(reddit_deletion_sync, hour={4}, minute={7}),
         cron(daily_backup, hour={3}, minute={15}),
+        cron(send_due, minute=set(range(0, 60, 5))),
+        cron(ingest_replies, minute=set(range(2, 60, 5))),
+        cron(poll_delivery, minute={11, 26, 41, 56}),
+        cron(follow_ups, minute={33}),
     ]
     on_startup = startup
     redis_settings = redis_settings()

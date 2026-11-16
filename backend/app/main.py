@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api import outreach_routes
 from app.api.deps import require_token
 from app.api.routes import public, router
 from app.config import get_settings, log_missing_integrations
@@ -38,6 +39,8 @@ def create_app() -> FastAPI:
     )
     app.include_router(public)
     app.include_router(router, dependencies=[Depends(require_token)])
+    app.include_router(outreach_routes.public)
+    app.include_router(outreach_routes.router, dependencies=[Depends(require_token)])
     return app
 
 

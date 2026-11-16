@@ -1,0 +1,123 @@
+"""Agent 8 — Outreach: sends the approved proposal.
+
+Only approved proposals are sent (Stage 1: by a human; Stage 2+: automatically). Every send
+passes the full policy gate first (suppression, country rules, language, cooldown + active
+outreach lock, send limits, QA gate, recipient, sender identity, restricted actions). Real
+sending waits for the recipient's local business hours; the Mailpit sandbox delivers
+immediately unless `sandbox_respect_send_window` is on. Follow-ups, delivery tracking and
+replies are scheduler jobs (services.outreach_jobs).
+"""
+
+from __future__ import annotations
+
+import logging
+import uuid
+from datetime import UTC, datetime, timedelta
+from typing import ClassVar
+
+from sqlalchemy import select
+
+from app.db.models import ApprovalStatus, Business, Lead, LeadStatus, Proposal
+from app.orchestrator.agents import AgentContext, AgentOutcome, register
+from app.policy.engine import PolicyEngine
+from app.services import activity, runtime_settings
+from app.services.sending import acquire_lock, deliver, next_send_time, schedule
+
+logger = logging.getLogger(__name__)
+STATUS_FOR_CHECK = {
+    "suppression": LeadStatus.SUPPRESSED,
+    "duplicate_cooldown": LeadStatus.COOLDOWN,
+}
+
+
+class OutreachAgent:
+    name: ClassVar[str] = "outreach"
+    expensive: ClassVar[bool] = False
+
+    async def run(self, ctx: AgentContext, lead_id: uuid.UUID) -> AgentOutcome:
+        s = ctx.session
+        lead = await s.get(Lead, lead_id)
+        if lead is None or lead.business_id is None:
+            return AgentOutcome(False, None, "missing lead")
+        proposal = (
+            await s.execute(
+                select(Proposal)
+                .where(Proposal.lead_id == lead.id)
+                .order_by(Proposal.version.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if proposal is None:
+            return AgentOutcome(False, None, "no proposal to send")
+        if proposal.approval_status == ApprovalStatus.PENDING:
+            return AgentOutcome(False, LeadStatus.AWAITING_APPROVAL, "waiting for approval")
+        if proposal.approval_status != ApprovalStatus.APPROVED:
+            return AgentOutcome(
+                False, LeadStatus.REJECTED_BY_HUMAN, f"proposal {proposal.approval_status}"
+            )
+        if not proposal.to_email:
+            return AgentOutcome(
+                False, LeadStatus.AWAITING_APPROVAL, "manual route: a human sends this proposal"
+            )
+
+        sandbox = bool(getattr(ctx.adapters.email, "is_sandbox", False))
+        verdict = await PolicyEngine(s).evaluate_outreach(
+            lead,
+            email=proposal.to_email,
+            recipient_type=lead.recipient_type or "unknown",
+            sandbox=sandbox,
+        )
+        if not verdict.allowed:
+            first = verdict.failures[0]
+            status = STATUS_FOR_CHECK.get(first.check)
+            if first.check == "send_limits":
+                return AgentOutcome(
+                    False, LeadStatus.APPROVED, f"send limit reached — will retry: {first.reason}"
+                )
+            return AgentOutcome(
+                False, status or LeadStatus.NEEDS_REVIEW, f"policy blocked sending: {first.reason}"
+            )
+
+        if not await acquire_lock(s, lead):
+            return AgentOutcome(
+                False,
+                LeadStatus.DUPLICATE,
+                "another lead for this business holds the outreach lock",
+            )
+
+        rs = await runtime_settings.load(s)
+        now = datetime.now(UTC)
+        when = next_send_time(now, lead.timezone, lead.country, rs.sending_window)
+        if when > now and (not sandbox or rs.sandbox_respect_send_window):
+            await schedule(
+                s, proposal=proposal, to=proposal.to_email, at=when, subject=proposal.subject
+            )
+            return AgentOutcome(
+                False,
+                LeadStatus.APPROVED,
+                f"scheduled for {when:%Y-%m-%d %H:%M} UTC (recipient business hours)",
+            )
+
+        msg = await deliver(
+            s, ctx.settings, ctx.adapters, lead=lead, proposal=proposal, to=proposal.to_email,
+            subject=proposal.subject, html=proposal.body_html, text=proposal.body_text,
+            attachments=proposal.attachments,
+        )  # fmt: skip
+        business = await s.get(Business, lead.business_id)
+        if business is not None:
+            business.cooldown_until = now + timedelta(days=rs.cooldown_days)
+        note = " (sandbox: captured by Mailpit, not really sent)" if msg.sandbox else ""
+        if msg.sandbox and when > now:
+            note += f"; outside business hours — would have waited until {when:%Y-%m-%d %H:%M} UTC"
+        await activity.emit(
+            s,
+            "email_sent",
+            f"Proposal sent to {proposal.to_email}{note}",
+            lead_id=lead.id,
+            agent=self.name,
+        )
+        return AgentOutcome(True, LeadStatus.SENT, f"sent to {proposal.to_email}{note}",
+                            {"message_id": str(msg.id), "sandbox": msg.sandbox})  # fmt: skip
+
+
+register(OutreachAgent())

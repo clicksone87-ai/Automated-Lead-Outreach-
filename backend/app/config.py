@@ -102,6 +102,9 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./data")
     # Website templates (mounted read-only at /site-templates in the containers)
     site_templates_dir: Path = Path("/site-templates")
+    email_templates_dir: Path = Path("/email-templates")
+    # Signs unsubscribe links (and other tokens). Set a long random value on a server.
+    app_secret: SecretStr | None = None
     dashboard_origin: str = "http://localhost:3000"
     # Optional bearer token for the API (recommended when moving to a server). Empty = off.
     api_token: SecretStr | None = None

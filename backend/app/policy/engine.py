@@ -237,19 +237,23 @@ class PolicyEngine:
         return await self._log(result, action=action, lead_id=lead_id)
 
     async def check_qa_gate(self, *, action: str, lead: Lead) -> PolicyResult:
-        failed_logos = (
-            await self.session.execute(
-                select(func.count())
-                .select_from(LogoConcept)
-                .where(LogoConcept.lead_id == lead.id, LogoConcept.qa_status != QAStatus.PASSED)
+        """Drafts that leave the building must have passed QA: at least one passed logo concept
+        (only passed concepts are ever attached) and a passed website preview, when made."""
+        logos = (
+            (
+                await self.session.execute(
+                    select(LogoConcept.qa_status).where(LogoConcept.lead_id == lead.id)
+                )
             )
-        ).scalar_one()
+            .scalars()
+            .all()
+        )
         preview = (
             await self.session.execute(select(Preview).where(Preview.lead_id == lead.id))
         ).scalar_one_or_none()
         problems = []
-        if failed_logos:
-            problems.append(f"{failed_logos} logo concept(s) not QA-passed")
+        if logos and QAStatus.PASSED not in logos:
+            problems.append("no logo concept has passed the quality check")
         if preview is not None and preview.qa_status != QAStatus.PASSED:
             problems.append("website preview not QA-passed")
         result = PolicyResult(
@@ -314,20 +318,38 @@ class PolicyEngine:
         return PolicyVerdict(results)
 
     async def evaluate_outreach(
-        self, lead: Lead, *, email: str, recipient_type: str
+        self, lead: Lead, *, email: str, recipient_type: str, sandbox: bool = False
     ) -> PolicyVerdict:
-        """The full pre-send gate. All checks run and are logged; any failure blocks."""
+        """The full pre-send gate. All checks run and are logged; any failure blocks.
+
+        `sandbox` = the transport is Mailpit (captured locally, never delivered). Only then a
+        "not legally reviewed" country result is downgraded to allowed — with the original
+        reason kept in the log — so the flow can be tested end to end. Real sending (Resend)
+        always needs legally reviewed country rules.
+        """
         rs = await runtime_settings.load(self.session)
-        demo_mode = get_settings().demo_mode
+        demo_mode = get_settings().mocks_allowed
         action = "send_email"
+        country = await self.check_country(
+            action=action, lead=lead, purpose="send", recipient_type=recipient_type
+        )
+        if sandbox and not country.allowed and "legally reviewed" in country.reason:
+            country = await self._log(
+                PolicyResult(
+                    "country",
+                    True,
+                    f"sandbox delivery (Mailpit) — nothing is really sent; real sending "
+                    f"blocked: {country.reason}",
+                ),
+                action=action,
+                lead_id=lead.id,
+            )
         results = [
             await self.check_restricted(action=action, lead_id=lead.id),
             await self.check_suppression(
                 action=action, lead_id=lead.id, email=email, business_id=lead.business_id
             ),
-            await self.check_country(
-                action=action, lead=lead, purpose="send", recipient_type=recipient_type
-            ),
+            country,
             await self.check_language(action=action, lead=lead, purpose="send", rs=rs),
             await self.check_cooldown_and_lock(action=action, lead=lead),
             await self.check_send_limits(action=action, lead_id=lead.id, rs=rs),

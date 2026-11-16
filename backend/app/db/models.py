@@ -467,6 +467,14 @@ class Proposal(Base):
     approved_by: Mapped[str | None] = mapped_column(String(100))
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     rejection_reason: Mapped[str | None] = mapped_column(Text)
+    # Phase 4: recipient + route, and whether the transport is a sandbox (Mailpit)
+    to_email: Mapped[str | None] = mapped_column(String(320))
+    contact_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("contacts.id", ondelete="SET NULL")
+    )
+    edited_by_human: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # the editable parts (greeting/intro/closing/signoff/preview_text) — claims are fixed
+    draft: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _updated()
 
@@ -489,6 +497,11 @@ class Message(Base):
     bounce_type: Mapped[str | None] = mapped_column(String(50))
     complained: Mapped[bool] = mapped_column(Boolean, default=False)
     follow_up_number: Mapped[int] = mapped_column(Integer, default=0)
+    # Phase 4
+    subject: Mapped[str | None] = mapped_column(Text)
+    message_id_header: Mapped[str | None] = mapped_column(String(300), index=True)
+    sandbox: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _updated()
 
@@ -507,6 +520,12 @@ class Reply(Base):
     raw: Mapped[str] = mapped_column(Text)
     classification: Mapped[str | None] = mapped_column(String(20))
     handed_to_inbox: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Phase 4
+    lead_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("leads.id", ondelete="SET NULL"), index=True
+    )
+    body_text: Mapped[str | None] = mapped_column(Text)
+    classification_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = _created()
 
 

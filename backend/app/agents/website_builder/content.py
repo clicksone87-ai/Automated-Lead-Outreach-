@@ -132,13 +132,37 @@ def nav_pages(html: str, base_url: str, limit: int = 5) -> list[tuple[str, str]]
             continue
         slug = re.sub(r"[^a-z0-9-]", "", parts.path.strip("/").split("/")[0].lower())[:40]
         text = " ".join(a.get_text(" ").split())[:40]
-        if not slug or slug in seen or not text or slug in ("index", "home", "wp-admin"):
+        if (
+            not slug
+            or slug in seen
+            or not text
+            or slug in ("index", "home")
+            or _UTILITY.search(slug)
+        ):
             continue
+        if text.isupper() or text.islower():
+            text = text.title()
         seen.add(slug)
         out.append((slug, text))
         if len(out) >= limit:
             break
     return out
+
+
+_UTILITY = re.compile(
+    r"(sitemap|privacy|terms|cookie|login|log-in|signin|account|cart|checkout|search|feed|"
+    r"wp-|admin|careers|jobs|blog|news|faq)",
+    re.I,
+)
+
+
+def trade_label(trade: str) -> str:
+    """'home_services' (an internal industry key) → a human trade word for the page."""
+    if "_" in trade:
+        from app.agents.discovery.base import industry_keywords  # noqa: PLC0415
+
+        trade = industry_keywords(trade)[0]
+    return trade[:1].upper() + trade[1:]
 
 
 def sections_for(slug: str) -> list[str]:
@@ -188,7 +212,7 @@ def build_content(
         "mode": mode,
         "business": {
             "name": facts.name,
-            "trade": facts.trade,
+            "trade": trade_label(facts.trade),
             "phone": facts.phone,
             "email": facts.email,
             "address": facts.address,

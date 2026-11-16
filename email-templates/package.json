@@ -1,0 +1,16 @@
+{
+  "name": "email-templates",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "React Email templates (proposal + follow-up) per language. render.mjs reads JSON on stdin and prints {html, text}.",
+  "scripts": {
+    "render": "node render.mjs"
+  },
+  "dependencies": {
+    "@react-email/components": "1.0.12",
+    "@react-email/render": "2.2.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  }
+}
