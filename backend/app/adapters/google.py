@@ -94,15 +94,28 @@ class GooglePageSpeed:
     async def run(
         self, url: str, strategy: str = "mobile", *, session: AsyncSession | None = None
     ) -> PageSpeedResult:
+        key = None
         if session is not None:
-            from app.orchestrator import quota  # noqa: PLC0415
+            from datetime import timedelta  # noqa: PLC0415
 
+            from app.orchestrator import quota  # noqa: PLC0415
+            from app.services import cache  # noqa: PLC0415
+
+            key = cache.make_key("pagespeed", {"url": url, "strategy": strategy})
+            hit = await cache.get(session, key)
+            if hit is not None:
+                return PageSpeedResult.model_validate(hit)
             await quota.consume(session, "pagespeed", agent="audit", description=url[:200])
         pairs = [("url", url), ("strategy", strategy), ("key", self._key)]
         pairs += [("category", c.upper().replace("-", "_")) for c in LIGHTHOUSE_CATEGORIES]
         resp = await self._client.get(self.ENDPOINT, params=tuple(pairs))
         resp.raise_for_status()
-        return parse_pagespeed(url, strategy, resp.json())
+        result = parse_pagespeed(url, strategy, resp.json())
+        if session is not None and key is not None:
+            await cache.put(
+                session, key, "pagespeed", result.model_dump(mode="json"), ttl=timedelta(days=7)
+            )
+        return result
 
 
 class GooglePlaces:

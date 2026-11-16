@@ -85,7 +85,7 @@ async def _lead(settings: Settings, *, email: str = "owner@hubcity.example") -> 
         await s.flush()
         lead = Lead(business_id=biz.id, source="local_sites", source_url="https://hubcity.example/",
                     source_item_id=uuid.uuid4().hex, trigger_type="broken_or_outdated_site", country="US",
-                    language="en", timezone="America/Chicago", status="qa_passed", recipient_type="business",
+                    language="en", timezone="America/Chicago", status="qa_passed", recipient_type="corporate_entity",
                     pipeline_state={"contact_id": str(contact.id), "contact_channel": "email"})  # fmt: skip
         s.add(lead)
         await s.flush()
@@ -327,3 +327,16 @@ async def test_autonomy_move_up_blocked_until_conditions_met() -> None:
         )
         down = await autonomy.change_stage(s, 1, changed_by="test", reason="back down")
         assert down.stage == 1
+
+
+async def test_sandbox_still_enforces_recipient_type_rules(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    lead_id = await _lead(settings)
+    async with session_scope() as s:
+        lead = await s.get(Lead, lead_id)
+        lead.recipient_type = "consumer"  # type: ignore[union-attr]
+    await _propose(settings, lead_id)
+    await _approve(lead_id)
+    sandbox = SandboxEmail()
+    outcome = await _send(settings, lead_id, sandbox)
+    assert not outcome.proceed and "recipient type" in outcome.reason and not sandbox.sent

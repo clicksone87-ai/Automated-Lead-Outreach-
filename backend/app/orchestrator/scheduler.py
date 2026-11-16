@@ -22,9 +22,10 @@ from app.agents.discovery.sources.social_apify import sync_reddit_deletions
 from app.config import get_settings, integration_status
 from app.db.models import Source
 from app.db.session import session_scope
+from app.learning.report import run_weekly
 from app.logging_setup import configure_logging
 from app.orchestrator.queue import SCHEDULER_QUEUE, enqueue_source, redis_settings
-from app.services import backup, outreach_jobs
+from app.services import backup, cache, outreach_jobs
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,22 @@ async def daily_backup(ctx: dict[str, Any]) -> str:
     return str(await backup.run_backup())
 
 
+async def weekly_report(ctx: dict[str, Any]) -> str:
+    async with session_scope() as session:
+        report = await run_weekly(session)
+        await cache.purge_expired(session)
+        return str(report.id)
+
+
+async def heartbeat(ctx: dict[str, Any]) -> None:
+    """Monitoring: proves the scheduler is alive (read by /api/monitoring)."""
+    from datetime import UTC, datetime  # noqa: PLC0415
+
+    redis = ctx.get("redis")
+    if redis is not None:
+        await redis.set("heartbeat:scheduler", datetime.now(UTC).isoformat(), ex=600)
+
+
 async def startup(ctx: dict[str, Any]) -> None:
     configure_logging()
 
@@ -117,6 +134,8 @@ class SchedulerSettings:
         cron(ingest_replies, minute=set(range(2, 60, 5))),
         cron(poll_delivery, minute={11, 26, 41, 56}),
         cron(follow_ups, minute={33}),
+        cron(weekly_report, weekday={0}, hour={6}, minute={30}),
+        cron(heartbeat, minute=set(range(60))),
     ]
     on_startup = startup
     redis_settings = redis_settings()

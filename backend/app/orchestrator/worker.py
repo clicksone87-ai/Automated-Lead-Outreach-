@@ -11,7 +11,7 @@ import uuid
 from typing import Any, ClassVar
 
 import httpx
-from arq import Retry
+from arq import Retry, cron
 
 from app.adapters.registry import get_adapters
 from app.agents.discovery.runner import run_source
@@ -68,12 +68,20 @@ async def startup(ctx: dict[str, Any]) -> None:
     log_missing_integrations(get_settings())
 
 
+async def heartbeat(ctx: dict[str, Any]) -> None:
+    """Monitoring: proves the worker is alive and consuming (read by /api/monitoring)."""
+    from datetime import UTC, datetime  # noqa: PLC0415
+
+    await ctx["redis"].set("heartbeat:worker", datetime.now(UTC).isoformat(), ex=600)
+
+
 async def shutdown(ctx: dict[str, Any]) -> None:
     await get_adapters().fetcher.aclose()
 
 
 class WorkerSettings:
     functions: ClassVar[list[Any]] = [run_pipeline, run_source_job]
+    cron_jobs: ClassVar[list[Any]] = [cron(heartbeat, minute=set(range(60)), run_at_startup=True)]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = redis_settings()

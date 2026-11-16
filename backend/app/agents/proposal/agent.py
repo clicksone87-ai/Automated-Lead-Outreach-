@@ -87,6 +87,20 @@ class ProposalAgent:
     name: ClassVar[str] = "proposal"
     expensive: ClassVar[bool] = True
 
+    async def can_resume(self, ctx: AgentContext, lead_id: uuid.UUID) -> bool:
+        """After a human approves the (email) proposal, the pipeline continues to Outreach."""
+        latest = (
+            await ctx.session.execute(
+                select(Proposal)
+                .where(Proposal.lead_id == lead_id)
+                .order_by(Proposal.version.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        return bool(
+            latest and latest.approval_status == ApprovalStatus.APPROVED and latest.to_email
+        )
+
     async def run(self, ctx: AgentContext, lead_id: uuid.UUID) -> AgentOutcome:
         s = ctx.session
         lead = await s.get(Lead, lead_id)

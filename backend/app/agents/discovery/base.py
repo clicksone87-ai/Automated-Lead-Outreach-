@@ -84,7 +84,8 @@ SERVICE_PATTERNS = {
     "website": r"\b(new|build|create|need|looking for)\b.{0,40}\b(web ?site|webpage|web page|"
     r"landing page|online presence)\b|\bweb ?(designer|developer)\b",
     "redesign": r"\b(redesign|revamp|refresh|modernise|modernize|update|rebuild)\b.{0,30}"
-    r"\b(web ?site|site)\b|\boutdated (web ?site|site)\b",
+    r"\b(web ?site|site)\b|\b(web ?site|site)\s+(re-?design|revamp|refresh|makeover|rebuild|"
+    r"overhaul|update)\b|\boutdated (web ?site|site)\b",
     "logo": r"\b(logo|branding|brand identity|brand design)\b",
     "seo": r"\b(seo|search engine optimi[sz]ation|rank(ing)? (higher|on google)|google ranking|"
     r"local seo)\b",

@@ -37,7 +37,7 @@ async def last_success(session: AsyncSession, agent: str, lead_id: uuid.UUID) ->
     ).scalar_one_or_none()
 
 
-async def execute(
+async def execute(  # noqa: PLR0915 - linear bookkeeping of one run
     ctx: AgentContext, agent: LeadAgent, lead_id: uuid.UUID, *, force: bool = False
 ) -> AgentOutcome:
     """Run one agent for one lead, recording everything. Never raises for expected stops."""
@@ -45,11 +45,13 @@ async def execute(
     if not force:
         done = await last_success(session, agent.name, lead_id)
         if done is not None:
-            return AgentOutcome(
-                proceed=bool(done.output.get("proceed", True)),
-                reason="already completed",
-                output=done.output,
-            )
+            proceed = bool(done.output.get("proceed", True))
+            # A step that stopped the pipeline to wait for something (e.g. human approval) may
+            # let it continue once that has happened — the agent decides, never the caller.
+            resume = getattr(agent, "can_resume", None)
+            if not proceed and resume is not None and await resume(ctx, lead_id):
+                return AgentOutcome(proceed=True, reason="resumed", output=done.output)
+            return AgentOutcome(proceed=proceed, reason="already completed", output=done.output)
 
     run = AgentRun(
         agent=agent.name,

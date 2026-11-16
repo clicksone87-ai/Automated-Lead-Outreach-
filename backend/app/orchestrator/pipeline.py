@@ -15,7 +15,7 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from app.adapters.registry import Adapters, get_adapters
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.db.session import session_scope
 from app.orchestrator import runs
 from app.orchestrator.agents import PIPELINE_ORDER, AgentContext, LeadAgent, load_agents
@@ -33,11 +33,11 @@ class PipelineState(TypedDict, total=False):
 NodeFn = Callable[[PipelineState], Awaitable[dict[str, Any]]]
 
 
-def _node(agent: LeadAgent, adapters: Adapters) -> NodeFn:
+def _node(agent: LeadAgent, adapters: Adapters, settings: Settings) -> NodeFn:
     async def run_node(state: PipelineState) -> dict[str, Any]:
         lead_id = uuid.UUID(state["lead_id"])
         async with session_scope() as session:
-            ctx = AgentContext(session=session, adapters=adapters, settings=get_settings())
+            ctx = AgentContext(session=session, adapters=adapters, settings=settings)
             outcome = await runs.execute(ctx, agent, lead_id)
         completed = [*state.get("completed", []), agent.name]
         if outcome.proceed:
@@ -47,7 +47,10 @@ def _node(agent: LeadAgent, adapters: Adapters) -> NodeFn:
     return run_node
 
 
-def build_graph(agents: dict[str, LeadAgent], adapters: Adapters) -> Any:
+def build_graph(
+    agents: dict[str, LeadAgent], adapters: Adapters, settings: Settings | None = None
+) -> Any:
+    settings = settings or get_settings()
     steps = [name for name in PIPELINE_ORDER if name in agents]
     graph: Any = StateGraph(PipelineState)
     if not steps:
@@ -56,7 +59,7 @@ def build_graph(agents: dict[str, LeadAgent], adapters: Adapters) -> Any:
         graph.add_edge("noop", END)
         return graph.compile()
     for name in steps:
-        graph.add_node(name, _node(agents[name], adapters))
+        graph.add_node(name, _node(agents[name], adapters, settings))
     graph.add_edge(START, steps[0])
     for current, nxt in zip(steps, [*steps[1:], None], strict=True):
         graph.add_conditional_edges(

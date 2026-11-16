@@ -122,8 +122,16 @@ class PolicyEngine:
         return await self._log(result, action=action, lead_id=lead_id)
 
     async def check_country(
-        self, *, action: str, lead: Lead, purpose: str, recipient_type: str = "unknown"
+        self,
+        *,
+        action: str,
+        lead: Lead,
+        purpose: str,
+        recipient_type: str = "unknown",
+        sandbox: bool = False,
     ) -> PolicyResult:
+        """`sandbox` (Mailpit: captured locally, never delivered) skips ONLY the legal-review
+        condition; consent and recipient-type rules always apply."""
         rule = self.rules.get(lead.country)
         if rule is None:
             result = PolicyResult("country", False, f"no rules loaded for country {lead.country!r}")
@@ -135,7 +143,7 @@ class PolicyEngine:
             )
         elif not rule.enabled:
             result = PolicyResult("country", False, "country disabled")
-        elif not rule.legal_reviewed:
+        elif not rule.legal_reviewed and not sandbox:
             result = PolicyResult("country", False, "country rules not legally reviewed yet")
         elif rule.requires_prior_consent:
             result = PolicyResult("country", False, "country requires prior consent")
@@ -145,6 +153,13 @@ class PolicyEngine:
                 False,
                 f"recipient type {recipient_type!r} not allowed in {lead.country}",
                 {"allowed": list(rule.allowed_recipient_types)},
+            )
+        elif not rule.legal_reviewed:
+            result = PolicyResult(
+                "country",
+                True,
+                "sandbox delivery (Mailpit) — nothing is really sent; real sending blocked: "
+                "country rules not legally reviewed yet",
             )
         else:
             result = PolicyResult("country", True, f"{lead.country} rules allow sending")
@@ -337,19 +352,8 @@ class PolicyEngine:
         demo_mode = self.settings.mocks_allowed
         action = "send_email"
         country = await self.check_country(
-            action=action, lead=lead, purpose="send", recipient_type=recipient_type
+            action=action, lead=lead, purpose="send", recipient_type=recipient_type, sandbox=sandbox
         )
-        if sandbox and not country.allowed and "legally reviewed" in country.reason:
-            country = await self._log(
-                PolicyResult(
-                    "country",
-                    True,
-                    f"sandbox delivery (Mailpit) — nothing is really sent; real sending "
-                    f"blocked: {country.reason}",
-                ),
-                action=action,
-                lead_id=lead.id,
-            )
         results = [
             await self.check_restricted(action=action, lead_id=lead.id),
             await self.check_suppression(

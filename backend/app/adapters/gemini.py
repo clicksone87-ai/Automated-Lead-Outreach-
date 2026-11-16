@@ -260,12 +260,30 @@ class GeminiLLM:
 
     async def structured(self, session: AsyncSession, request: LLMRequest, schema: type[T]) -> T:
         body = self.build_body(request, schema)
+        # Deterministic calls are cached (saves free-tier quota on re-runs); creative logo
+        # concepts never are. Untrusted blocks use random delimiters, so the key is built
+        # from the stable parts of the request.
+        cache_key = None
+        if request.kind != "logo":
+            from app.services import cache  # noqa: PLC0415
+
+            cache_key = cache.make_key(
+                "gemini",
+                {"models": self._models[request.kind], "schema": schema.__name__, "system": request.system,
+                 "task": request.task, "untrusted": request.untrusted, "images": [len(i) for i in request.images]},
+            )  # fmt: skip
+            hit = await cache.get(session, cache_key)
+            if hit is not None:
+                try:
+                    return schema.model_validate(hit)
+                except ValidationError:
+                    pass
         last_error: Exception | None = None
         for _attempt in range(2):
             payload = await self._generate(session, request, schema, body)
             raw = self.extract_text(payload)
             try:
-                return schema.model_validate_json(_strip_fences(raw))
+                result = schema.model_validate_json(_strip_fences(raw))
             except ValidationError as exc:
                 last_error = exc
                 body = copy.deepcopy(body)
@@ -281,6 +299,20 @@ class GeminiLLM:
                         ],
                     },
                 ]
+                continue
+            if cache_key is not None:
+                from datetime import timedelta  # noqa: PLC0415
+
+                from app.services import cache  # noqa: PLC0415
+
+                await cache.put(
+                    session,
+                    cache_key,
+                    "gemini",
+                    result.model_dump(mode="json"),
+                    ttl=timedelta(days=14),
+                )
+            return result
         raise LLMOutputError(f"invalid structured output for {schema.__name__}: {last_error}")
 
 

@@ -770,3 +770,31 @@ __all__ = [
     "TriggerType",
     "VerificationStatus",
 ]
+
+
+class Report(Base):
+    """Learning-loop snapshot: weekly results by source/service/industry/
+    country/message style, plus the adjustments it made."""
+
+    __tablename__ = "reports"
+
+    id: Mapped[uuid.UUID] = _pk()
+    kind: Mapped[str] = mapped_column(String(30), default="weekly")
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    adjustments: Mapped[list[Any]] = mapped_column(JSONB, default=list)
+    created_at: Mapped[datetime] = _created()
+
+
+class ApiCache(Base):
+    """Result cache for free-tier calls (PageSpeed, deterministic LLM calls) — saves quota."""
+
+    __tablename__ = "api_cache"
+
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(30), index=True)
+    value: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    hits: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = _created()

@@ -124,3 +124,12 @@ async def test_mock_llm_uses_schema_fixture() -> None:
     llm = MockLLM()
     out = await llm.structured(None, LLMRequest(agent="t", task="x", untrusted={"a": "b"}), _Out)  # type: ignore[arg-type]
     assert out.answer == "saw 1 blocks"
+
+
+def test_detect_services_both_redesign_word_orders() -> None:
+    from app.agents.discovery.base import detect_services  # noqa: PLC0415
+
+    assert "redesign" in detect_services("We need a website redesign and a new logo")
+    assert "redesign" in detect_services("Looking to redesign our website")
+    assert "redesign" in detect_services("our site needs a makeover? site makeover quotes")
+    assert "redesign" not in detect_services("We need a new website")
