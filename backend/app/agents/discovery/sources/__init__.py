@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from app.agents.discovery.base import DiscoverySource
-from app.agents.discovery.proactive_triggers import NoWebsiteSource, SiteHealthSource
+from app.agents.discovery.proactive_triggers import (
+    LocalSitesSource,
+    NoWebsiteSource,
+    SiteHealthSource,
+)
 from app.agents.discovery.sources.boards import AlertEmailSource, FreelancerSource
 from app.agents.discovery.sources.mock_demo import MockDemoSource
 from app.agents.discovery.sources.reddit import RedditSource
@@ -37,6 +41,7 @@ _ALL: list[DiscoverySource] = [
     FreelancerSource(),
     AlertEmailSource(),
     SiteHealthSource(),
+    LocalSitesSource(),
     NoWebsiteSource(),
 ]
 # Fixture source for the automated test suite only — never registered in the running system.

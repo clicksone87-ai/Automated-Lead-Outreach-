@@ -14,13 +14,12 @@ from app.adapters.base import AdapterUnavailableError
 from app.db.models import AgentRun, Cost, Lead, LeadStatus, RunStatus
 from app.orchestrator.agents import AgentContext, AgentOutcome, LeadAgent
 from app.orchestrator.budget import BudgetExceededError
+from app.orchestrator.errors import TransientAgentError
 from app.services import activity
 
 logger = logging.getLogger(__name__)
 
-
-class TransientAgentError(Exception):
-    """Raise (or wrap) for failures worth retrying with backoff (network, 5xx, timeouts)."""
+__all__ = ["TransientAgentError", "execute", "last_success"]
 
 
 async def last_success(session: AsyncSession, agent: str, lead_id: uuid.UUID) -> AgentRun | None:

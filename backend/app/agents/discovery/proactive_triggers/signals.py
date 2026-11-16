@@ -28,9 +28,24 @@ TLDS_BY_COUNTRY = {
 }
 
 
+_CHALLENGE = re.compile(
+    r"(just a moment\.\.\.|attention required! \| cloudflare|cf-chl|cf_chl_|challenge-platform|"
+    r"captcha|are you a robot|access denied|ddos protection)",
+    re.I,
+)
+# On a normal 200 page only unambiguous challenge markers count (contact forms use reCAPTCHA).
+_CHALLENGE_200 = re.compile(
+    r"(<title>\s*just a moment\.\.\.|attention required! \| cloudflare|cf_chl_|"
+    r"/cdn-cgi/challenge-platform)",
+    re.I,
+)
+
+
 @dataclass(slots=True)
 class SiteHealth:
-    status: str  # ok | broken | outdated | unreachable
+    # ok | broken | outdated | unreachable | protected (bot check / access denied: unknown,
+    # never actionable — we do not get past challenges)
+    status: str
     signals: list[str] = field(default_factory=list)
 
 
@@ -65,8 +80,13 @@ def classify_site(
 ) -> SiteHealth:
     if status_code is None:
         return SiteHealth("unreachable", ["unreachable"])
+    head = (html or "")[:20_000]
+    if status_code in (401, 403, 429) or (status_code in (503, 202) and _CHALLENGE.search(head)):
+        return SiteHealth("protected", [f"http_{status_code}"])
     if status_code >= 400:
         return SiteHealth("broken", [f"http_{status_code}"])
+    if _CHALLENGE_200.search(head):
+        return SiteHealth("protected", ["bot_challenge"])
     signals = outdated_signals(html or "", final_url=final_url or "", now=now)
     # Two or more independent signals (or no HTTPS + no mobile) = outdated.
     strong = {"no_https", "no_mobile_viewport"}

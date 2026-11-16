@@ -95,7 +95,7 @@ class SiteHealthSource:
             except FetchError:
                 health, final_url = classify_site(None, None, None), url
             b.site_status, b.site_checked_at = health.status, datetime.now(UTC)
-            if health.status == "ok" or await _has_lead(
+            if health.status in ("ok", "protected") or await _has_lead(
                 ctx, b.id, TriggerType.BROKEN_OR_OUTDATED_SITE
             ):
                 continue

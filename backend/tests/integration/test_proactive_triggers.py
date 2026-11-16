@@ -47,6 +47,13 @@ def test_classify_site_signals() -> None:
     assert classify_site(200, NEW_SITE, "https://freshpipes.com/", now=NOW).status == "ok"
     assert classify_site(503, "", "https://x.com/").status == "broken"
     assert classify_site(None, None, None).status == "unreachable"
+    # Bot checks are "protected" (unknown), never "broken" — and never bypassed.
+    challenge = "<html><head><title>Just a moment...</title></head><body>cf_chl_opt</body></html>"
+    assert classify_site(403, challenge, "https://x.com/").status == "protected"
+    assert classify_site(200, challenge, "https://x.com/").status == "protected"
+    assert classify_site(429, "", "https://x.com/").status == "protected"
+    recaptcha_form = NEW_SITE.replace("</body>", '<div class="g-recaptcha"></div></body>')
+    assert classify_site(200, recaptcha_form, "https://freshpipes.com/", now=NOW).status == "ok"
 
 
 def test_domain_candidates_and_mentions() -> None:

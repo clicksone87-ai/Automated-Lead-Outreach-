@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.llm import LLMOutputError, LLMRequest
 from app.orchestrator import quota
+from app.orchestrator.errors import TransientAgentError
 from app.orchestrator.quota import FreeQuotaExceededError
 from app.policy.untrusted import wrap
 
@@ -37,8 +38,9 @@ BASE = "https://generativelanguage.googleapis.com/v1beta"
 MAX_RETRY_WAIT_S = 65.0
 
 
-class GeminiUnavailableError(Exception):
-    """All configured models failed with transient errors (503 / timeouts)."""
+class GeminiUnavailableError(TransientAgentError):
+    """All configured models failed with transient errors (503 / timeouts). Transient: the
+    orchestrator records the run as retrying and the worker retries it with backoff."""
 
 
 def inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
@@ -184,8 +186,10 @@ class GeminiLLM:
     async def _post(
         self, session: AsyncSession, model: str, body: dict[str, Any], request: LLMRequest
     ) -> dict[str, Any]:
-        """One logical call to `model`, retrying 429s within the free tier. Raises on failure."""
-        for attempt in range(4):
+        """One logical call to `model`, retrying 429s (server RetryInfo) and brief 503s
+        within the free tier. Raises on failure."""
+        overloaded = 0
+        for attempt in range(5):
             await quota.consume(
                 session,
                 "gemini",
@@ -218,6 +222,10 @@ class GeminiLLM:
             if resp.status_code == 400 and "responseJsonSchema" in body.get("generationConfig", {}):
                 raise _SchemaRejectedError(str(err.get("message", ""))[:300])
             if resp.status_code in (500, 502, 503, 504):
+                overloaded += 1
+                if overloaded <= 2:  # "high demand" spikes are usually short
+                    await self._sleep(2.0 if overloaded == 1 else 6.0)
+                    continue
                 raise GeminiUnavailableError(f"{model}: {resp.status_code} {err.get('status')}")
             raise LLMOutputError(
                 f"gemini {model} HTTP {resp.status_code}: {str(err.get('message', ''))[:300]}"

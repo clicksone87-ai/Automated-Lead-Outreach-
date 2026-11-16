@@ -30,15 +30,17 @@ QUERY_TEMPLATES = (
 
 class SearchApiSource:
     key: ClassVar[str] = "search_api"
-    label: ClassVar[str] = "Search API (Brave)"
+    label: ClassVar[str] = "Google indexed pages (Serper → Exa)"
     description: ClassVar[str] = (
-        "Searches indexed pages for explicit requests via the Brave Search API, then fetches "
-        "each result page through the safe fetcher."
+        "Searches indexed pages for explicit requests via the Serper Google results API (Exa "
+        "as fallback), then fetches each result page through the safe fetcher."
     )
-    integration: ClassVar[str] = "brave"
+    integration: ClassVar[str] = "serper"
     default_enabled: ClassVar[bool] = True
     default_schedule_minutes: ClassVar[int] = 30
-    constraints: ClassVar[str] = "Search API only — Google result pages are never scraped."
+    constraints: ClassVar[str] = (
+        "Licensed search APIs only (Serper, Exa) — Google result pages are never scraped."
+    )
     default_config: ClassVar[dict[str, Any]] = {"queries_per_run": 3, "freshness": "pw"}
 
     def queries(self, ctx: SourceContext) -> list[tuple[str, str]]:

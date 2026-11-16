@@ -169,9 +169,10 @@ class RequirementsAgent:
         out = _Classification()
         if lead.trigger_type != TriggerType.EXPLICIT_REQUEST or not text.strip():
             return out
-        if not looks_like_request(text):
-            # Free-tier guard: a post with no request for a logo/website/redesign/SEO is scored
-            # by rules with zero intent and never reaches the (rate-limited) LLM.
+        if (lead.language or "en") == "en" and not looks_like_request(text):
+            # Free-tier guard (English only — the patterns are English): a post with no request
+            # for a logo/website/redesign/SEO is scored by rules with zero intent and never
+            # reaches the rate-limited LLM. Other languages always go to the LLM.
             out.llm_score = 0
             out.assumptions.append(
                 "pre-filter: no request for a logo, website, redesign or SEO found; LLM not called"
@@ -297,12 +298,16 @@ class RequirementsAgent:
         rs = await runtime_settings.load(s)
         out = dict(output)
         language, country = brief.language, brief.country
+        low_intent = brief.intent.combined < rs.min_intent_score
+        intent_reason = f"intent {brief.intent.combined} < minimum {rs.min_intent_score}"
         if not language or language not in rs.enabled_languages:
             reason = f"language {language or 'unknown'} not enabled"
             return AgentOutcome(False, LeadStatus.PARKED_LANGUAGE, reason, out)
         rule = get_rules().get(country)
         if not country or country not in rs.target_countries or rule is None or not rule.can_draft:
             if not country:
+                if low_intent:  # nothing to wait for: an unknown-country lead with no intent
+                    return AgentOutcome(False, LeadStatus.REJECTED_LOW_INTENT, intent_reason, out)
                 why = "country unknown"
             elif country not in rs.target_countries:
                 why = f"{country} not a target country"
@@ -334,9 +339,8 @@ class RequirementsAgent:
             return AgentOutcome(False, LeadStatus.DUPLICATE, reason, out)
         if not verdict.allowed:
             return AgentOutcome(False, LeadStatus.PARKED_COUNTRY, verdict.failures[0].reason, out)
-        if brief.intent.combined < rs.min_intent_score:
-            reason = f"intent {brief.intent.combined} < minimum {rs.min_intent_score}"
-            return AgentOutcome(False, LeadStatus.REJECTED_LOW_INTENT, reason, out)
+        if low_intent:
+            return AgentOutcome(False, LeadStatus.REJECTED_LOW_INTENT, intent_reason, out)
         return None
 
     async def _resolve_business(

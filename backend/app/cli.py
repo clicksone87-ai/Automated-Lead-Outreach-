@@ -1,4 +1,4 @@
-"""Command line: python -m app.cli {seed|run-cycle|backup|check-providers|purge-demo}."""
+"""Command line: python -m app.cli {seed|run-cycle|run-source KEY|run-lead ID|backup|check-providers|purge-demo}."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import json
 import sys
+from typing import Any
 
 from sqlalchemy import select
 
@@ -33,6 +34,42 @@ IN_PROGRESS = (
     LeadStatus.BUILT,
     LeadStatus.QA_PASSED,
 )
+
+
+async def _run_pending() -> dict[str, object]:
+    """Run/resume the pipeline for every lead that is mid-pipeline (no discovery)."""
+    adapters = get_adapters()
+    async with session_scope() as session:
+        waiting = (
+            (
+                await session.execute(
+                    select(Lead.id)
+                    .where(Lead.status.in_([str(s) for s in IN_PROGRESS]))
+                    .order_by(Lead.created_at)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    out = []
+    for lead_id in waiting:
+        out.append(await _safe_run_lead(lead_id, adapters))
+    await adapters.fetcher.aclose()
+    return {"pipelines": out}
+
+
+async def _safe_run_lead(lead_id: Any, adapters: Any) -> dict[str, object]:
+    """One lead's pipeline; a failure is recorded (agent_runs) and the batch continues."""
+    try:
+        state = await pipeline.run_lead(lead_id, adapters)
+    except Exception as exc:
+        return {"lead_id": str(lead_id), "error": f"{type(exc).__name__}: {exc}"[:300]}
+    return {
+        "lead_id": str(lead_id),
+        "completed": state.get("completed"),
+        "stopped_at": state.get("stopped_at"),
+        "reason": state.get("reason"),
+    }
 
 
 async def _run_cycle() -> dict[str, object]:
@@ -73,15 +110,7 @@ async def _run_cycle() -> dict[str, object]:
         )
     new_leads = list(dict.fromkeys([*new_leads, *waiting]))
     for lead_id in new_leads:
-        state = await pipeline.run_lead(lead_id, adapters)
-        pipelines.append(
-            {
-                "lead_id": str(lead_id),
-                "completed": state.get("completed"),
-                "stopped_at": state.get("stopped_at"),
-                "reason": state.get("reason"),
-            }
-        )
+        pipelines.append(await _safe_run_lead(lead_id, adapters))
     await adapters.fetcher.aclose()
     return {"sources": sources, "pipelines": pipelines}
 
@@ -98,6 +127,31 @@ async def _check_providers() -> dict[str, object]:
     return {"providers": provider_check.as_dicts(rows)}
 
 
+async def _run_one_source(key: str) -> dict[str, object]:
+    """Run a single discovery source once (forced) and report the leads it created."""
+    settings, adapters = get_settings(), get_adapters()
+    async with session_scope() as session:
+        result = await run_source(session, adapters, settings, key, force=True)
+    await adapters.fetcher.aclose()
+    return {
+        "source": key,
+        "status": result.status,
+        "items": result.items_seen,
+        "lead_ids": [str(x) for x in result.lead_ids or []],
+        "error": result.error,
+    }
+
+
+async def _run_one_lead(lead_id: str) -> dict[str, object]:
+    """Run (or resume) the per-lead pipeline for one lead."""
+    import uuid  # noqa: PLC0415
+
+    adapters = get_adapters()
+    state = await pipeline.run_lead(uuid.UUID(lead_id), adapters)
+    await adapters.fetcher.aclose()
+    return {"lead_id": lead_id, **dict(state)}
+
+
 async def _purge_demo() -> dict[str, object]:
     async with session_scope() as session:
         return dict(await seed.purge_demo_data(session))
@@ -106,18 +160,37 @@ async def _purge_demo() -> dict[str, object]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="app.cli")
     parser.add_argument(
-        "command", choices=["seed", "run-cycle", "backup", "check-providers", "purge-demo"]
+        "command",
+        choices=[
+            "seed",
+            "run-cycle",
+            "run-source",
+            "run-lead",
+            "run-pending",
+            "backup",
+            "check-providers",
+            "purge-demo",
+        ],
     )
+    parser.add_argument("target", nargs="?", help="source key (run-source) or lead id (run-lead)")
     args = parser.parse_args(argv)
+    if args.command in ("run-source", "run-lead") and not args.target:
+        parser.error(f"{args.command} needs a target")
     configure_logging()
     log_missing_integrations(get_settings())
-    runner = {
-        "seed": _seed,
-        "run-cycle": _run_cycle,
-        "backup": _backup,
-        "check-providers": _check_providers,
-        "purge-demo": _purge_demo,
-    }[args.command]
+    if args.command == "run-source":
+        runner: Any = lambda: _run_one_source(args.target)  # noqa: E731
+    elif args.command == "run-lead":
+        runner = lambda: _run_one_lead(args.target)  # noqa: E731
+    else:
+        runner = {
+            "seed": _seed,
+            "run-cycle": _run_cycle,
+            "run-pending": _run_pending,
+            "backup": _backup,
+            "check-providers": _check_providers,
+            "purge-demo": _purge_demo,
+        }[args.command]
     if sys.platform == "win32":
         # psycopg async needs the selector loop on Windows (containers are Linux); the
         # audit browser runs Playwright on its own Proactor loop in a thread when needed.
