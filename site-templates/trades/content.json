@@ -1,0 +1,22 @@
+{
+  "variant": "classic",
+  "language": "en",
+  "mode": "new",
+  "business": { "name": "", "trade": "", "phone": "", "email": "", "address": "", "city": "" },
+  "brand": {
+    "primary": "#1d4ed8",
+    "accent": "#f59e0b",
+    "ink": "#0f172a",
+    "surface": "#f8fafc",
+    "fontHeading": "system-ui, sans-serif",
+    "fontBody": "system-ui, sans-serif",
+    "logoSvg": ""
+  },
+  "seo": { "title": "", "description": "" },
+  "hero": { "headline": "", "subheadline": "", "cta": "" },
+  "services": [],
+  "about": "",
+  "areas": [],
+  "pages": [{ "slug": "", "title": "Home", "sections": ["hero", "services", "about", "areas", "contact"] }],
+  "preview": { "agency": "", "notice": "Preview — not a live website" }
+}

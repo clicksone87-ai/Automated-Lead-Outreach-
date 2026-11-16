@@ -82,7 +82,7 @@ warn_unused_ignores = true
 exclude = ["app/db/migrations/"]
 
 [[tool.mypy.overrides]]
-module = ["feedparser.*", "trafilatura.*", "arq.*", "lingua.*", "tldextract.*", "holidays.*", "phonenumbers.*", "sse_starlette.*", "langgraph.*"]
+module = ["feedparser.*", "trafilatura.*", "arq.*", "lingua.*", "tldextract.*", "holidays.*", "phonenumbers.*", "sse_starlette.*", "langgraph.*", "lxml.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

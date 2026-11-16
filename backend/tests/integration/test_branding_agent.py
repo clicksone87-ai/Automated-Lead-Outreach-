@@ -16,7 +16,16 @@ from app.adapters.fetcher import SafeFetcher
 from app.adapters.registry import build_adapters
 from app.agents.branding.agent import BrandingAgent, logo_format
 from app.config import Settings
-from app.db.models import Audit, BrandProfile, Brief, Business, Evidence, Lead, LeadStatus
+from app.db.models import (
+    Audit,
+    BrandProfile,
+    Brief,
+    Business,
+    Evidence,
+    Lead,
+    LeadStatus,
+    LogoConcept,
+)
 from app.db.session import session_scope
 from app.orchestrator import runs
 from app.orchestrator.agents import AgentContext, AgentOutcome
@@ -50,6 +59,22 @@ HOME = """<!doctype html><html><head><title>Smith Plumbing | Leeds</title>
 CSS = ":root{--brand-primary:#0b5fa5;--accent:#f28c28} body{font-family:'Open Sans',sans-serif}"
 RIVAL = """<html><head><title>Rival</title><style>header{background:#c81e1e}</style></head>
 <body><header><img src="/rival-logo.png" alt="Rival logo"></header></body></html>"""
+
+
+class FakeBrowser:
+    """Renders any HTML to a small PNG (keeps tests fast and offline)."""
+
+    async def __aenter__(self) -> FakeBrowser:
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        return None
+
+    async def render_png(
+        self, html: str, *, width: int, height: int, transparent: bool = True
+    ) -> bytes:
+        colour = (11, 95, 165) if "#0b5fa5" in html else (30, 30, 30)
+        return _png(colour, (width, height))
 
 
 def _fetcher(*, robots: str = "User-agent: *\nAllow: /\n") -> SafeFetcher:
@@ -145,7 +170,9 @@ async def _run(lead_id: uuid.UUID, fetcher: SafeFetcher | None = None) -> AgentO
     adapters = build_adapters(settings)
     adapters.fetcher = fetcher or _fetcher()
     async with session_scope() as s:
-        return await runs.execute(AgentContext(s, adapters, settings), BrandingAgent(), lead_id)
+        return await runs.execute(
+            AgentContext(s, adapters, settings), BrandingAgent(browser_factory=FakeBrowser), lead_id
+        )
 
 
 async def _profile(lead_id: uuid.UUID) -> BrandProfile:
@@ -163,7 +190,29 @@ async def test_extracts_brand_with_evidence_for_every_value() -> None:
     lead_id = await _lead()
     outcome = await _run(lead_id)
     assert outcome.proceed, outcome.reason
+    assert outcome.status == LeadStatus.BRANDED
     p = await _profile(lead_id)
+
+    # 3 logo concepts: sanitised SVG + PNGs, exact wording without "Ltd", similarity checked
+    async with session_scope() as s:
+        concepts = (
+            (
+                await s.execute(
+                    select(LogoConcept)
+                    .where(LogoConcept.lead_id == lead_id)
+                    .order_by(LogoConcept.variant)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert [c.variant for c in concepts] == [1, 2, 3]
+    assert {c.typography["style"] for c in concepts} == {"wordmark", "icon_wordmark", "emblem"}
+    for c in concepts:
+        assert c.svg_path and c.svg_path.endswith(".svg") and c.png_path.endswith("-1024.png")
+        assert c.text == "Smith Plumbing" and c.language == "en"
+        assert c.similarity["checked_against"] == 1 and c.similarity["text_check"] == "exact"
+        assert c.qa_status == "pending"
 
     brand = [c for c in p.colors if c["role"] != "neutral"]
     assert brand[0] == {"hex": "#0b5fa5", "role": "primary", "weight": brand[0]["weight"]}
@@ -209,7 +258,9 @@ async def test_rerun_is_idempotent() -> None:
     adapters = build_adapters(settings)
     adapters.fetcher = _fetcher()
     async with session_scope() as s:
-        await BrandingAgent().run(AgentContext(s, adapters, settings), lead_id)
+        await BrandingAgent(browser_factory=FakeBrowser).run(
+            AgentContext(s, adapters, settings), lead_id
+        )
     second = await _profile(lead_id)
     async with session_scope() as s:
         assert (await s.execute(select(func.count(BrandProfile.id)))).scalar_one() == 1

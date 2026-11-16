@@ -6,13 +6,16 @@ business's own social profiles (recorded, not scraped: Meta/X/LinkedIn come only
 approved APIs), and competitor styles + logos for the trademark-similarity check.
 Every extracted value records its source URL / evidence id in `brand_profiles.sources`.
 
-Steps 2–3 (logo concepts, SVG/PNG) are added in 3.03–3.05.
+Steps 2–3 (3.03–3.05): 3 logo concepts designed by the LLM as SVG code (one per style),
+sanitised, rendered to PNG in a network-blocked browser, checked for the exact wording and
+compared with the competitor logos collected above (trademark-similarity guard).
 """
 
 from __future__ import annotations
 
 import io
 import logging
+import re
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
@@ -21,10 +24,31 @@ from PIL import Image, UnidentifiedImageError
 from sqlalchemy import select
 
 from app.adapters.fetcher import FetchError, RobotsDisallowedError
+from app.adapters.llm import LLMOutputError, LLMRequest
+from app.agents.audit.browser import GuardedBrowser
 from app.agents.branding.extract import BrandExtraction, extract
-from app.db.models import Audit, BrandProfile, Brief, Business, EvidenceKind, Lead, LeadStatus
+from app.agents.branding.logos import (
+    STYLES,
+    LogoPrompt,
+    LogoSpec,
+    SvgRejectedError,
+    render_page,
+    sanitize_svg,
+    text_matches,
+)
+from app.db.models import (
+    Audit,
+    BrandProfile,
+    Brief,
+    Business,
+    EvidenceKind,
+    Lead,
+    LeadStatus,
+    LogoConcept,
+)
 from app.orchestrator.agents import AgentContext, AgentOutcome, register
 from app.policy.engine import PolicyEngine
+from app.quality.images import compare
 from app.services import evidence
 from app.services.competitors import competitor_domains
 
@@ -35,6 +59,22 @@ MAX_LOGO_BYTES = 2 * 1024 * 1024
 MIN_LOGO_SIDE = 16
 _PIL_EXT = {"PNG": "png", "JPEG": "jpg", "GIF": "gif", "WEBP": "webp", "ICO": "ico", "BMP": "bmp"}
 ROLES = ("primary", "accent", "secondary", "extra", "extra")
+LOGO_SIZES = (1024, 512)
+_LEGAL_SUFFIX = re.compile(
+    r"[,\s]+(ltd\.?|limited|llc|l\.l\.c\.|inc\.?|incorporated|co\.?|corp\.?|plc|gmbh|"
+    r"s\.?l\.?|s\.?a\.?r\.?l\.?)$",
+    re.I,
+)
+
+
+def logo_text(name: str) -> str:
+    """The wording for the logo: the business name without legal suffixes."""
+    text = name.strip()
+    while True:
+        stripped = _LEGAL_SUFFIX.sub("", text).strip()
+        if stripped == text or not stripped:
+            return text
+        text = stripped
 
 
 @dataclass(slots=True)
@@ -79,6 +119,9 @@ class BrandingAgent:
     name: ClassVar[str] = "branding"
     expensive: ClassVar[bool] = True  # logo generation (3.03) spends money
 
+    def __init__(self, browser_factory: Any = None) -> None:
+        self._browser_factory = browser_factory or GuardedBrowser
+
     async def run(self, ctx: AgentContext, lead_id: uuid.UUID) -> AgentOutcome:
         s = ctx.session
         lead = await s.get(Lead, lead_id)
@@ -111,18 +154,190 @@ class BrandingAgent:
             if own
             else "no website — brand built from brief"
         )
-        return AgentOutcome(
-            True,
-            None,
-            f"brand extracted: {found}; {len(competitors)} competitor styles",
-            output={
-                "brand_profile_id": str(profile.id),
-                "colors": [c["hex"] for c in profile.colors],
-                "fonts": [f["family"] for f in profile.fonts],
-                "logo_path": profile.logo_path,
-                "competitors": [c["domain"] for c in competitors],
-            },
+        concepts = await self._logo_concepts(ctx, lead, profile)
+        flagged = sum(1 for c in concepts if (c.similarity or {}).get("too_similar"))
+        output = {
+            "brand_profile_id": str(profile.id),
+            "colors": [c["hex"] for c in profile.colors],
+            "fonts": [f["family"] for f in profile.fonts],
+            "logo_path": profile.logo_path,
+            "competitors": [c["domain"] for c in competitors],
+            "logo_concepts": [str(c.id) for c in concepts],
+        }
+        reason = (
+            f"brand extracted: {found}; {len(competitors)} competitor styles; "
+            f"{len(concepts)} logo concepts"
+            + (f" ({flagged} too similar to a competitor)" if flagged else "")
         )
+        if not concepts:
+            return AgentOutcome(True, None, reason + " — logo generation failed", output=output)
+        return AgentOutcome(True, LeadStatus.BRANDED, reason, output=output, paid=True)
+
+    # ── logo concepts (3.03–3.05) ────────────────────────────────────────
+
+    async def _logo_concepts(
+        self, ctx: AgentContext, lead: Lead, profile: BrandProfile
+    ) -> list[LogoConcept]:
+        text = logo_text(profile.brand_name or "")
+        if not text:
+            return []
+        language = lead.language or "en"
+        colours = [c["hex"] for c in profile.colors if c.get("role") != "neutral"][:3]
+        fonts = [f["family"] for f in profile.fonts][:2]
+        avoid = sorted({c for comp in profile.competitor_styles for c in comp.get("colors", [])})[
+            :6
+        ]
+        industry = profile.industry or "local business"
+        references = await self._reference_logos(ctx, profile)
+        made: list[LogoConcept] = []
+        async with self._browser_factory() as browser:
+            for variant, (style, style_desc) in enumerate(STYLES, start=1):
+                concept = await self._one_concept(
+                    ctx,
+                    lead,
+                    browser,
+                    variant=variant,
+                    style=style,
+                    task=LogoPrompt.task(
+                        text=text,
+                        language=language,
+                        industry=industry,
+                        style=style,
+                        style_desc=style_desc,
+                        colours=colours,
+                        fonts=fonts,
+                        avoid_colours=avoid,
+                    ),
+                    text=text,
+                    language=language,
+                    references=references,
+                    mock={
+                        "text": text,
+                        "style": style,
+                        "colour": colours[0] if colours else "#1d4ed8",
+                    },
+                )
+                if concept is not None:
+                    made.append(concept)
+        return made
+
+    async def _one_concept(
+        self,
+        ctx: AgentContext,
+        lead: Lead,
+        browser: GuardedBrowser,
+        *,
+        variant: int,
+        style: str,
+        task: str,
+        text: str,
+        language: str,
+        references: dict[str, bytes],
+        mock: dict[str, Any],
+    ) -> LogoConcept | None:
+        svg: str | None = None
+        spec: LogoSpec | None = None
+        attempts = 0
+        for attempts in (1, 2):
+            try:
+                spec = await ctx.adapters.llm.structured(
+                    ctx.session,
+                    LLMRequest(
+                        agent=self.name,
+                        task=task,
+                        system=LogoPrompt.SYSTEM,
+                        kind="logo",
+                        lead_id=lead.id,
+                        max_output_tokens=6000,
+                        mock_context=mock,
+                    ),
+                    LogoSpec,
+                )
+                svg = sanitize_svg(spec.svg)
+                break
+            except (LLMOutputError, SvgRejectedError) as exc:
+                logger.info("logo %s attempt %d rejected: %s", style, attempts, exc)
+        if spec is None or svg is None:
+            return None
+        owner = lead.id.hex
+        svg_path = ctx.adapters.storage.save_bytes(
+            f"logos/{owner}/concept-{variant}.svg", svg.encode("utf-8")
+        )
+        png_paths: dict[int, str] = {}
+        for size in LOGO_SIZES:
+            png = await browser.render_png(render_page(svg, size), width=size, height=size // 2)
+            png_paths[size] = ctx.adapters.storage.save_bytes(
+                f"logos/{owner}/concept-{variant}-{size}.png", png
+            )
+        main_png = ctx.adapters.storage.read_bytes(png_paths[LOGO_SIZES[0]])
+        sims = compare(main_png, references)
+        nearest = sims[0] if sims else None
+        values: dict[str, Any] = {
+            "svg_path": svg_path,
+            "png_path": png_paths[LOGO_SIZES[0]],
+            "palette": spec.palette,
+            "typography": {
+                "family": spec.font_family,
+                "weight": spec.font_weight,
+                "concept_name": spec.concept_name,
+                "style": style,
+                "rationale": spec.rationale,
+                "png_512": png_paths[512],
+            },
+            "language": language,
+            "text": text,
+            "prompt": task,
+            "similarity": {
+                "checked_against": len(references),
+                "nearest": nearest.against if nearest else None,
+                "distance": nearest.distance if nearest else None,
+                "colour_overlap": nearest.colour_overlap if nearest else None,
+                "too_similar": bool(nearest and nearest.too_similar),
+                "text_check": text_matches(svg, text),
+            },
+            "attempts": attempts,
+            "qa_status": "pending",
+            "qa_report": {},
+        }
+        row = (
+            await ctx.session.execute(
+                select(LogoConcept).where(
+                    LogoConcept.lead_id == lead.id, LogoConcept.variant == variant
+                )
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            row = LogoConcept(lead_id=lead.id, variant=variant, **values)
+            ctx.session.add(row)
+        else:
+            for k, v in values.items():
+                setattr(row, k, v)
+        await ctx.session.flush()
+        return row
+
+    async def _reference_logos(self, ctx: AgentContext, profile: BrandProfile) -> dict[str, bytes]:
+        """Competitor logos as PNG bytes (SVG ones are rendered first) for the similarity check."""
+        refs: dict[str, bytes] = {}
+        svgs: dict[str, str] = {}
+        for path in profile.competitor_logos:
+            try:
+                data = ctx.adapters.storage.read_bytes(path)
+            except (OSError, ValueError):
+                continue
+            if path.endswith(".svg"):
+                try:
+                    svgs[path] = sanitize_svg(data.decode("utf-8", errors="replace"))
+                except SvgRejectedError:
+                    continue
+            else:
+                refs[path] = data
+        if svgs:
+            async with self._browser_factory() as browser:
+                for path, svg in svgs.items():
+                    refs[path] = await browser.render_png(
+                        render_page(svg, 512), width=512, height=256
+                    )
+        return refs
 
     # ── own site ─────────────────────────────────────────────────────────
 

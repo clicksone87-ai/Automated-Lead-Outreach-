@@ -150,6 +150,27 @@ class GuardedBrowser:
             return await self._isolated(self._pdf, html)
         return await self._pdf(html)
 
+    async def render_png(
+        self, html: str, *, width: int, height: int, transparent: bool = True
+    ) -> bytes:
+        """Screenshot trusted, self-contained HTML/SVG with ALL network blocked."""
+        if self._threaded:
+            return await self._isolated(self._render_png, html, width, height, transparent)
+        return await self._render_png(html, width, height, transparent)
+
+    async def _render_png(self, html: str, width: int, height: int, transparent: bool) -> bytes:
+        assert self._browser is not None
+        ctx = await self._browser.new_context(
+            viewport={"width": width, "height": height}, java_script_enabled=False
+        )
+        try:
+            await ctx.route("**/*", lambda route: route.abort())
+            page = await ctx.new_page()
+            await page.set_content(html, wait_until="load")
+            return await page.screenshot(type="png", omit_background=transparent)
+        finally:
+            await ctx.close()
+
     async def _allowed(self, url: str) -> bool:
         if url.startswith(("data:", "blob:", "about:")):
             return True
