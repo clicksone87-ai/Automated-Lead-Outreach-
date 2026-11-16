@@ -96,7 +96,7 @@ export function PipelineFlow({ stages }: { stages: Overview["stages"] }) {
                       aria-hidden
                     />
                   )}
-                  <div className="flex min-w-0 items-center gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
                     <span
                       className={cn(
                         "flex size-6 shrink-0 items-center justify-center rounded-md",
@@ -105,14 +105,16 @@ export function PipelineFlow({ stages }: { stages: Overview["stages"] }) {
                     >
                       <Icon className="size-3.5" aria-hidden />
                     </span>
-                    <span className="truncate text-xs font-medium text-muted-foreground group-hover:text-foreground">
-                      {stage.label}
+                    <span className="text-2xl font-semibold leading-none tracking-tight">
+                      <AnimatedNumber value={stage.current} />
                     </span>
                   </div>
-                  <div className="text-2xl font-semibold leading-none tracking-tight">
-                    <AnimatedNumber value={stage.current} />
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-medium text-muted-foreground group-hover:text-foreground" title={stage.label}>
+                      {stage.label}
+                    </div>
+                    <div className="tabular truncate text-[11px] text-muted-foreground">{stage.reached} reached</div>
                   </div>
-                  <div className="tabular text-[11px] text-muted-foreground">{stage.reached} reached</div>
                 </Link>
               </motion.div>
               {i < stages.length - 1 && <Connector active={hot} />}

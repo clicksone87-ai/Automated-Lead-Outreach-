@@ -79,6 +79,7 @@ class LeadStatus(StrEnum):
     QUALIFIED = "qualified"
     REJECTED_LOW_INTENT = "rejected_low_intent"
     PARKED_LANGUAGE = "parked_language"
+    PARKED_COUNTRY = "parked_country"
     DUPLICATE = "duplicate"
     COOLDOWN = "cooldown"
     SUPPRESSED = "suppressed"
@@ -187,6 +188,9 @@ class Business(Base):
     address: Mapped[str | None] = mapped_column(Text)
     phone: Mapped[str | None] = mapped_column(String(50))
     has_website: Mapped[bool | None] = mapped_column(Boolean)
+    # broken/outdated-site trigger: ok | broken | outdated | unreachable | none
+    site_status: Mapped[str | None] = mapped_column(String(20))
+    site_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(30), default="active")
     cooldown_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created()
@@ -223,6 +227,8 @@ class Lead(Base):
     intent_score: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(30), default=LeadStatus.DISCOVERED, index=True)
     status_reason: Mapped[str | None] = mapped_column(Text)
+    # corporate_entity | sole_trader | individual | unknown (country rules depend on it)
+    recipient_type: Mapped[str | None] = mapped_column(String(20))
     country: Mapped[str | None] = mapped_column(String(2), index=True)
     language: Mapped[str | None] = mapped_column(String(8), index=True)
     timezone: Mapped[str | None] = mapped_column(String(64))
