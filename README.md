@@ -85,3 +85,89 @@ cd backend; $env:TEST_DATABASE_URL="postgresql+psycopg://leads:leads@127.0.0.1:5
 
 Tests are hermetic: they never read `.env`, never make live calls, and use recorded fixtures
 and mock adapters (`APP_MODE=test` only).
+
+## How it works (one lead)
+
+```
+Discovery (sources + proactive triggers, scheduler)        → leads table (+ evidence)
+  → Requirements   intent score, brief, language/country/time zone, duplicate & cooldown gates
+  → Contact        email on their own site / social bio / platform reply  (no route = stop, $0 spent)
+  → Audit          PageSpeed lab data, Playwright screenshots, axe, technical SEO, Gemini vision
+  → Branding       brand extraction + 3 SVG logo concepts (sanitised, PNG renders, similarity check)
+  → Website        Next.js template filled from facts → static preview (Caddy, private) + tests
+  → Quality check  logos / preview / evidence links; failures go back to the producer once
+  → Proposal       evidence-mapped claims, React Email (language, identity footer, unsubscribe)
+  → [you approve in the Approval queue — Stage 1]
+  → Outreach       policy gate → SMTP → Mailpit (testing) · follow-ups · replies → Inbox
+  → Learning loop  weekly report, guarded weight adjustments (logged)
+```
+
+Every step is recorded in `agent_runs`; a failed step resumes without redoing completed steps.
+Every policy decision (suppression, country rules, limits, QA gate, budget/free caps…) is in
+`policy_decisions` with its reason.
+
+## Testing mode — what to expect
+
+* **Sources**: Serper (Google results via API), Exa (fallback), Apify social sources (X,
+  Instagram, Facebook public pages/groups, Reddit), Companies House, freelance boards/RSS,
+  proactive triggers. Paid ones show "Off in testing mode".
+* **Free caps** (Sources page → Free-tier usage): Gemini 500 requests/day, Serper 2,500
+  credits, Exa $10 credit, Apify $5/month split per source, PageSpeed 400/day. When a cap is
+  reached that work pauses until the cap resets — nothing paid ever runs (budget $0).
+* **Email**: every email (first message and follow-ups) goes to **Mailpit**
+  (http://localhost:8025). To test a reply, send an email to `replies@test-agency.local`
+  through Mailpit's SMTP (`localhost:1025`) with `In-Reply-To` set to the message's
+  Message-ID, or simply reply from Mailpit's UI ("Release" is not needed). The scheduler reads
+  the reply inbox every 5 minutes; positive replies appear in the dashboard Inbox.
+* **Sending windows**: real sending waits for the recipient's business hours; the sandbox
+  delivers immediately (Settings → `sandbox_respect_send_window` to test the windows).
+* **Country rules**: US/GB are enabled for drafting; real sending stays blocked until a legal
+  review sets `legal_reviewed: true` in `backend/app/policy/country_rules.yaml`. The sandbox
+  skips only that condition — recipient-type and consent rules still apply.
+
+## Daily operation
+
+1. Dashboard → **Approval queue**: read each email next to its claims → evidence; approve,
+   edit the wording, or reject (keys j/k/a/e/r).
+2. **Inbox**: answer positive replies yourself; track quote → contract → payment → delivery.
+3. **Sources**: watch free-tier usage and any "Degraded" source; **Overview → System health**
+   shows worker/scheduler heartbeats and agent errors.
+4. **Weekly report**: what produced replies; the learning loop's adjustments (needs ≥ 20 real
+   sends per source/template before it moves anything).
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| Dashboard says "API unreachable" | `docker compose ps`; `docker compose logs api --tail 50` |
+| Ports not answering after Docker Desktop restarted | `docker compose up -d --force-recreate` |
+| A source shows "Degraded" | provider returned nothing / failed; the pipeline keeps running. Details in the source card |
+| Leads stuck "Paused (free cap / budget)" | a free cap was reached; it resets daily/monthly (Sources page) |
+| Gemini "high demand" (503) | retried with backoff, then the next model, then the orchestrator retries later |
+| Website build slow | builds run one at a time in the worker (2 GB); ~5–7 min on an 8 GB laptop |
+| Disk filling up | `docker builder prune --keep-storage 3GB`; Docker's disk image lives in `C:\DockerDesktopWSL` |
+
+## Go-live checklist — status on 2026-11-17
+
+| Item | Status |
+|---|---|
+| Legal review of US + EU outreach rules, `country_rules.yaml` filled | ⛔ open — sending stays sandboxed until done |
+| Separate sending domain, SPF/DKIM/DMARC, warm-up schedule | ⛔ open (warm-up schedule is configured in Settings) |
+| API keys | ✅ free tier (Gemini, Serper, Exa, Apify, Companies House, PageSpeed) · paid ones open (Resend, ZeroBounce, OpenAI optional) |
+| Budget cap ≤ $120/month | ✅ enforced in code (currently $0 = free tier only) |
+| One industry selected; languages enabled | ✅ home services; EN sending (DE/FR/ES templates ready) |
+| Sender identity | ⚠️ placeholder values ("Test Agency") — set real ones in `.env` |
+| Autonomy at Stage 1 | ✅ |
+
+To go live: set `APP_TIER=paid`, `EMAIL_PROVIDER=resend` + `RESEND_API_KEY` + `SENDING_DOMAIN`,
+a reply mailbox (`REPLY_IMAP_*`), real sender identity, `APP_SECRET`, and mark countries
+`legal_reviewed: true` after the review. Nothing else changes in code.
+
+## Moving to one Linux server (4 vCPU / 8 GB)
+
+Same `docker-compose.yml`, different `.env`: set `APP_MODE=server`, `API_TOKEN` (and the same
+value as `NEXT_PUBLIC_API_TOKEN` build arg for the dashboard), `APP_SECRET`,
+`PUBLIC_API_BASE_URL` (unsubscribe links + webhooks) and `PUBLIC_PREVIEW_BASE_URL` (preview
+links instead of screenshots). Put Caddy in front with real TLS, keep Postgres/Redis/Adminer
+bound to 127.0.0.1 (Adminer can be removed in production), restore the latest backup with the
+steps above, run `make migrate`, then `make up`.

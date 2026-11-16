@@ -92,7 +92,9 @@ async def fake_build(
     return BuildResult(site, log.parent, "abc", log, 3.0)
 
 
-async def fake_tests(site: Path, *, expected_name: str) -> tuple[PreviewTests, dict[str, bytes]]:
+async def fake_tests(
+    site: Path, *, expected_name: str, **_: Any
+) -> tuple[PreviewTests, dict[str, bytes]]:
     names = ("build_output", "title", "h1", "business_name", "cta", "viewport_meta", "noindex",
              "internal_links", "renders", "no_external_requests")  # fmt: skip
     return PreviewTests(True, [{"name": n, "passed": True, "detail": ""} for n in names]), {

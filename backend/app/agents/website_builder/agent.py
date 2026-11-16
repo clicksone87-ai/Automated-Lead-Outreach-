@@ -45,6 +45,7 @@ from app.db.models import (
 )
 from app.orchestrator.agents import AgentContext, AgentOutcome, register
 from app.policy.engine import PolicyEngine
+from app.services import runtime_settings
 
 logger = logging.getLogger(__name__)
 TEMPLATE = "trades"
@@ -140,7 +141,10 @@ class WebsiteBuilderAgent:
                              "language": facts.language, "content": content, "qa_status": "failed",
                              "test_results": {"build_error": str(exc)[:2000]}})  # fmt: skip
             return AgentOutcome(False, LeadStatus.NEEDS_REVIEW, f"build failed: {str(exc)[:300]}")
-        tests, files = await self._test(built.site_dir, expected_name=facts.name)
+        rs = await runtime_settings.load(s)
+        tests, files = await self._test(
+            built.site_dir, expected_name=facts.name, thresholds=rs.lighthouse_min
+        )
         stored: dict[str, str] = {}
         for name, data in files.items():
             stored[name] = ctx.adapters.storage.save_bytes(

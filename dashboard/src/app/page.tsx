@@ -12,6 +12,7 @@ import { ActivityFeed } from "@/components/overview/activity-feed";
 import { AgentCards } from "@/components/overview/agent-cards";
 import { CostChart } from "@/components/overview/cost-chart";
 import { PipelineFlow } from "@/components/overview/pipeline-flow";
+import { SystemHealth } from "@/components/overview/system-health";
 import { Skeleton } from "@/components/ui/skeleton";
 import { pct, usd } from "@/lib/format";
 import { useLive } from "@/lib/live";
@@ -155,6 +156,7 @@ export default function OverviewPage() {
               </div>
             </Panel>
 
+            <SystemHealth />
             <Panel>
               <PanelHeader title="Deliverability" description="Last 30 days. Stage 2 needs bounce < 3% and complaints < 0.1%." />
               <div className="grid grid-cols-2 gap-4 p-5">

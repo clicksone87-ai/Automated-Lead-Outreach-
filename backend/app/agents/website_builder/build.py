@@ -290,6 +290,7 @@ async def run_preview_tests(
     expected_name: str,
     browser_factory: Any = GuardedBrowser,
     run_lighthouse: bool = True,
+    thresholds: dict[str, int] | None = None,
 ) -> tuple[PreviewTests, dict[str, bytes]]:
     """Run every preview check. Returns results + screenshot/PDF bytes to store."""
     checks: list[dict[str, Any]] = []
@@ -333,7 +334,8 @@ async def run_preview_tests(
     if run_lighthouse:
         scores = await lighthouse_scores(site)
         if scores:
-            low = {k: v for k, v in scores.items() if v < LIGHTHOUSE_THRESHOLDS.get(k, 0)}
+            limits = thresholds or LIGHTHOUSE_THRESHOLDS
+            low = {k: v for k, v in scores.items() if v < limits.get(k, 0)}
             check(
                 "lighthouse",
                 not low,

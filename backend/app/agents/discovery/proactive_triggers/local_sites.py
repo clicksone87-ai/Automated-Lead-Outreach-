@@ -68,7 +68,31 @@ class LocalSitesSource:
         "Licensed search API, organic results only (no Maps/Places bulk lists, no scraping of "
         "result pages); one homepage fetch per business via the safe fetcher."
     )
-    default_config: ClassVar[dict[str, Any]] = {"queries_per_run": 1, "max_sites": 10, "pages": 2}
+    default_config: ClassVar[dict[str, Any]] = {
+        "queries_per_run": 1,
+        "max_sites": 10,
+        "pages": 2,
+        "lighthouse_check": True,
+        "min_performance": 40,
+        "min_seo": 60,
+    }
+
+    @staticmethod
+    async def _low_lighthouse(ctx: SourceContext, url: str) -> list[str]:
+        if not ctx.config.get("lighthouse_check", True):
+            return []
+        try:
+            result = await ctx.adapters.pagespeed.run(url, "mobile", session=ctx.session)
+        except Exception as exc:  # quota reached, API hiccup: just skip the signal
+            logger.info("pagespeed check skipped for %s: %s", url, exc)
+            return []
+        signals = []
+        perf, seo = result.scores.get("performance"), result.scores.get("seo")
+        if perf is not None and perf < float(ctx.config.get("min_performance", 40)):
+            signals.append(f"lighthouse_performance_{perf:g}")
+        if seo is not None and seo < float(ctx.config.get("min_seo", 60)):
+            signals.append(f"lighthouse_seo_{seo:g}")
+        return signals
 
     def queries(self, ctx: SourceContext) -> list[tuple[str, str, int]]:
         trades = industry_keywords(ctx.runtime.active_industry)[:8]
@@ -130,8 +154,15 @@ class LocalSitesSource:
                     continue  # the site opted out of crawling
                 except FetchError:
                     health, html, final_url = classify_site(None, None, None), "", url
-                if health.status in ("ok", "protected", "unreachable"):
-                    continue  # healthy, bot-protected (unknown) or possibly our network
+                if health.status in ("protected", "unreachable"):
+                    continue  # bot-protected (unknown) or possibly our network
+                if health.status == "ok":
+                    # "Very low Lighthouse": lab data via PageSpeed (cached,
+                    # within the free daily cap) for sites that look fine statically.
+                    low = await self._low_lighthouse(ctx, final_url)
+                    if not low:
+                        continue
+                    health.status, health.signals = "outdated", [*health.signals, *low]
                 name = _business_name(html, r.title, domain)
                 if not name:
                     continue

@@ -1,5 +1,6 @@
 import {
   Ban,
+  BarChart3,
   FileSearch,
   Inbox,
   MailCheck,
@@ -47,6 +48,8 @@ export const NAV: NavGroup[] = [
         description: "Website & SEO audit reports with evidence" },
       { href: "/previews", label: "Previews & logos", icon: Palette, shortcut: "G P",
         description: "Logo concepts and private website previews with QA" },
+      { href: "/reports", label: "Weekly report", icon: BarChart3, shortcut: "G R",
+        description: "What produces replies; learning-loop adjustments" },
     ],
   },
   {

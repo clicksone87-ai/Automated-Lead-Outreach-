@@ -94,7 +94,9 @@ class FakeBuild:
         return BuildResult(site, work, "abc123", log, 12.5)
 
 
-async def fake_tests(site: Path, *, expected_name: str) -> tuple[PreviewTests, dict[str, bytes]]:
+async def fake_tests(
+    site: Path, *, expected_name: str, **_: Any
+) -> tuple[PreviewTests, dict[str, bytes]]:
     checks = [{"name": "business_name", "passed": True, "detail": expected_name}]
     return PreviewTests(True, checks, {}, {"performance": 95.0}), {
         "desktop.png": b"png",
