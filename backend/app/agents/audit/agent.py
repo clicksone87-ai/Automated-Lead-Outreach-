@@ -39,7 +39,8 @@ from app.orchestrator.agents import AgentContext, AgentOutcome, register
 from app.orchestrator.runs import TransientAgentError
 from app.policy.engine import PolicyEngine
 from app.services import evidence
-from app.services.dedup import PLATFORM_DOMAINS, normalize_domain
+from app.services.competitors import competitor_domains
+from app.services.dedup import normalize_domain
 
 logger = logging.getLogger(__name__)
 
@@ -567,29 +568,11 @@ class AuditAgent:
         brief: dict[str, Any],
         keep: Callable[..., Any],
     ) -> list[Competitor]:
-        trade = brief.get("business_type") or (business.industry or "").replace("_", " ")
-        city = (brief.get("location") or business.address or "").split(",")[0].strip()
-        if not trade or not city:
-            return []
-        try:
-            results = await ctx.adapters.search.search(
-                ctx.session,
-                f"{trade} {city}",
-                agent=self.name,
-                country=business.country,
-                count=10,
-            )
-        except AdapterUnavailableError:
-            return []
-        if ctx.adapters.search.is_mock:
-            return []  # mock search returns fixture forum URLs, not competitors
+        domains = await competitor_domains(
+            ctx.session, ctx.adapters.search, business, brief, agent=self.name
+        )
         competitors: list[Competitor] = []
-        seen = {business.domain}
-        for r in results:
-            domain = normalize_domain(r.url)
-            if not domain or domain in seen or domain in PLATFORM_DOMAINS:
-                continue
-            seen.add(domain)
+        for domain in domains:
             try:
                 page = await ctx.adapters.fetcher.get(f"https://{domain}/")
             except FetchError:
