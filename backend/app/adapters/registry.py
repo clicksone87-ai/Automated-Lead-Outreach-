@@ -30,6 +30,7 @@ from app.adapters.google import (
     PlacesAdapter,
 )
 from app.adapters.llm import LLMAdapter, MockLLM, OpenAILLM
+from app.adapters.mailbox import DisabledMailbox, ImapMailbox, MailboxAdapter, MockMailbox
 from app.adapters.search import BraveSearch, DisabledSearch, MockSearch, SearchAdapter
 from app.adapters.storage import LocalStorage, StorageAdapter
 from app.adapters.verification import (
@@ -59,6 +60,7 @@ class Adapters:
     pagespeed: PageSpeedAdapter
     places: PlacesAdapter
     email: EmailAdapter
+    mailbox: MailboxAdapter
     storage: StorageAdapter
     fetcher: SafeFetcher
     mocks_in_use: set[str] = field(default_factory=set)
@@ -125,6 +127,14 @@ def build_adapters(s: Settings) -> Adapters:
             ResendEmail(key(s.resend_api_key)) if st["resend"].configured else None,
             MockEmail(),
             DisabledEmail(),
+        ),
+        mailbox=pick(
+            "imap",
+            ImapMailbox(s.reply_imap_host, s.reply_imap_user, key(s.reply_imap_password))
+            if st["imap"].configured
+            else None,
+            MockMailbox(),
+            DisabledMailbox(),
         ),
         storage=LocalStorage(s.data_dir),
         fetcher=SafeFetcher(s.crawler_user_agent),

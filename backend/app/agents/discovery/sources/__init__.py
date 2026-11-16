@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.agents.discovery.base import DiscoverySource
 from app.agents.discovery.proactive_triggers import NoWebsiteSource, SiteHealthSource
+from app.agents.discovery.sources.boards import AlertEmailSource, FreelancerSource
 from app.agents.discovery.sources.mock_demo import MockDemoSource
 from app.agents.discovery.sources.reddit import RedditSource
 from app.agents.discovery.sources.registries import (
@@ -26,6 +27,8 @@ _ALL: list[DiscoverySource] = [
     RedditSource(),
     XSource(),
     MetaSource(),
+    FreelancerSource(),
+    AlertEmailSource(),
     SiteHealthSource(),
     NoWebsiteSource(),
     MockDemoSource(),

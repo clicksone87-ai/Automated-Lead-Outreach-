@@ -87,7 +87,6 @@ class Settings(BaseSettings):
     x_bearer_token: SecretStr | None = None
     meta_access_token: SecretStr | None = None
     freelancer_api_token: SecretStr | None = None
-    producthunt_api_token: SecretStr | None = None
 
     # Registries
     opencorporates_api_key: SecretStr | None = None
@@ -268,14 +267,6 @@ def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
             _has(s.freelancer_api_token),
             False,
             "https://developers.freelancer.com",
-        ),
-        (
-            "producthunt",
-            "Product Hunt API",
-            ("PRODUCTHUNT_API_TOKEN",),
-            _has(s.producthunt_api_token),
-            False,
-            "https://api.producthunt.com/v2/docs",
         ),
         (
             "opencorporates",
