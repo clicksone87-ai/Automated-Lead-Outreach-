@@ -26,6 +26,7 @@ from playwright.async_api import (
     ViewportSize,
     async_playwright,
 )
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from app.adapters.fetcher import BlockedURLError, Resolver, SafeFetcher, system_resolver
 from app.policy.network import is_blocked_ip
@@ -60,6 +61,14 @@ class Capture:
     mobile_png: bytes
     axe_violations: list[dict[str, Any]] | None
     blocked_requests: list[str] = field(default_factory=list)
+
+
+async def _settle(page: Any, load_ms: int = 12_000) -> None:
+    try:
+        await page.wait_for_load_state("load", timeout=load_ms)
+    except PlaywrightTimeoutError:
+        logger.info("page did not finish loading in %d ms; capturing what is rendered", load_ms)
+    await page.wait_for_timeout(800)
 
 
 def axe_script() -> str | None:
@@ -221,8 +230,10 @@ class GuardedBrowser:
         desktop, blocked_requests = await self._context(mobile=False)
         try:
             page = await desktop.new_page()
-            response = await page.goto(url, wait_until="load", timeout=timeout_ms)
-            await page.wait_for_timeout(800)
+            # Many small-business sites never fire "load" (trackers, chat widgets): wait for the
+            # DOM, then give the full load a bounded chance before capturing what is there.
+            response = await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            await _settle(page)
             html = await page.content()
             headers = await response.all_headers() if response else {}
             status = response.status if response else 0
@@ -246,8 +257,8 @@ class GuardedBrowser:
         mobile, _ = await self._context(mobile=True)
         try:
             mpage = await mobile.new_page()
-            await mpage.goto(final_url, wait_until="load", timeout=timeout_ms)
-            await mpage.wait_for_timeout(500)
+            await mpage.goto(final_url, wait_until="domcontentloaded", timeout=timeout_ms)
+            await _settle(mpage)
             mobile_png = await mpage.screenshot(full_page=False, type="png")
         finally:
             await mobile.close()
