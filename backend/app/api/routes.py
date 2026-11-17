@@ -89,6 +89,8 @@ async def list_leads(
     service: Annotated[list[str] | None, Query()] = None,
     trigger: Annotated[list[str] | None, Query()] = None,
     min_score: Annotated[int | None, Query(ge=0, le=100)] = None,
+    max_score: Annotated[int | None, Query(ge=0, le=100)] = None,
+    unscored: Annotated[str | None, Query(pattern="^(include|only)$")] = None,
     q: str | None = None,
 ) -> LeadPage:
     return await queries.list_leads(
@@ -104,6 +106,8 @@ async def list_leads(
         service=service,
         trigger=trigger,
         min_score=min_score,
+        max_score=max_score,
+        unscored=unscored,
         q=q,
     )
 

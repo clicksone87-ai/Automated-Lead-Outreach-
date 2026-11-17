@@ -1372,6 +1372,8 @@ export interface operations {
                 service?: string[] | null;
                 trigger?: string[] | null;
                 min_score?: number | null;
+                max_score?: number | null;
+                unscored?: string | null;
                 q?: string | null;
             };
             header?: {

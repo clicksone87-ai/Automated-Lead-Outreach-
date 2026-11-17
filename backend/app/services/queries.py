@@ -341,6 +341,8 @@ def _lead_filters(
     service: list[str] | None,
     trigger: list[str] | None,
     min_score: int | None,
+    max_score: int | None,
+    unscored: str | None = None,
     q: str | None,
 ) -> Any:
     if status:
@@ -362,8 +364,19 @@ def _lead_filters(
         stmt = stmt.where(Lead.service_needed.overlap(service))
     if trigger:
         stmt = stmt.where(Lead.trigger_type.in_(trigger))
-    if min_score is not None:
-        stmt = stmt.where(Lead.intent_score >= min_score)
+    if unscored == "only":
+        stmt = stmt.where(Lead.intent_score.is_(None))
+    else:
+        score_rules = []
+        if min_score is not None:
+            score_rules.append(Lead.intent_score >= min_score)
+        if max_score is not None:
+            score_rules.append(Lead.intent_score <= max_score)
+        if score_rules:
+            rule = and_(*score_rules)
+            if unscored == "include":
+                rule = or_(rule, Lead.intent_score.is_(None))
+            stmt = stmt.where(rule)
     if q:
         like = f"%{q.strip()}%"
         stmt = stmt.where(

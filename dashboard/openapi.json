@@ -256,6 +256,41 @@
       }
      },
      {
+      "name": "max_score",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer",
+         "maximum": 100,
+         "minimum": 0
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Max Score"
+      }
+     },
+     {
+      "name": "unscored",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "pattern": "^(include|only)$"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Unscored"
+      }
+     },
+     {
       "name": "q",
       "in": "query",
       "required": false,
