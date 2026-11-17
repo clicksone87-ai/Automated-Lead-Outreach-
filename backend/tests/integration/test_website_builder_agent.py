@@ -161,3 +161,25 @@ async def test_skips_when_not_needed(tmp_path: Path) -> None:
             AgentContext(s, build_adapters(settings), settings), lead_id
         )
     assert outcome.proceed and "not needed" in outcome.reason
+
+
+class TimeoutBuild(FakeBuild):
+    async def __call__(self, **kw: Any) -> BuildResult:
+        raise BuildError("next build failed (124): timed out after 900s", timed_out=True)
+
+
+async def test_build_timeout_is_retried_not_reviewed(tmp_path: Path) -> None:
+    from app.orchestrator.errors import TransientAgentError  # noqa: PLC0415
+
+    settings = _settings(tmp_path)
+    lead_id = await _lead(settings)
+    with pytest.raises(TransientAgentError):
+        async with session_scope() as s:
+            await runs.execute(
+                AgentContext(s, build_adapters(settings), settings),
+                WebsiteBuilderAgent(builder=TimeoutBuild(), tester=fake_tests),
+                lead_id,
+            )
+    async with session_scope() as s:
+        lead = await s.get(Lead, lead_id)
+        assert lead.status != LeadStatus.NEEDS_REVIEW  # type: ignore[union-attr]

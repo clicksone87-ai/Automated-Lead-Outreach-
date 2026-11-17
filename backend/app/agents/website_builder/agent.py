@@ -44,6 +44,7 @@ from app.db.models import (
     PreviewMode,
 )
 from app.orchestrator.agents import AgentContext, AgentOutcome, register
+from app.orchestrator.errors import TransientAgentError
 from app.policy.engine import PolicyEngine
 from app.services import runtime_settings
 
@@ -137,6 +138,8 @@ class WebsiteBuilderAgent:
                 content=content,
             )
         except BuildError as exc:
+            if exc.timed_out:  # a slow machine, not a broken site: retry later with backoff
+                raise TransientAgentError(str(exc)[:300]) from exc
             await self._save(ctx, lead, values={"template_id": TEMPLATE, "mode": str(mode),
                              "language": facts.language, "content": content, "qa_status": "failed",
                              "test_results": {"build_error": str(exc)[:2000]}})  # fmt: skip

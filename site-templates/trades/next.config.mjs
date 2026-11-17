@@ -6,7 +6,9 @@ const nextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   eslint: { ignoreDuringBuilds: true },
-  typescript: { ignoreBuildErrors: false },
+  // The template is type-checked in the repo; preview builds skip it (the slowest build step
+  // on a small machine). Content is plain JSON validated by the builder.
+  typescript: { ignoreBuildErrors: true },
 };
 
 export default nextConfig;

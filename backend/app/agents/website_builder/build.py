@@ -36,7 +36,7 @@ from app.agents.audit.browser import GuardedBrowser
 
 logger = logging.getLogger(__name__)
 
-BUILD_TIMEOUT_S = 480
+BUILD_TIMEOUT_S = 900
 NPM_TIMEOUT_S = 600
 _BUILD_LOCK = asyncio.Lock()
 COPY_IGNORE = shutil.ignore_patterns("node_modules", "out", ".next", "*.tsbuildinfo")
@@ -45,7 +45,9 @@ PREVIEW_ORIGIN = "http://preview.local"
 
 
 class BuildError(Exception):
-    pass
+    def __init__(self, message: str, *, timed_out: bool = False) -> None:
+        super().__init__(message)
+        self.timed_out = timed_out
 
 
 @dataclass(slots=True)
@@ -152,7 +154,10 @@ async def build_site(
         )
         log_path.write_text(out, encoding="utf-8")
         if code != 0 or not (work / "out" / "index.html").exists():
-            raise BuildError(f"next build failed ({code}); see {log_path.name}: {out[-600:]}")
+            raise BuildError(
+                f"next build failed ({code}); see {log_path.name}: {out[-600:]}",
+                timed_out=code == 124,
+            )
         site = data_dir / "previews" / preview_id / "site"
         tmp = site.with_name("site.tmp")
         shutil.rmtree(tmp, ignore_errors=True)
