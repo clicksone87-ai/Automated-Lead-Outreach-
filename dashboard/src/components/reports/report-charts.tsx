@@ -22,7 +22,7 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
   );
 }
 
-/** Single-series horizontal bars (one hue, value labels, hover tooltip, recessive grid). */
+/** Horizontal bar chart for one series. */
 function HBars({ rows, ariaLabel }: { rows: { label: string; value: number }[]; ariaLabel: string }) {
   const height = Math.max(120, rows.length * 34 + 24);
   return (

@@ -1,9 +1,7 @@
-"""Public business websites & directories (robots.txt, terms and rate limits respected).
+"""Business listings from public directories (robots.txt, terms and rate limits respected).
 
-Reads schema.org LocalBusiness data from directory listing pages you configure (only
-directories whose terms permit it). Businesses without a website become `no_website` leads
-(the domain check in the proactive trigger confirms before money is spent); businesses with a
-website are stored for the broken/outdated-site trigger to scan.
+Reads schema.org LocalBusiness data from configured directory pages; businesses without a
+website become `no_website` leads.
 """
 
 from __future__ import annotations

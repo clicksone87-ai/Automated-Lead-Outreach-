@@ -7,7 +7,7 @@ import { StatusPill } from "@/components/common/status-pill";
 import { agoShort, titleCase } from "@/lib/format";
 import { useMonitoring } from "@/lib/ops";
 
-/** Monitoring (§5.03): heartbeats, agent failures, unhealthy sources, quotas near their cap. */
+/** Monitoring: heartbeats, agent failures, unhealthy sources, quotas near their cap. */
 export function SystemHealth() {
   const { data } = useMonitoring();
   if (!data) return null;

@@ -1,4 +1,4 @@
-"""Branding agent, step 1 (3.02): brand extraction end to end against a fixture site + Postgres."""
+"""Branding agent: brand extraction end to end against a fixture site and Postgres."""
 
 from __future__ import annotations
 
@@ -229,7 +229,7 @@ async def test_extracts_brand_with_evidence_for_every_value() -> None:
     logo_src = next(src for src in p.sources if src["field"] == "logo")
     assert logo_src["source"] == f"{SITE}touch.png"
 
-    # Competitor style + logo collected for the trademark-similarity check (3.05).
+    # Competitor style + logo collected for the trademark-similarity check.
     assert [c["domain"] for c in p.competitor_styles] == ["rival-plumbers.com"]
     assert p.competitor_styles[0]["colors"] == ["#c81e1e"]
     assert len(p.competitor_logos) == 1

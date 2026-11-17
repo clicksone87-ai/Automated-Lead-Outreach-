@@ -1767,73 +1767,6 @@
     }
    }
   },
-  "/api/pricing/{package_id}": {
-   "patch": {
-    "summary": "Patch Pricing",
-    "operationId": "patch_pricing_api_pricing__package_id__patch",
-    "parameters": [
-     {
-      "name": "package_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "integer",
-       "title": "Package Id"
-      }
-     },
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/PricingPatch"
-       }
-      }
-     }
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": true,
-         "title": "Response Patch Pricing Api Pricing  Package Id  Patch"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
   "/api/autonomy": {
    "get": {
     "summary": "Get Autonomy",
@@ -1982,6 +1915,221 @@
           "additionalProperties": true
          },
          "title": "Response Messages Api Messages Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/monitoring": {
+   "get": {
+    "summary": "Monitoring",
+    "operationId": "monitoring_api_monitoring_get",
+    "parameters": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Monitoring Api Monitoring Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/reports": {
+   "get": {
+    "summary": "Reports",
+    "operationId": "reports_api_reports_get",
+    "parameters": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 12,
+       "title": "Limit"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": true
+         },
+         "title": "Response Reports Api Reports Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/reports/live": {
+   "get": {
+    "summary": "Live Report",
+    "operationId": "live_report_api_reports_live_get",
+    "parameters": [
+     {
+      "name": "days",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 7,
+       "title": "Days"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Live Report Api Reports Live Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/reports/run": {
+   "post": {
+    "summary": "Run Report",
+    "operationId": "run_report_api_reports_run_post",
+    "parameters": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Run Report Api Reports Run Post"
         }
        }
       }
@@ -3751,59 +3899,6 @@
      "created_at"
     ],
     "title": "PolicyDecisionOut"
-   },
-   "PricingPatch": {
-    "properties": {
-     "description": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Description"
-     },
-     "price_usd": {
-      "anyOf": [
-       {
-        "type": "number",
-        "minimum": 0.0
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Price Usd"
-     },
-     "price_eur": {
-      "anyOf": [
-       {
-        "type": "number",
-        "minimum": 0.0
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Price Eur"
-     },
-     "price_gbp": {
-      "anyOf": [
-       {
-        "type": "number",
-        "minimum": 0.0
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Price Gbp"
-     }
-    },
-    "type": "object",
-    "title": "PricingPatch"
    },
    "QuotaOut": {
     "properties": {

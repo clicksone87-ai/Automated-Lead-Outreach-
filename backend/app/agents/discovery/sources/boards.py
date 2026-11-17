@@ -1,9 +1,6 @@
-"""Freelance boards and classifieds: official APIs and alert emails only.
+"""Freelance boards and classifieds, through official APIs and alert emails only.
 
-- Freelancer.com: official projects API (public project search; token optional).
-- Alert emails: job-board / classified alert emails (Upwork, Fiverr, PeoplePerHour, Gumtree,
-  Craigslist…) delivered to a folder of the reply mailbox. We never log in to, or scrape, those
-  platforms; links in alerts are stored as references and are never fetched.
+The platforms are never logged in to or scraped; links in alert emails are stored, not fetched.
 """
 
 from __future__ import annotations

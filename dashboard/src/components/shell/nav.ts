@@ -5,7 +5,6 @@ import {
   Inbox,
   MailCheck,
   Palette,
-  Gauge,
   LayoutDashboard,
   Radar,
   Settings2,
@@ -26,7 +25,6 @@ export interface NavGroup {
   items: NavItem[];
 }
 
-/** Pages are added here as each build phase delivers them. */
 export const NAV: NavGroup[] = [
   {
     label: "Operate",
@@ -66,4 +64,3 @@ export const NAV: NavGroup[] = [
 ];
 
 export const ALL_NAV_ITEMS = NAV.flatMap((g) => g.items);
-export const BRAND_ICON = Gauge;

@@ -1,10 +1,7 @@
-"""Logo concepts.
+"""Logo concepts designed by the LLM as SVG code.
 
-Gemini designs each concept as SVG code (no image API). The SVG is untrusted model output, so
-it is sanitised with a strict allowlist (no scripts, event handlers, external references or
-foreign objects), normalised (viewBox, size), and only then rendered to PNG in a browser with
-all network access blocked. The wording drawn in the logo is checked against the exact text
-we asked for (SVG <text> is code, so no OCR is needed).
+The SVG is untrusted model output: it is sanitised against a strict allowlist and normalised
+before it is rendered to PNG in a network-blocked browser.
 """
 
 from __future__ import annotations
@@ -17,7 +14,6 @@ from pydantic import BaseModel, Field
 
 MAX_SVG_BYTES = 60_000
 SVG_NS = "http://www.w3.org/2000/svg"
-XLINK_NS = "http://www.w3.org/1999/xlink"
 
 ALLOWED_TAGS = {
     "svg", "g", "path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "text",

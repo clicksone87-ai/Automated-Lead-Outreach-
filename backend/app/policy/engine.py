@@ -1,7 +1,7 @@
-"""Policy and safety layer. Plain code — AI can never override a decision.
+"""Policy and safety layer. Plain code; the LLM can never override a decision.
 
-Every check returns a PolicyResult and is logged to `policy_decisions` with its reason.
-`evaluate_outreach()` runs the full pre-send gate; any failure blocks the send.
+Every check is logged to `policy_decisions` with its reason; `evaluate_outreach()` runs the
+full pre-send gate.
 """
 
 from __future__ import annotations
@@ -341,12 +341,10 @@ class PolicyEngine:
     async def evaluate_outreach(
         self, lead: Lead, *, email: str, recipient_type: str, sandbox: bool = False
     ) -> PolicyVerdict:
-        """The full pre-send gate. All checks run and are logged; any failure blocks.
+        """The full pre-send gate: all checks run and are logged, and any failure blocks.
 
-        `sandbox` = the transport is Mailpit (captured locally, never delivered). Only then a
-        "not legally reviewed" country result is downgraded to allowed — with the original
-        reason kept in the log — so the flow can be tested end to end. Real sending (Resend)
-        always needs legally reviewed country rules.
+        With `sandbox` (Mailpit) only the "not legally reviewed" country result is downgraded to
+        allowed, so the flow can be tested end to end; real sending needs reviewed rules.
         """
         rs = await runtime_settings.load(self.session)
         demo_mode = self.settings.mocks_allowed

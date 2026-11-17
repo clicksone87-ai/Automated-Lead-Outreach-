@@ -1,8 +1,7 @@
 """Runtime settings stored in the `settings` table.
 
-Env vars provide initial values; the dashboard edits them here. Every change is written to
-`settings_changes` with who/why. Autonomy stage changes go through `autonomy.change_stage`
-(which enforces the move-up conditions) — not through `update()`.
+Every change is written to `settings_changes`; autonomy stage changes go through
+`autonomy.change_stage`, not `update()`.
 """
 
 from __future__ import annotations
@@ -67,11 +66,11 @@ class RuntimeSettings(BaseModel):
     provider_prices: dict[str, float] = Field(
         default_factory=lambda: {"brave": 0.005, "zerobounce": 0.008, "places": 0.035, "x": 0.01}
     )
-    # Learning loop (§13)
+    # Learning loop
     scoring_weights: dict[str, float] = Field(default_factory=dict)
     source_weights: dict[str, float] = Field(default_factory=dict)
     template_weights: dict[str, float] = Field(default_factory=dict)
-    # Quality thresholds (§7 quality check)
+    # Quality thresholds
     lighthouse_min: dict[str, int] = Field(
         default_factory=lambda: {
             "performance": 80,

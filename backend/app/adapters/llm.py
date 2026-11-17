@@ -1,9 +1,7 @@
-"""LLM adapter — every LLM call goes through here.
+"""LLM adapter: every LLM call goes through here.
 
-- Structured output only, validated by Pydantic (one repair retry on invalid JSON).
-- Untrusted web content is wrapped by `policy.untrusted.wrap` with per-call random tokens.
-- No tools/functions are ever exposed to the model.
-- Budget is reserved via `budget.charge()` BEFORE the call and settled after.
+Output is structured and validated by Pydantic (one repair retry), untrusted content is wrapped
+with per-call random tokens, no tools are exposed, and budget is reserved before each call.
 """
 
 from __future__ import annotations

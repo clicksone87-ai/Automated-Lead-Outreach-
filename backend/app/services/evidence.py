@@ -1,6 +1,5 @@
-"""Evidence capture.
-
-Idempotent: the same content for the same lead/kind returns the existing record.
+"""Evidence capture. Idempotent: the same content for the same lead and kind returns the
+existing record.
 """
 
 from __future__ import annotations

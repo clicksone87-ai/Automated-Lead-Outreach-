@@ -1,8 +1,7 @@
 """Untrusted-content handling.
 
-Text from websites/posts is DATA. It is wrapped in delimited blocks whose boundary token is
-random per call, so content cannot forge a closing delimiter. The system prompt tells the
-model to ignore any instructions inside those blocks. LLM calls never expose tools.
+Web and post text is wrapped in delimited blocks with a random per-call boundary token, so
+content cannot forge a closing delimiter; the model is told to ignore instructions inside.
 """
 
 from __future__ import annotations

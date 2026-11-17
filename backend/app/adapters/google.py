@@ -1,8 +1,6 @@
-"""Google adapters: PageSpeed Insights (free) and Places API (New) — individual lookups only.
+"""Google adapters: PageSpeed Insights and Places API (New).
 
-Places terms: no bulk database, limited fields, respect storage terms. We request a minimal
-field mask, look up one named business at a time, and store only what the audit/trigger needs
-(place id + website presence + profile URL) alongside the evidence record.
+Places is used for single-business lookups with a minimal field mask, to stay within its terms.
 """
 
 from __future__ import annotations

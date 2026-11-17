@@ -1,9 +1,8 @@
 """Autonomy stages: live move-up metrics and the only way to change stage.
 
-Stage 1 → 2: bounce < 3 %, complaints < 0.1 %, and two clean weeks (≥ 14 days since the
-first send with no breach, and enough volume to judge: ≥ 20 sends).
-Stage 2 → 3: everything above, plus ≥ 14 days at stage 2 and budget caps working (no spend
-above a cap). Moving down is always allowed. Every change is logged with who and why.
+Stage 1 to 2 needs bounce < 3 %, complaints < 0.1 %, two clean weeks and at least 20 sends;
+stage 2 to 3 also needs 14 days at stage 2 with budget caps holding. Moving down is always
+allowed.
 """
 
 from __future__ import annotations

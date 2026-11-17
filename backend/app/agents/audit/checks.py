@@ -1,7 +1,4 @@
-"""Deterministic audit checks on fetched HTML + headers (pure functions, no network).
-
-Each check returns Finding drafts; the agent attaches an evidence id before they are stored.
-"""
+"""Deterministic audit checks on fetched HTML and headers (pure functions, no network)."""
 
 from __future__ import annotations
 

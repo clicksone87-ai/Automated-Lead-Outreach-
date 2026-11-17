@@ -1,7 +1,6 @@
 """Local file storage under DATA_DIR.
 
-Paths stored in the DB are *relative* to DATA_DIR so moving to a server (or an object store
-adapter later) is a config change.
+Paths in the database are relative to DATA_DIR, so moving storage is a config change.
 """
 
 from __future__ import annotations

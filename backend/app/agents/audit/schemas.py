@@ -56,7 +56,7 @@ class Finding(BaseModel):
     severity: Severity
     title: str
     detail: str
-    evidence_id: str  # REQUIRED: every finding links to stored evidence
+    evidence_id: str  # every finding must link to stored evidence
     metric: dict[str, Any] = Field(default_factory=dict)
     check: str = ""
 

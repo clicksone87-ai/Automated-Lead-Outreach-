@@ -1,7 +1,7 @@
-"""Unsubscribe links: signed, stateless tokens.
+"""Signed, stateless unsubscribe tokens.
 
-A token encodes (business id, email) plus an HMAC so a link can only unsubscribe the address
-it was sent to. Using it adds a PERMANENT suppression and cancels pending follow-ups.
+The HMAC ties a link to the address it was sent to; using it adds a permanent suppression and
+cancels pending follow-ups.
 """
 
 from __future__ import annotations

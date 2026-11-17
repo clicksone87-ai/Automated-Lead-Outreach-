@@ -1,8 +1,6 @@
-"""Competitor discovery shared by the Audit (comparison) and Branding (styles, logos) agents.
+"""Competitor discovery shared by the Audit and Branding agents.
 
-Uses the search adapter only (never scrapes result pages) with a "<trade> <city>" query and
-returns candidate domains in result order; callers fetch them through the safe fetcher and
-stop at their own limit.
+Runs a "<trade> <city>" search and returns candidate domains in result order.
 """
 
 from __future__ import annotations

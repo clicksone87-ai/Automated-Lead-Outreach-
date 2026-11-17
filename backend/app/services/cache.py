@@ -1,8 +1,7 @@
-"""Result cache for free-tier calls (Phase 5 cost optimisation).
+"""Postgres cache for free-tier results.
 
-Identical PageSpeed runs and deterministic LLM calls (classification, briefs, copy, reply
-classification) are served from Postgres for a while instead of spending quota again — e.g.
-when a lead is re-run after a crash. Creative calls (logo concepts) are never cached.
+Identical PageSpeed runs and deterministic LLM calls are served from the cache instead of
+spending quota again; creative calls (logo concepts) are never cached.
 """
 
 from __future__ import annotations

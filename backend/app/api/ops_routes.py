@@ -1,5 +1,4 @@
-"""Phase 5 API: monitoring (agent errors, source health, heartbeats, quotas) and the learning
-loop's weekly reports."""
+"""Monitoring and weekly-report endpoints."""
 
 from __future__ import annotations
 

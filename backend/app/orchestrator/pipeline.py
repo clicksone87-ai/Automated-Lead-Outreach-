@@ -1,8 +1,7 @@
 """Per-lead LangGraph workflow.
 
-Each node runs one agent in its own transaction. Completed steps are skipped on re-entry
-(agent_runs), so re-invoking the graph resumes from the first unfinished step without
-restarting the cycle. A step that says `proceed=False` ends the graph for that lead.
+Completed steps are skipped on re-entry, so re-invoking the graph resumes at the first
+unfinished step.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Blocked internal IP ranges for crawlers (SSRF protection, the specification §5.3)."""
+"""Blocked internal IP ranges for crawlers (SSRF protection)."""
 
 from __future__ import annotations
 

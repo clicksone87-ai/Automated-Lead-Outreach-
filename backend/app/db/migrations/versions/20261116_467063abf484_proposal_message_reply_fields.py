@@ -1,4 +1,4 @@
-"""phase 4 proposal message reply fields
+"""proposal message reply fields
 
 Revision ID: 467063abf484
 Revises: 5e19849fe4fe

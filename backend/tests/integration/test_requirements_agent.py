@@ -1,4 +1,4 @@
-"""Requirements agent (Agent 2) against Postgres with the mock LLM."""
+"""Requirements agent against Postgres with the mock LLM."""
 
 from __future__ import annotations
 

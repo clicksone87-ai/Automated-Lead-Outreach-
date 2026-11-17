@@ -1,14 +1,8 @@
-"""Agent 3 — Contact Enrichment.
+"""Contact enrichment agent: finds a usable contact route before any drafting money is spent.
 
-Finds a usable contact route BEFORE any drafting money is spent:
-  1. an email the author published in the lead's own post,
-  2. emails / contact forms on the business's own website (homepage + contact/about/imprint
-     pages found via links), fetched through the safe fetcher,
-  3. social bio: the public Instagram profile of the post author (licensed provider, Apify):
-     emails published in the bio / business email field, and the linked website,
-  4. for platform posts: the platform's public reply (handled manually, never automated).
-Emails are verified through the verification adapter; invalid/unknown ones are never used.
-Every contact stores the URL it was found on. Addresses are never guessed.
+Checked in order: an email in the lead's own post, the business website, the post author's
+public Instagram bio, then the platform's public reply (manual). Emails must pass verification
+and are never guessed.
 """
 
 from __future__ import annotations

@@ -1,8 +1,7 @@
-"""Image checks shared by Branding (trademark similarity) and the Quality check.
+"""Image similarity checks shared by Branding and the Quality check.
 
-Perceptual difference hash (dHash) on the trimmed, square-padded grayscale image plus a
-coarse colour-histogram overlap. Two logos are "too similar" when their shapes nearly match
-(small Hamming distance) — colour alone never flags a logo (many trades share blue).
+A perceptual difference hash plus a coarse colour-histogram overlap; colour alone never flags
+a logo.
 """
 
 from __future__ import annotations

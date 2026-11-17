@@ -1,4 +1,4 @@
-"""Search adapter."""
+"""Search adapter for the Brave Search API."""
 
 from __future__ import annotations
 

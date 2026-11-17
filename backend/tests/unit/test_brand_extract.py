@@ -1,4 +1,4 @@
-"""Brand extraction (3.02): colours, fonts, logo, social links, brand name from HTML + CSS."""
+"""Brand extraction: colours, fonts, logo, social links and brand name from HTML and CSS."""
 
 from __future__ import annotations
 

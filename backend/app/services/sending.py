@@ -1,7 +1,6 @@
-"""Sending: business-hours windows, idempotent Message records, unsubscribe headers.
+"""Sending: business-hours windows, idempotent message records and unsubscribe headers.
 
-Used by the Outreach agent (first email) and the follow-up job. Nothing here decides WHETHER
-to send — that is the policy gate's job — only WHEN and HOW.
+This module decides when and how to send, never whether; that is the policy gate's job.
 """
 
 from __future__ import annotations
@@ -125,7 +124,7 @@ def outgoing(
 
 
 async def acquire_lock(session: AsyncSession, lead: Lead) -> bool:
-    """One active outreach per business. True if this lead holds the lock."""
+    """One active outreach per business. Returns True if this lead holds the lock."""
     assert lead.business_id is not None
     await session.execute(
         insert(OutreachLock)

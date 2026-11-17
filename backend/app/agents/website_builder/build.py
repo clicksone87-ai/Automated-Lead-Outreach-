@@ -1,15 +1,8 @@
-"""Website Builder — build pipeline (3.09) and preview tests (3.10).
+"""Preview build pipeline and preview tests.
 
-Build: copy the template into a per-preview working directory, link the shared
-node_modules (installed once from the template's lockfile), write content.json, commit to a
-local git repo per preview, run `next build` (static export) with a memory cap, a timeout and
-low CPU priority — one build at a time — then publish atomically to
-DATA_DIR/previews/<id>/site, which Caddy serves privately.
-
-Tests: Playwright smoke test (title, h1, CTA, no console errors) on the built files with zero
-network access, desktop + mobile screenshots, internal link check, Lighthouse lab scores
-against a local static server (the crawlability audit is skipped: previews are noindex on
-purpose), and a PDF made from the full-page screenshots for local-mode email attachments.
+Builds the template as a static export in a per-preview directory (shared node_modules, one
+build at a time) and publishes it atomically for Caddy. Tests: smoke test, screenshots,
+internal links and Lighthouse scores.
 """
 
 from __future__ import annotations
@@ -254,8 +247,8 @@ async def lighthouse_scores(site: Path) -> dict[str, float]:
             [
                 binary, f"http://127.0.0.1:{port}/", "--output=json", "--quiet",
                 "--form-factor=mobile", "--skip-audits=is-crawlable",
-                # Calibrated for this host: Lighthouse's default 4x CPU slowdown assumes a fast
-                # desktop; on a small local machine it measures the laptop, not the site.
+                # Lighthouse's default 4x CPU slowdown assumes a fast desktop; on small machines it
+                # measures the host rather than the site.
                 "--throttling.cpuSlowdownMultiplier=1",
                 "--only-categories=performance,accessibility,best-practices,seo",
                 "--chrome-flags=--headless=new --no-sandbox --disable-dev-shm-usage",

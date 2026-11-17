@@ -1,6 +1,7 @@
-"""5.06 — one lead through the FULL pipeline with mocked adapters:
-requirements → contact → audit → branding → website builder → quality check → proposal →
-(human approval) → outreach. Real agents, real policy, recorded fixtures, no network."""
+"""One lead through the full pipeline with mocked adapters.
+
+Real agents and policy, recorded fixtures, no network.
+"""
 
 from __future__ import annotations
 

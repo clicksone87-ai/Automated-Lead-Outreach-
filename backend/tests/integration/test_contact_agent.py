@@ -1,4 +1,4 @@
-"""Contact Enrichment agent (Agent 3) against Postgres with fixture websites."""
+"""Contact enrichment agent against Postgres with fixture websites."""
 
 from __future__ import annotations
 

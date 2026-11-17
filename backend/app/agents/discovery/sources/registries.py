@@ -35,8 +35,6 @@ UK_SIC_HOME_SERVICES = [
     "80200",
     "95220",
 ]
-# Norwegian NACE codes for the same trades
-NO_NACE_HOME_SERVICES = ["43.210", "43.220", "43.310", "43.320", "43.341", "43.910", "81.210"]
 
 
 def _since(ctx: SourceContext, default_days: int) -> date:

@@ -1,10 +1,7 @@
-"""Free-tier quotas — every free-tier provider call goes through `consume()` (or reserve/settle).
+"""Free-tier quotas: every free-tier provider call goes through `consume()` (or reserve/settle).
 
-With MONTHLY_BUDGET_USD=0 no paid call can run (`budget.charge` refuses any amount > 0).
-Free-tier calls cost $0 against the budget but are tracked against each provider's OWN free
-cap (requests per day, one-time credits, monthly free credit), so the system stays inside
-the free tier. A cap that would be exceeded raises FreeQuotaExceededError, a subclass of
-BudgetExceededError, so agents and sources pause exactly as they do for budget caps.
+Calls are tracked against each provider's own free cap. Exceeding one raises
+FreeQuotaExceededError, a BudgetExceededError, so callers pause exactly as for budget caps.
 """
 
 from __future__ import annotations

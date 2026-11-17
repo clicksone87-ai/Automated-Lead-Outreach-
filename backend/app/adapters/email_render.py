@@ -1,9 +1,7 @@
-"""React Email render adapter.
+"""Renders outgoing email with the React Email templates in `email-templates/`.
 
-Templates live in `email-templates/` (React Email components, one set of labels per
-language). Dependencies are installed once per lockfile into DATA_DIR/email-renderer, then
-`render.mjs` turns {template, props} into {html, text}. The backend never builds HTML itself
-for outgoing email, so every message carries the same identity footer and unsubscribe link.
+The backend never builds email HTML itself, so every message carries the same identity footer
+and unsubscribe link.
 """
 
 from __future__ import annotations

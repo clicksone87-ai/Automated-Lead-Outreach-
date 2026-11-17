@@ -1,12 +1,7 @@
-"""Agent 2 — Requirements.
+"""Requirements agent: classifies the lead, scores buying intent and plans the next agents.
 
-Determines services, business type, location, country/language/time zone, existing site and
-available info; scores buying intent (LLM for explicit requests + rule signals); applies the
-duplicate/cooldown/suppression rules; decides which downstream agents run. Below
-MIN_INTENT_SCORE the lead stops here and no money is spent on it.
-
-Never invents facts: LLM quotes and URLs that do not appear in the source text are discarded,
-and unsupported intent is capped.
+Leads below MIN_INTENT_SCORE stop here. LLM quotes and URLs that are not in the source text
+are discarded.
 """
 
 from __future__ import annotations

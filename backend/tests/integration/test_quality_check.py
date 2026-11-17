@@ -1,4 +1,4 @@
-"""Quality check (3.12–3.13): logos, preview, evidence links; no self-approval; returns."""
+"""Quality check: logos, preview and evidence links; no self-approval; returns to producer."""
 
 from __future__ import annotations
 

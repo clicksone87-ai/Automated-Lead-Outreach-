@@ -1,8 +1,6 @@
-"""`make seed`: runtime settings, pricing packages, source rows (idempotent).
+"""`make seed`: runtime settings, pricing packages and source rows (idempotent).
 
-Country rules live in app/policy/country_rules.yaml (edited by the legal review).
-Pricing values are STARTER values for the dashboard pricing sheet — confirm/edit them in
-Settings before they are ever quoted to a client.
+Pricing values are starter values; review them before quoting a client.
 """
 
 from __future__ import annotations

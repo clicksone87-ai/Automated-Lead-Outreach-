@@ -1,7 +1,6 @@
-"""Reddit via the official Data API (OAuth). Needs approved/commercial access.
+"""Reddit via the official Data API (OAuth).
 
-Rules enforced: read-only (we never send automated messages on Reddit); content that is
-deleted/removed on Reddit is deleted from our DB by `sync_deletions` (scheduled).
+Read-only; posts deleted on Reddit are removed from the database by `sync_deletions`.
 """
 
 from __future__ import annotations

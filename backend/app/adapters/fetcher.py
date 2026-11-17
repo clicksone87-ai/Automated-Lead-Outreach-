@@ -1,14 +1,8 @@
-"""Safe fetcher — the ONLY way agents fetch external web content.
+"""Safe fetcher: the only way agents fetch external web content.
 
-Guarantees:
-- http/https on ports 80/443 only.
-- Every TCP connection is made to an address that was resolved *and validated at connect
-  time* (DNS pinning inside the network backend), so DNS rebinding and redirects to internal
-  hosts are blocked. All resolved addresses must be public, not just the first.
-- Redirects are followed manually; scheme/port/robots are re-checked on every hop.
-- robots.txt is fetched, cached and honoured (5xx/timeout => disallow, 4xx => allow).
-- Per-domain rate limit, identifying User-Agent, response size and time limits.
-- Never sends cookies or credentials (no login walls).
+Only http/https on ports 80/443. Every connection goes to an address validated at connect time,
+which blocks DNS rebinding and redirects to internal hosts. Redirects are re-checked per hop;
+robots.txt, per-domain rate limits and size/time limits apply; no cookies or credentials are sent.
 """
 
 from __future__ import annotations

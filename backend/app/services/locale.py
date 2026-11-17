@@ -1,8 +1,7 @@
 """Country, language and time-zone resolution.
 
-Deterministic signals (TLD, phone prefix, postcode/state patterns, explicit country names)
-first; language detection with lingua. Every result carries the signal used, so the
-Requirements agent can record why a country was assigned.
+Deterministic signals (TLD, phone prefix, postcode patterns, country names) come first, then
+lingua language detection; each result records the signal used.
 """
 
 from __future__ import annotations

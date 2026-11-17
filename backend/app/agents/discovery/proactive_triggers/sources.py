@@ -1,10 +1,7 @@
 """Proactive triggers as discovery sources.
 
-- site_health        → broken_or_outdated_site leads from known business websites
-- no_website_check   → no_website leads (registry/directory says no site AND domain check finds
-                       none) and profile_without_site leads (Places profile with no website)
-Newly registered businesses come from the registry sources (trigger new_business); the
-no-website check then confirms whether they really lack a site.
+`site_health` finds broken or outdated sites of known businesses; `no_website_check` confirms
+businesses that have no website (or only a Places profile).
 """
 
 from __future__ import annotations

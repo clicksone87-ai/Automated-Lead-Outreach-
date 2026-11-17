@@ -1,12 +1,8 @@
 """Application configuration.
 
-All environment variables live here. Values from the environment are the
-*initial* values; runtime-editable settings (autonomy stage, limits, budgets, languages,
-industry) are persisted in the `settings` table and edited from the dashboard.
-
-A missing API key never crashes the system: `integration_status()` reports which
-integrations are unavailable so adapters fall back to disabled/mock behaviour and the
-dashboard can show "Needs API key".
+Environment values are initial values; runtime-editable settings live in the `settings` table.
+A missing API key never crashes the system: `integration_status()` reports it, the adapter is
+disabled and the dashboard shows "Needs API key".
 """
 
 from __future__ import annotations
@@ -169,10 +165,6 @@ class Settings(BaseSettings):
     )
 
     @property
-    def is_local(self) -> bool:
-        return self.app_mode == AppMode.LOCAL
-
-    @property
     def mocks_allowed(self) -> bool:
         """Mock adapters exist for the automated test suite only."""
         return self.demo_mode and self.app_mode == AppMode.TEST
@@ -201,10 +193,6 @@ class Settings(BaseSettings):
     @property
     def gemini_fallbacks(self) -> list[str]:
         return [m.strip() for m in self.gemini_fallback_models.split(",") if m.strip()]
-
-    @property
-    def previews_dir(self) -> Path:
-        return self.data_dir / "previews"
 
     @property
     def public_links_enabled(self) -> bool:

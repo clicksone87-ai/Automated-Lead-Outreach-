@@ -1,10 +1,7 @@
-"""Website Builder — content for the template.
+"""Site copy for the template, written by the LLM from verified facts only.
 
-The site copy is written by the LLM from VERIFIED FACTS ONLY (the business's own public site
-text, the brief, the brand profile). It must not invent years in business, reviews, awards,
-licences, prices or guarantees. For redesigns the page structure mirrors the original site's
-navigation (fair before/after), and only the client's own public text is reused — every
-reused item is recorded with its source URL. No images are copied from anywhere.
+It must not invent years in business, reviews, awards, licences, prices or guarantees; reused
+client text is recorded with its source URL.
 """
 
 from __future__ import annotations

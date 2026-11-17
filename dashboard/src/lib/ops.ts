@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { API_URL } from "./api";
 
-/** Phase 5 endpoints: weekly reports (learning loop) and monitoring. */
+/** Weekly reports (learning loop) and monitoring endpoints. */
 
 export interface DimRow {
   key: string;

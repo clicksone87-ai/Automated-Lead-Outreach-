@@ -27,7 +27,6 @@ dependencies = [
   "phonenumbers>=8.13",
   "holidays>=0.57",
   "sse-starlette>=2.1",
-  "python-dateutil>=2.9",
   "tldextract>=5.1",
   "dnspython>=2.6",
 ]
@@ -40,7 +39,6 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.11",
   "types-PyYAML",
-  "types-python-dateutil",
 ]
 
 [build-system]

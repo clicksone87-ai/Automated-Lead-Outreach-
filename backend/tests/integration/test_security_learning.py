@@ -1,5 +1,6 @@
-"""Phase 5: prompt-injection handling, suppression/unsubscribe invariants, learning loop
-guardrails, result cache. No live calls."""
+"""Prompt-injection handling, suppression and unsubscribe invariants, learning-loop guardrails
+and the result cache. No live calls.
+"""
 
 from __future__ import annotations
 

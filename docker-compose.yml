@@ -1,4 +1,4 @@
-# Local stack. Memory limits keep the whole stack ~4.5 GB for an 8 GB host.
+# Local stack. Memory limits keep the whole stack around 4.5 GB.
 # Moving to a single Linux server is a config change: same file, different .env.
 
 x-backend: &backend

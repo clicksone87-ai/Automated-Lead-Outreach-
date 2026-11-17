@@ -1,7 +1,7 @@
 """Platform access rules enforced in code.
 
-Domains here are NEVER fetched directly by the crawler. Content from these platforms may only
-arrive through their official APIs, alert emails or feeds (each behind its own adapter).
+Domains listed here are never fetched directly; their content only arrives through official
+APIs, alert emails or feeds.
 """
 
 from __future__ import annotations

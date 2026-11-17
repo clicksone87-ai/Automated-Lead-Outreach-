@@ -1,8 +1,4 @@
-"""Free/testing email stack: SMTP sending (Mailpit in testing — nothing is really sent),
-Mailpit inbox reading (replies + alert emails) and a local email verifier (syntax + MX).
-
-Resend and ZeroBounce stay available behind the same interfaces for go-live.
-"""
+"""Free-tier email stack: SMTP sending, Mailpit inbox reading and a local syntax + MX verifier."""
 
 from __future__ import annotations
 

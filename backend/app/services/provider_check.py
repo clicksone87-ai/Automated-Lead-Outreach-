@@ -1,8 +1,4 @@
-"""Live provider check: ONE real call per configured provider through the real adapters.
-
-`python -m app.cli check-providers` prints provider | key found | result | detail.
-Secrets are never printed. Paid / off-in-testing-mode providers are reported, not called.
-"""
+"""Live provider check: one real call per configured provider. Secrets are never printed."""
 
 from __future__ import annotations
 

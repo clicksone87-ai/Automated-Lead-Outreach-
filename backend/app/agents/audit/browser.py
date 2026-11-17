@@ -1,8 +1,7 @@
-"""Headless Chromium for audits: screenshots, axe-core, PDF rendering.
+"""Headless Chromium for audits: screenshots, axe-core and PDF rendering.
 
-SSRF protection: every request the page makes (navigation, redirects, subresources) passes
-through a route guard that applies the same URL rules and private-IP blocklist as the safe
-fetcher. Tests pass `fulfill` to serve fixtures with zero network access.
+Every request the page makes goes through a route guard with the same URL rules and IP
+blocklist as the safe fetcher.
 """
 
 from __future__ import annotations

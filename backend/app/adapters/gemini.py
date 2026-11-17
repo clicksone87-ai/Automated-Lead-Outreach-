@@ -1,13 +1,8 @@
-"""Gemini adapter (free tier) — default LLM for text, structured output and vision.
+"""Gemini adapter: the default LLM for text, structured output and vision.
 
-Same contract as the OpenAI adapter:
-- structured output only, validated by Pydantic (one repair retry on invalid JSON)
-- untrusted web content wrapped with per-call random tokens; no tools are ever exposed
-- every request is counted against the free-tier quota (orchestrator.quota) BEFORE it is sent
-- free-tier friendly: client-side rate limit (GEMINI_RPM), retry with backoff on 429 using
-  the server's RetryInfo, daily-quota 429 → FreeQuotaExceededError (callers pause), and
-  fallback to the next configured model on 503 / timeouts.
-Model names come from config (GEMINI_*_MODEL), never from agent code.
+Same contract as the OpenAI adapter (validated structured output, wrapped untrusted input, no
+tools). Requests are counted against the free-tier quota before they are sent, rate limited
+client-side, retried on 429 using RetryInfo, and fall back to the next model on 503 or timeout.
 """
 
 from __future__ import annotations

@@ -1,14 +1,8 @@
-"""Agent 5 — Branding.
+"""Branding agent: brand extraction and logo concepts.
 
-Step 1 (this module, 3.02): brand extraction — business name, industry, existing colours,
-fonts and logo from the website (safe fetcher only, robots.txt respected), links to the
-business's own social profiles (recorded, not scraped: Meta/X/LinkedIn come only via
-approved APIs), and competitor styles + logos for the trademark-similarity check.
-Every extracted value records its source URL / evidence id in `brand_profiles.sources`.
-
-Steps 2–3 (3.03–3.05): 3 logo concepts designed by the LLM as SVG code (one per style),
-sanitised, rendered to PNG in a network-blocked browser, checked for the exact wording and
-compared with the competitor logos collected above (trademark-similarity guard).
+Extracts colours, fonts, logo and social links from the business's site (each value records its
+source) and collects competitor logos. The LLM then designs three SVG logo concepts, which are
+sanitised, rendered and checked for wording and similarity to the competitor logos.
 """
 
 from __future__ import annotations
@@ -117,7 +111,7 @@ def logo_format(content: bytes) -> str | None:
 
 class BrandingAgent:
     name: ClassVar[str] = "branding"
-    expensive: ClassVar[bool] = True  # logo generation (3.03) spends money
+    expensive: ClassVar[bool] = True  # logo generation spends money
 
     def __init__(self, browser_factory: Any = None) -> None:
         self._browser_factory = browser_factory or GuardedBrowser
@@ -173,7 +167,7 @@ class BrandingAgent:
             return AgentOutcome(True, None, reason + " — logo generation failed", output=output)
         return AgentOutcome(True, LeadStatus.BRANDED, reason, output=output, paid=True)
 
-    # ── logo concepts (3.03–3.05) ────────────────────────────────────────
+    # ── logo concepts ────────────────────────────────────────────────────
 
     async def _logo_concepts(
         self, ctx: AgentContext, lead: Lead, profile: BrandProfile
@@ -547,7 +541,7 @@ class BrandingAgent:
 
         values: dict[str, Any] = {
             # The registered/known business name is authoritative; the site's wording is kept
-            # in `sources` for the logo text decision (3.03).
+            # in `sources` for the logo text decision.
             "brand_name": brand_name,
             "colors": colors,
             "fonts": fonts,

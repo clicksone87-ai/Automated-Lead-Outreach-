@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Protocol, Self, runtime_checkable
+from typing import Any, Protocol, Self, runtime_checkable
 
 
 class AdapterUnavailableError(Exception):
@@ -16,11 +16,6 @@ class AdapterUnavailableError(Exception):
         super().__init__(f"{integration} is not configured{hint}")
         self.integration = integration
         self.env_vars = env_vars
-
-
-class Adapter(Protocol):
-    name: ClassVar[str]
-    is_mock: ClassVar[bool]
 
 
 @runtime_checkable

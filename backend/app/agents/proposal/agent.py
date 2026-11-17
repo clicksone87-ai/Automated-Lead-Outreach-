@@ -1,13 +1,7 @@
-"""Agent 7 — Proposal.
+"""Proposal agent: writes a personalised email from verified facts only.
 
-Writes a personalised email in the lead's language from VERIFIED FACTS ONLY. Every factual
-claim is a structured item that cites a stored evidence record; a draft with any claim that
-does not map to this lead's evidence is rejected (one retry, then human review). The email is
-rendered from the localized React Email templates with the sender identity footer and an
-unsubscribe link. Local mode attaches screenshots + PDFs instead of live links.
-
-At autonomy Stage 1 every proposal waits for human approval; Stage 2+ approves automatically
-(the outreach gate still runs every policy check before anything is sent).
+Every factual claim must cite this lead's stored evidence or the draft is rejected (one retry,
+then human review). At autonomy stage 1 every proposal waits for human approval.
 """
 
 from __future__ import annotations

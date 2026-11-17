@@ -1,4 +1,4 @@
-"""Database backups: pg_dump → ./backups. Keeps the newest N dumps."""
+"""Database backups with pg_dump into ./backups, keeping the newest N dumps."""
 
 from __future__ import annotations
 

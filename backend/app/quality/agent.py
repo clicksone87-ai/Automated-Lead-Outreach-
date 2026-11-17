@@ -1,13 +1,7 @@
-"""Quality check.
+"""Quality check: verifies logos, website previews and evidence links before they are used.
 
-Verifies produced work before it can be used: logos (valid files, resolution, exact wording,
-trademark similarity), the website preview (build + smoke tests + Lighthouse thresholds) and
-evidence links (every audit finding and brand fact points at stored evidence).
-
-The checker never produces or fixes anything, so it can never approve its own failed work.
-A failed item goes back to its producer once (that agent's last run is superseded and the
-lead re-enters the pipeline at that step); a second failure goes to human review. Every
-verdict is recorded in `quality_checks`.
+The checker never produces or fixes anything. A failed item goes back to its producer once,
+then to human review; every verdict is stored in `quality_checks`.
 """
 
 from __future__ import annotations

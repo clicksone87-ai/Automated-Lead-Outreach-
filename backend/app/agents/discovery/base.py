@@ -1,8 +1,6 @@
 """Discovery source contract.
 
-Each source is its own module, can be enabled/disabled in settings, has its own schedule and
-declares the integration it depends on (so a missing key shows "Needs API key"). Sources only
-*find* raw items; the runner handles dedup, locale, evidence and lead creation uniformly.
+Sources only find raw items; the runner handles dedup, locale, evidence and lead creation.
 """
 
 from __future__ import annotations

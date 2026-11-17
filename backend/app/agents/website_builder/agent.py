@@ -1,7 +1,6 @@
-"""Agent 6 — Website Builder.
+"""Website builder agent: fills a template with verified facts, tests the build and publishes a
+private preview.
 
-Builds a new or redesigned site FROM A TEMPLATE (never free-form generation), filled with the
-brief, branding and audit facts, then tests it and publishes it as a private local preview.
 Redesigns keep the original page structure and reuse only the client's own public text.
 """
 

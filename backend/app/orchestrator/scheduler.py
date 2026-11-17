@@ -1,8 +1,4 @@
-"""Scheduler service: periodic jobs.
-
-Runs on its own Arq queue so it only executes these light cron tasks; heavy work is
-enqueued onto the worker queue.
-"""
+"""Scheduler: periodic jobs on their own Arq queue; heavy work is enqueued onto the worker queue."""
 
 from __future__ import annotations
 

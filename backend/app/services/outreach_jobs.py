@@ -1,5 +1,7 @@
-"""Scheduled outreach jobs: send due messages, track delivery,
-ingest + classify replies, follow-ups, unsubscribe. All idempotent; all policy-gated."""
+"""Scheduled outreach jobs: send due messages, track delivery, ingest replies and follow-ups.
+
+All jobs are idempotent and policy-gated.
+"""
 
 from __future__ import annotations
 

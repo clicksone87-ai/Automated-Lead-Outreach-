@@ -1,7 +1,6 @@
-"""Free-tier search providers: Serper (Google results via API) and Exa (fallback).
+"""Free-tier search: Serper (Google results via API) with Exa as fallback.
 
-Never scrapes Google result pages. Every call is counted against the
-provider's free quota first (orchestrator.quota).
+Every call is counted against the provider's free quota first.
 """
 
 from __future__ import annotations

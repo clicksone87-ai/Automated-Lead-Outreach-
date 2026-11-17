@@ -1,4 +1,4 @@
-"""phase 2 lead and site fields
+"""lead and site fields
 
 Revision ID: ca9104e044f2
 Revises: 874bf4fa0f56

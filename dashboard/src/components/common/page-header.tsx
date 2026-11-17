@@ -21,23 +21,3 @@ export function PageHeader({
     </div>
   );
 }
-
-export function SectionTitle({
-  children,
-  hint,
-  action,
-}: {
-  children: React.ReactNode;
-  hint?: React.ReactNode;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="mb-3 flex items-center justify-between gap-3">
-      <div>
-        <h2 className="text-sm font-semibold text-foreground">{children}</h2>
-        {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-      </div>
-      {action}
-    </div>
-  );
-}

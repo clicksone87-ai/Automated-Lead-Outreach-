@@ -1,10 +1,7 @@
 """Trigger: broken or outdated websites of local businesses found through a search API.
 
-One licensed search query per run ("<trade> <city>", rotated over the active industry's trades
-and US/UK cities) returns individual business websites (organic results — never a Maps/Places
-bulk list, never scraping Google result pages). Each homepage is fetched once through the safe
-fetcher (robots.txt, rate limits, SSRF guard) and classified with the same signals as the
-site-health trigger. Only broken or outdated sites become leads.
+One "<trade> <city>" query per run (rotated). Each homepage is fetched once through the safe
+fetcher and classified with the site-health signals; only broken or outdated sites become leads.
 """
 
 from __future__ import annotations

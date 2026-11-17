@@ -4,7 +4,7 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import type { Costs } from "@/lib/api";
 import { usd } from "@/lib/format";
 
-/** Single-series daily spend: 2px line, soft fill, recessive grid, crosshair tooltip. */
+/** Daily spend over time. */
 export function CostChart({ data, dailyCap }: { data: Costs["daily"]; dailyCap: number }) {
   // Fill missing days so the line reads as time, not as a list of points.
   const byDay = new Map(data.map((d) => [d.day, d.amount_usd]));

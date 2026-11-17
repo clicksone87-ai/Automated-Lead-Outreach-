@@ -1,8 +1,7 @@
-"""Agent 4 — Website Audit and SEO.
+"""Website audit and SEO agent.
 
-Runs only when the brief says so (lead has a site and needs redesign/SEO), after a contact
-route exists. Captures evidence first, derives findings from it, and refuses to store any
-finding that does not point at an evidence record.
+Runs for leads with a site that need a redesign or SEO, once a contact route exists. Findings
+that do not point at stored evidence are rejected.
 """
 
 from __future__ import annotations

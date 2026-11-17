@@ -1,7 +1,6 @@
-"""Contact extraction from fetched pages (pure functions; input HTML is untrusted).
+"""Contact extraction from fetched pages.
 
-Only addresses that literally appear in the content are returned — nothing is guessed or
-generated from name patterns.
+Only addresses that literally appear in the content are returned; nothing is guessed.
 """
 
 from __future__ import annotations

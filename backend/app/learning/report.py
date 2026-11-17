@@ -1,10 +1,7 @@
-"""Learning loop: weekly report + guarded adjustments.
+"""Learning loop: weekly report and guarded adjustments.
 
-Report: which sources, services, industries, countries, triggers and message styles produced
-replies (and positive replies / wins), plus the funnel. Adjustments are conservative and
-always logged (settings_changes): a weight moves only with enough data (≥ MIN_SAMPLE sends),
-in small steps (± STEP), within fixed bounds — so a few lucky replies never swing the system.
-Real sends only: Mailpit sandbox messages never train anything.
+A weight moves only with at least MIN_SAMPLE sends, by STEP at a time and within fixed bounds;
+every change is logged. Sandbox (Mailpit) messages never count.
 """
 
 from __future__ import annotations

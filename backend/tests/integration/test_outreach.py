@@ -1,6 +1,6 @@
-"""Phase 4 (4.01–4.11): proposal claims → evidence, sandbox-aware outreach gate, idempotent
-sends with unsubscribe headers, signed unsubscribe links, replies → inbox/suppression,
-follow-ups, sending windows and autonomy gating. No live calls."""
+"""Proposal and outreach flow: evidence-mapped claims, the sandbox-aware gate, sends, unsubscribe
+links, replies, follow-ups and autonomy gating. No live calls.
+"""
 
 from __future__ import annotations
 

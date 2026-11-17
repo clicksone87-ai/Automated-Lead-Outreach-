@@ -1,4 +1,4 @@
-"""Website Builder content (3.06–3.08): structure, facts, variants."""
+"""Website builder content: structure, facts and variants."""
 
 from __future__ import annotations
 

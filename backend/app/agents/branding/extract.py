@@ -1,8 +1,6 @@
 """Brand extraction from a site's HTML and CSS.
 
-Pure functions over already-fetched text, so they are testable with fixtures and never touch
-the network themselves. Every value carries where it was found (`source`) so the brand
-profile can point back at evidence.
+Pure functions over already-fetched text; every value records where it was found.
 """
 
 from __future__ import annotations

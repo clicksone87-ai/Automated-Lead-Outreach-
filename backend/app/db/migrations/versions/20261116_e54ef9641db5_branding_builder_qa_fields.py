@@ -1,4 +1,4 @@
-"""phase 3 branding builder qa fields
+"""branding builder qa fields
 
 Revision ID: e54ef9641db5
 Revises: ca9104e044f2

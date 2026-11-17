@@ -1,4 +1,4 @@
-"""Structured outputs for the Requirements agent (validated by Pydantic; the specification §5.7)."""
+"""Structured outputs for the Requirements agent."""
 
 from __future__ import annotations
 

@@ -1,7 +1,4 @@
-"""Email sending adapter (Resend). Agents never call the vendor directly.
-
-The mock adapter never sends anything; it records messages for tests and demo mode.
-"""
+"""Email sending adapter (Resend). The mock adapter only records messages for tests."""
 
 from __future__ import annotations
 

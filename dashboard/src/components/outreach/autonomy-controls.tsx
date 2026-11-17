@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useAutonomy, useSetStage } from "@/lib/outreach";
 import { cn } from "@/lib/utils";
 
-/** Live move-up conditions and the only control that changes the autonomy stage (§10). */
+/** Live move-up conditions and the only control that changes the autonomy stage. */
 export function AutonomyControls() {
   const { data } = useAutonomy();
   const setStage = useSetStage();

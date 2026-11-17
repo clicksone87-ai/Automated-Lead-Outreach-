@@ -1,15 +1,7 @@
-"""Adapter registry — picks the real or disabled implementation for each integration.
+"""Builds the adapter set: the real adapter when an integration is ready, otherwise a disabled one
+that raises AdapterUnavailableError.
 
-Rules:
-- Integration ready (keys present, provider selected, not off in testing mode) -> real adapter
-- Otherwise                                   -> disabled adapter (raises AdapterUnavailableError,
-                                                 which agents/sources turn into a visible state)
-- Mock adapters are used ONLY by the automated test suite (APP_MODE=test + DEMO_MODE=true).
-  The running system never uses mock adapters or produces mock data.
-
-Testing-mode defaults (APP_TIER=free): Gemini (LLM), Serper → Exa (search), Serper local
-results (single-business lookups), PageSpeed (lab data), SMTP → Mailpit (email + replies),
-local syntax+MX verifier, Apify (public social posts).
+Mock adapters are only used by the test suite (APP_MODE=test and DEMO_MODE=true).
 """
 
 from __future__ import annotations

@@ -1,9 +1,7 @@
-"""Apify adapter — licensed third-party provider for PUBLIC social posts (X, Instagram,
-Facebook public pages/groups, Reddit).
+"""Apify client for public social posts (X, Instagram, Facebook public pages/groups, Reddit).
 
-Every run is capped twice: Apify enforces `maxItems` + `maxTotalChargeUsd` server-side, and
-the estimated cost is reserved against the per-source share of APIFY_MONTHLY_CAP_USD before
-the run starts (orchestrator.quota), then settled with the real charge afterwards.
+Each run is capped server-side (maxItems, maxTotalChargeUsd), and its estimated cost is reserved
+against the source's share of APIFY_MONTHLY_CAP_USD before it starts.
 """
 
 from __future__ import annotations

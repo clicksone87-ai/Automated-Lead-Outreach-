@@ -1,4 +1,4 @@
-"""Website Builder agent (3.08–3.10) with a fake build/test step (no Node in the test suite)."""
+"""Website builder agent with a fake build step (no Node in the test suite)."""
 
 from __future__ import annotations
 

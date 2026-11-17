@@ -1,14 +1,4 @@
-"""SQLAlchemy models.
-
-Supporting tables beyond §6:
-- `policy_decisions`   every policy check with its reason (§8 "logged with its reason")
-- `settings_changes`   audit log of settings / threshold changes (§13)
-- `sources`            per-source enable flag, schedule, health (§7, §14 Sources page)
-- `source_runs`        each discovery run of a source
-- `outreach_locks`     one active outreach per business (§9, row-level guarantee)
-- `activity_events`    live activity feed streamed to the dashboard
-- `quality_checks`     every quality-check verdict per produced item (§7, no self-approval)
-"""
+"""SQLAlchemy models."""
 
 from __future__ import annotations
 
@@ -353,7 +343,7 @@ class BrandProfile(Base):
     logo_path: Mapped[str | None] = mapped_column(Text)
     industry: Mapped[str | None] = mapped_column(String(100))
     competitor_styles: Mapped[list[Any]] = mapped_column(JSONB, default=list)
-    # Phase 3: where each value came from (url / evidence_id per colour, font, logo)
+    # where each value came from (url / evidence_id per colour, font, logo)
     brand_name: Mapped[str | None] = mapped_column(Text)
     sources: Mapped[list[Any]] = mapped_column(JSONB, default=list)
     social_profiles: Mapped[list[Any]] = mapped_column(JSONB, default=list)
@@ -380,7 +370,6 @@ class LogoConcept(Base):
     typography: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     qa_status: Mapped[str] = mapped_column(String(20), default=QAStatus.PENDING)
     qa_report: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
-    # Phase 3
     language: Mapped[str | None] = mapped_column(String(8))
     text: Mapped[str | None] = mapped_column(Text)  # exact wording rendered in the logo
     prompt: Mapped[str | None] = mapped_column(Text)
@@ -406,7 +395,6 @@ class Preview(Base):
     screenshots: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     test_results: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     qa_status: Mapped[str] = mapped_column(String(20), default=QAStatus.PENDING)
-    # Phase 3
     mode: Mapped[str] = mapped_column(String(20), default=PreviewMode.NEW, server_default="new")
     language: Mapped[str | None] = mapped_column(String(8))
     content: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)  # typed template input
@@ -425,8 +413,8 @@ class Preview(Base):
 class QualityCheck(Base):
     """One quality-check verdict on one produced item.
 
-    The checker is never the producer (§5.8); a failed item goes back to its producer
-    (`returned_to`) or to human review — a later pass of the same item gets a new row.
+    The checker is never the producer; a failed item goes back to its producer (`returned_to`)
+    or to human review, and a later pass gets a new row.
     """
 
     __tablename__ = "quality_checks"
@@ -467,7 +455,7 @@ class Proposal(Base):
     approved_by: Mapped[str | None] = mapped_column(String(100))
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     rejection_reason: Mapped[str | None] = mapped_column(Text)
-    # Phase 4: recipient + route, and whether the transport is a sandbox (Mailpit)
+    # recipient + route, and whether the transport is a sandbox (Mailpit)
     to_email: Mapped[str | None] = mapped_column(String(320))
     contact_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("contacts.id", ondelete="SET NULL")
@@ -497,7 +485,6 @@ class Message(Base):
     bounce_type: Mapped[str | None] = mapped_column(String(50))
     complained: Mapped[bool] = mapped_column(Boolean, default=False)
     follow_up_number: Mapped[int] = mapped_column(Integer, default=0)
-    # Phase 4
     subject: Mapped[str | None] = mapped_column(Text)
     message_id_header: Mapped[str | None] = mapped_column(String(300), index=True)
     sandbox: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
@@ -520,7 +507,6 @@ class Reply(Base):
     raw: Mapped[str] = mapped_column(Text)
     classification: Mapped[str | None] = mapped_column(String(20))
     handed_to_inbox: Mapped[bool] = mapped_column(Boolean, default=False)
-    # Phase 4
     lead_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("leads.id", ondelete="SET NULL"), index=True
     )
@@ -773,8 +759,7 @@ __all__ = [
 
 
 class Report(Base):
-    """Learning-loop snapshot: weekly results by source/service/industry/
-    country/message style, plus the adjustments it made."""
+    """Weekly learning-loop snapshot and the adjustments it made."""
 
     __tablename__ = "reports"
 

@@ -1,4 +1,4 @@
-"""Restricted actions — never automated at any autonomy stage."""
+"""Restricted actions: never automated at any autonomy stage."""
 
 from __future__ import annotations
 

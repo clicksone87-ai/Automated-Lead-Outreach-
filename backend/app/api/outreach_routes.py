@@ -1,7 +1,6 @@
-"""Phase 4 API: approval queue, inbox + deals, suppression list, pricing, autonomy, unsubscribe.
+"""Approval queue, inbox and deals, suppression list, autonomy and unsubscribe endpoints.
 
-Humans make every restricted decision here (approve/edit/reject emails, quote → contract →
-payment → delivery statuses). Unsubscribe links are public (no token) and idempotent.
+Unsubscribe links are public and idempotent.
 """
 
 from __future__ import annotations
@@ -24,7 +23,6 @@ from app.db.models import (
     Lead,
     LeadStatus,
     Message,
-    PricingPackage,
     Proposal,
     Reply,
     Suppression,
@@ -66,13 +64,6 @@ class SuppressionIn(BaseModel):
     email: str | None = Field(default=None, max_length=320)
     domain: str | None = Field(default=None, max_length=255)
     reason: str = Field(default="manual", max_length=100)
-
-
-class PricingPatch(BaseModel):
-    description: str | None = None
-    price_usd: float | None = Field(default=None, ge=0)
-    price_eur: float | None = Field(default=None, ge=0)
-    price_gbp: float | None = Field(default=None, ge=0)
 
 
 class StageIn(BaseModel):
@@ -287,18 +278,6 @@ async def add_suppression(body: SuppressionIn, session: SessionDep) -> dict[str,
     session.add(row)
     await session.flush()
     return {"id": str(row.id), "email": row.email, "domain": row.domain, "reason": row.reason}
-
-
-@router.patch("/pricing/{package_id}")
-async def patch_pricing(package_id: int, body: PricingPatch, session: SessionDep) -> dict[str, Any]:
-    row = await session.get(PricingPackage, package_id)
-    if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "package not found")
-    for k, v in body.model_dump(exclude_none=True).items():
-        setattr(row, k, v)
-    await session.flush()
-    return {"id": row.id, "service": row.service, "package": row.package, "description": row.description,
-            "price_usd": row.price_usd, "price_eur": row.price_eur, "price_gbp": row.price_gbp}  # fmt: skip
 
 
 @router.get("/autonomy")

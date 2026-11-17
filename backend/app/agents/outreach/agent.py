@@ -1,11 +1,7 @@
-"""Agent 8 — Outreach: sends the approved proposal.
+"""Outreach agent: sends approved proposals.
 
-Only approved proposals are sent (Stage 1: by a human; Stage 2+: automatically). Every send
-passes the full policy gate first (suppression, country rules, language, cooldown + active
-outreach lock, send limits, QA gate, recipient, sender identity, restricted actions). Real
-sending waits for the recipient's local business hours; the Mailpit sandbox delivers
-immediately unless `sandbox_respect_send_window` is on. Follow-ups, delivery tracking and
-replies are scheduler jobs (services.outreach_jobs).
+Every send passes the full policy gate first. Real sending waits for the recipient's business
+hours; the Mailpit sandbox delivers immediately unless `sandbox_respect_send_window` is set.
 """
 
 from __future__ import annotations

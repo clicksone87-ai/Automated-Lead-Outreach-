@@ -1,4 +1,4 @@
-"""Logo concepts (3.03–3.05): SVG sanitising, wording check, legal suffixes, similarity."""
+"""Logo concepts: SVG sanitising, wording check, legal suffixes and similarity."""
 
 from __future__ import annotations
 

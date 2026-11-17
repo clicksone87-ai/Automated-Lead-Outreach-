@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { API_URL } from "./api";
 
-/** Phase 4 endpoints (approvals, inbox, deals, suppressions, autonomy, pricing). */
+/** Approvals, inbox, deals, suppressions and autonomy endpoints. */
 
 export interface Claim {
   text: string;
@@ -209,14 +209,3 @@ export function useSetStage() {
   });
 }
 
-export function usePatchPricing() {
-  const done = useInvalidate([["settings"]]);
-  return useMutation({
-    mutationFn: ({ id, patch }: { id: number; patch: Record<string, number | string> }) => call(`/api/pricing/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
-    onSuccess: () => {
-      toast.success("Price saved");
-      done();
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-}

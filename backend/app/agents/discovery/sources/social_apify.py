@@ -1,15 +1,8 @@
-"""Public social posts via Apify (licensed third-party provider) — X, Instagram, Facebook
-(public pages + PUBLIC groups only) and Reddit.
+"""Public social posts via Apify: X, Instagram, Facebook (public pages and groups) and Reddit.
 
-Rules enforced here:
-- public content only: keyword/hashtag search and public group/page URLs; never logins,
-  private groups or profiles; read-only (we never post, reply or message on these platforms)
-- intent phrases × local trades × US/UK locations, rotated per run to stay inside the free cap
-- every run is capped by Apify (maxItems + maxTotalChargeUsd) and by the per-source share of
-  APIFY_MONTHLY_CAP_USD (orchestrator.quota)
-- post URL, text, handle and date are stored as evidence; every result goes to Requirements
-- a failed or empty actor run marks the source "degraded"; the pipeline keeps running
-- Reddit posts deleted/removed on Reddit are deleted from our DB (`sync_reddit_deletions`)
+Public content only, read-only. Queries rotate per run to stay inside the free cap, a failed or
+empty run marks the source degraded, and posts deleted on Reddit are removed by
+`sync_reddit_deletions`.
 """
 
 from __future__ import annotations
@@ -42,30 +35,6 @@ INTENT_PHRASES = [
     "recommend a web designer",
     "need help with SEO",
     "who can build a website",
-]
-US_CITIES = [
-    "New York",
-    "Los Angeles",
-    "Chicago",
-    "Houston",
-    "Austin",
-    "Dallas",
-    "Miami",
-    "Atlanta",
-    "Seattle",
-    "Denver",
-    "Phoenix",
-    "Boston",
-]
-UK_CITIES = [
-    "London",
-    "Manchester",
-    "Birmingham",
-    "Leeds",
-    "Glasgow",
-    "Bristol",
-    "Liverpool",
-    "Edinburgh",
 ]
 REDDIT_SUBS = ["smallbusiness", "Entrepreneur", "forhire", "web_design", "startups"]
 REDDIT_CITY_SUBS = [

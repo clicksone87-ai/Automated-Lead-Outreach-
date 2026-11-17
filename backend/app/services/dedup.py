@@ -1,12 +1,7 @@
-"""Duplicate matching — one business = one record across all sources.
+"""Duplicate matching: one business is one record across all sources.
 
-Match order (first hit wins):
-  1. website domain (registrable domain, exact)
-  2. registry source + number (exact)
-  3. verified contact detail (email / phone, exact)
-  4. normalized name similarity (pg_trgm) within the same country
-Resolution is serialized per normalized name with an advisory lock so concurrent discovery
-jobs cannot create the same business twice.
+Matches by domain, registry number, verified email/phone, then name similarity within a
+country; resolution is serialized with an advisory lock.
 """
 
 from __future__ import annotations

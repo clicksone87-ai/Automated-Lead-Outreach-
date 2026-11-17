@@ -1,9 +1,7 @@
-"""Budget caps — every paid call goes through `charge()` first.
+"""Budget caps: every paid call goes through `charge()` first.
 
-Checks, in one serialized transaction (advisory lock):
-  global daily cap, global monthly cap, per-agent caps, per-provider caps.
-If any cap would be exceeded, the call is refused (BudgetExceededError), the refusal is logged
-as a policy decision, and the caller pauses. AI can never override this.
+Daily, monthly, per-agent and per-provider caps are checked in one serialized transaction; a
+refusal is logged and the caller pauses.
 """
 
 from __future__ import annotations

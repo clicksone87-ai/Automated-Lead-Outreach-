@@ -1,9 +1,6 @@
 """Agent contract and registry.
 
-Every agent:
-- reads its input from the DB and writes structured results back
-- is idempotent: rerunning on the same lead must not duplicate records or emails (§20)
-- returns an AgentOutcome telling the orchestrator whether the lead continues
+Agents read inputs from the database, write structured results back, and must be idempotent.
 """
 
 from __future__ import annotations

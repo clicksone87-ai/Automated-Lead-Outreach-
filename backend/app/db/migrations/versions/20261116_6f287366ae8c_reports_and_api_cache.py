@@ -1,4 +1,4 @@
-"""phase 5 reports and api cache
+"""reports and api cache
 
 Revision ID: 6f287366ae8c
 Revises: 467063abf484
