@@ -27,7 +27,8 @@ countries:
     enabled: true
     legal_reviewed: false          # set true only after legal review
     regime_note: "Draft placeholder — commonly discussed framework is CAN-SPAM; confirm."
-    allowed_recipient_types: [corporate_entity, sole_trader]
+    # Owner decision 2026-11-17: any recipient who may need our services can be contacted.
+    allowed_recipient_types: [corporate_entity, sole_trader, individual, unknown]
     requires_prior_consent: false  # TO CONFIRM
     requires_unsubscribe: true
     requires_postal_address: true
@@ -43,7 +44,9 @@ countries:
     regime_note: >-
       Draft placeholder — commonly discussed framework is PECR + UK GDPR, which treats
       corporate subscribers differently from sole traders/partnerships; confirm.
-    allowed_recipient_types: [corporate_entity]   # TO CONFIRM
+    # Owner decision 2026-11-17: any recipient who may need our services can be contacted.
+    # Note for the legal review: PECR limits unsolicited email to sole traders/individuals.
+    allowed_recipient_types: [corporate_entity, sole_trader, individual, unknown]
     requires_prior_consent: false                 # TO CONFIRM (for corporate subscribers)
     requires_unsubscribe: true
     requires_postal_address: true
