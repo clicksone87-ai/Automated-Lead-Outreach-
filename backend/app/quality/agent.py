@@ -37,6 +37,7 @@ from app.db.models import (
     RunStatus,
 )
 from app.orchestrator.agents import AgentContext, AgentOutcome, register
+from app.services import runtime_settings
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +186,14 @@ class QualityCheckAgent:
         for name in sorted(REQUIRED_PREVIEW_CHECKS):
             c = by_name.get(name)
             checks.append(check(name, bool(c and c["passed"]), (c or {}).get("detail", "not run")))
-        if "lighthouse" in by_name:
+        scores = tr.get("lighthouse") or {}
+        if scores:
+            # Judged against the CURRENT thresholds (Settings), not the builder's flag.
+            limits = (await runtime_settings.load(ctx.session)).lighthouse_min
+            low = {k: v for k, v in scores.items() if v < limits.get(k, 0)}
+            detail = f"scores {scores}; thresholds {limits}" + (f"; below: {low}" if low else "")
+            checks.append(check("lighthouse", not low, detail))
+        elif "lighthouse" in by_name:
             checks.append(
                 check(
                     "lighthouse", by_name["lighthouse"]["passed"], by_name["lighthouse"]["detail"]

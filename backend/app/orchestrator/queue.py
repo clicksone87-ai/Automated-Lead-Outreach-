@@ -16,7 +16,12 @@ _pool: ArqRedis | None = None
 
 
 def redis_settings() -> RedisSettings:
-    return RedisSettings.from_dsn(get_settings().redis_url)
+    """Tolerant of short stalls (a busy laptop during website builds) instead of crashing."""
+    rs = RedisSettings.from_dsn(get_settings().redis_url)
+    rs.conn_timeout = 15
+    rs.conn_retries = 10
+    rs.conn_retry_delay = 2
+    return rs
 
 
 async def get_pool() -> ArqRedis:

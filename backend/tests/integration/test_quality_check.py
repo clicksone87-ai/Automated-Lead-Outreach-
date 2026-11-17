@@ -162,3 +162,31 @@ async def test_finding_without_evidence_needs_review(tmp_path: Path) -> None:
     lead_id = await _lead(settings, evidence_ok=False)
     outcome = await _run(settings, lead_id)
     assert outcome.status == LeadStatus.NEEDS_REVIEW and "evidence" in outcome.reason
+
+
+async def test_lighthouse_judged_against_current_thresholds(tmp_path: Path) -> None:
+    from app.services import runtime_settings  # noqa: PLC0415
+
+    settings = _settings(tmp_path)
+    lead_id = await _lead(settings)
+    scores = {"performance": 58.0, "accessibility": 96.0, "best-practices": 96.0, "seo": 100.0}
+    async with session_scope() as s:
+        p = (await s.execute(select(Preview).where(Preview.lead_id == lead_id))).scalar_one()
+        p.test_results = {**p.test_results, "lighthouse": scores}
+    first = await _run(settings, lead_id)
+    assert first.status == LeadStatus.BRANDED  # performance 58 < 80 → back to the builder
+    async with session_scope() as s:
+        lim = (await runtime_settings.load(s)).lighthouse_min
+        await runtime_settings.update(
+            s, {"lighthouse_min": {**lim, "performance": 50}}, changed_by="test"
+        )
+        qa = (
+            await s.execute(
+                select(AgentRun).where(
+                    AgentRun.lead_id == lead_id, AgentRun.agent == "quality_check"
+                )
+            )
+        ).scalar_one()
+        await s.delete(qa)
+    second = await _run(settings, lead_id)
+    assert second.status == LeadStatus.QA_PASSED

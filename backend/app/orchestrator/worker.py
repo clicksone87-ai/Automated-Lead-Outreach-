@@ -86,7 +86,7 @@ class WorkerSettings:
     on_shutdown = shutdown
     redis_settings = redis_settings()
     queue_name = DEFAULT_QUEUE
-    max_jobs = 4  # Chromium/Lighthouse are heavy; keeps the worker within its 2 GB limit
+    max_jobs = 2  # Chromium/Lighthouse/next build are heavy: stay within 2 GB on an 8 GB host
     # One pipeline job can include 3 logo concepts + a website build (~15 min on a laptop).
     job_timeout = 3600
     max_tries = get_settings().max_job_attempts
