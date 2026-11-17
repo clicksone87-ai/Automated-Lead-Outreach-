@@ -33,6 +33,8 @@ export interface LeadFilters {
   service?: string[];
   trigger?: string[];
   min_score?: number;
+  max_score?: number;
+  unscored?: "include" | "only";
   q?: string;
 }
 
