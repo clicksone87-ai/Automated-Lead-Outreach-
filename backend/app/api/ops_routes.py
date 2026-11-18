@@ -23,11 +23,12 @@ async def _heartbeats(redis_url: str) -> dict[str, Any]:
     out: dict[str, Any] = {}
     try:
         client = Redis.from_url(redis_url, socket_timeout=2, decode_responses=True)
-        for name in ("worker", "scheduler"):
+        for name in ("worker", "worker-heavy", "scheduler"):
             raw = await client.get(f"heartbeat:{name}")
             at = datetime.fromisoformat(raw) if raw else None
             out[name] = {"last": raw, "alive": bool(at and datetime.now(UTC) - at < STALE_AFTER)}
         out["queue_depth"] = int(await client.zcard("arq:queue"))
+        out["heavy_queue_depth"] = int(await client.zcard("arq:heavy"))
         await client.aclose()
     except Exception as exc:  # monitoring must never fail the page
         out["error"] = str(exc)[:200]

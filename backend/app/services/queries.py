@@ -557,6 +557,8 @@ async def lead_detail(session: AsyncSession, lead_id: uuid.UUID) -> LeadDetail |
                 "approved_at",
                 "rejection_reason",
                 "created_at",
+                "to_email",
+                "draft",
             )
             for p in proposals
         ],

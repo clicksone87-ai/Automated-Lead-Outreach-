@@ -38,3 +38,15 @@ def test_no_bom_or_mojibake_in_sources() -> None:
 
 def test_spanish_country_word_detected() -> None:
     assert country_from_text("Calle Mayor 1, Madrid, España")[0] == "ES"
+
+
+def test_social_posts_older_than_eight_hours_are_dropped() -> None:
+    from datetime import UTC, datetime, timedelta  # noqa: PLC0415
+
+    from app.agents.discovery.sources.social_apify import MAX_POST_AGE, _is_recent  # noqa: PLC0415
+
+    now = datetime.now(UTC)
+    assert timedelta(hours=8) == MAX_POST_AGE
+    assert _is_recent(now - timedelta(hours=7, minutes=59))
+    assert not _is_recent(now - timedelta(hours=8, minutes=1))
+    assert _is_recent(None)  # undated items are kept
