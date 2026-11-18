@@ -5,6 +5,7 @@ Aliases are private on purpose: binding e.g. `audit` here would shadow the
 """
 
 from app.agents.audit import agent as _audit_agent
+from app.agents.audit import light as _light_audit_agent
 from app.agents.branding import agent as _branding_agent
 from app.agents.contact_enrichment import agent as _contact_agent
 from app.agents.outreach import agent as _outreach_agent
@@ -18,6 +19,7 @@ REGISTERED_MODULES = (
     _prefilter_agent,
     _requirements_agent,
     _contact_agent,
+    _light_audit_agent,
     _audit_agent,
     _branding_agent,
     _website_builder_agent,
