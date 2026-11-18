@@ -122,8 +122,13 @@ class ApifyClient:
             r = await self._client.get(f"{API}/actor-runs/{run['id']}", headers=self._headers)
             run = r.json()["data"] if r.status_code == 200 else run
         cost = _run_cost(run)
-        await quota.settle(session, reserved, units=1, credit_usd=cost)
-        reserved.description = f"{actor} run {run.get('id')} {run.get('status')}"
+        await quota.settle(
+            session,
+            reserved,
+            units=1,
+            credit_usd=cost,
+            description=f"{actor} run {run.get('id')} {run.get('status')}",
+        )
         items: list[dict[str, Any]] = []
         dataset = run.get("defaultDatasetId")
         if dataset:

@@ -7,12 +7,16 @@ FreeQuotaExceededError, a BudgetExceededError, so callers pause exactly as for b
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import make_transient
 
 from app.config import Settings, get_settings
 from app.db.models import Cost, PolicyDecision
@@ -120,50 +124,94 @@ async def consume(
     description: str | None = None,
     settings: Settings | None = None,
 ) -> Cost:
-    """Check every applicable free cap, then record the usage. Raises FreeQuotaExceededError."""
+    """Check every applicable free cap, then record the usage. Raises FreeQuotaExceededError.
+
+    The check and the record are committed in their own short transaction, not the caller's:
+    the cap lock is held for milliseconds instead of a whole pipeline step (which serialised
+    every worker), and a call that was really made stays counted even if the step fails.
+    `session` is unused and kept so call sites read the same as budget.charge().
+    """
     if units < 0 or credit_usd < 0:
         raise ValueError("usage must be >= 0")
     s = settings or get_settings()
-    await session.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _LOCK_KEY})
-    for q in applicable(quotas(s), provider, scope):
-        amount = units if q.measure == "units" else credit_usd
-        if amount <= 0:
-            continue
-        spent = await used(session, q)
-        if spent + amount > q.cap + 1e-9:
-            session.add(
-                PolicyDecision(
-                    check="free_quota",
-                    action=f"{agent}:{provider}",
-                    lead_id=lead_id,
-                    allowed=False,
-                    reason=f"{q.scope} free cap {q.cap:g} {q.unit_label} reached (used {spent:g})",
-                    details={"scope": q.scope, "amount": amount},
+    async with _own_transaction() as own:
+        await own.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _LOCK_KEY})
+        for q in applicable(quotas(s), provider, scope):
+            amount = units if q.measure == "units" else credit_usd
+            if amount <= 0:
+                continue
+            spent = await used(own, q)
+            if spent + amount > q.cap + 1e-9:
+                await _insert(
+                    own,
+                    PolicyDecision(
+                        check="free_quota",
+                        action=f"{agent}:{provider}",
+                        lead_id=lead_id,
+                        allowed=False,
+                        reason=f"{q.scope} free cap {q.cap:g} {q.unit_label} reached "
+                        f"(used {spent:g})",
+                        details={"scope": q.scope, "amount": amount},
+                    ),
                 )
-            )
-            await session.flush()
-            raise FreeQuotaExceededError(q.scope, spent, q.cap, amount)
-    row = Cost(
-        provider=provider,
-        agent=agent,
-        lead_id=lead_id,
-        amount_usd=0,
-        free_tier=True,
-        units=units,
-        credit_usd=credit_usd,
-        quota_scope=scope or provider,
-        description=description,
-    )
-    session.add(row)
-    await session.flush()
+                await own.commit()  # keep the refusal on record
+                raise FreeQuotaExceededError(q.scope, spent, q.cap, amount)
+        row = Cost(
+            provider=provider,
+            agent=agent,
+            lead_id=lead_id,
+            amount_usd=0,
+            free_tier=True,
+            units=units,
+            credit_usd=credit_usd,
+            quota_scope=scope or provider,
+            description=description,
+        )
+        await _insert(own, row)
     return row
 
 
-async def settle(session: AsyncSession, reserved: Cost, *, units: float, credit_usd: float) -> None:
+async def settle(
+    session: AsyncSession,
+    reserved: Cost,
+    *,
+    units: float,
+    credit_usd: float,
+    description: str | None = None,
+) -> None:
     """Replace a reservation's estimate with the actual usage once it is known."""
     reserved.units = max(0.0, units)
     reserved.credit_usd = max(0.0, credit_usd)
-    await session.flush()
+    values: dict[str, object] = {"units": reserved.units, "credit_usd": reserved.credit_usd}
+    if description is not None:
+        reserved.description = values["description"] = description
+    async with _own_transaction() as own:
+        await own.execute(update(Cost).where(Cost.id == reserved.id).values(**values))
+
+
+@asynccontextmanager
+async def _own_transaction() -> AsyncIterator[AsyncSession]:
+    from app.db.session import session_scope  # noqa: PLC0415 - avoids an import cycle
+
+    async with session_scope() as own:
+        yield own
+
+
+async def _insert(own: AsyncSession, row: Cost | PolicyDecision) -> None:
+    """Insert, dropping the lead link if that lead isn't committed yet (still being created)."""
+    try:
+        async with own.begin_nested():
+            own.add(row)
+            await own.flush()
+    except IntegrityError:
+        if row.lead_id is None:
+            raise
+        if row in own:
+            own.expunge(row)
+        make_transient(row)
+        row.lead_id = None
+        own.add(row)
+        await own.flush()
 
 
 async def report(
