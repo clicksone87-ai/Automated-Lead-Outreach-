@@ -62,6 +62,7 @@ from app.schemas import (
     LeadDetail,
     LeadPage,
     LeadRow,
+    ManualRunOut,
     OverviewOut,
     PolicyDecisionOut,
     QuotaOut,
@@ -70,7 +71,7 @@ from app.schemas import (
     SourceOut,
     StageCount,
 )
-from app.services import runtime_settings
+from app.services import manual_runs, runtime_settings
 
 STAGES: list[tuple[str, str, set[str]]] = [
     ("discovery", "Discovery", {LeadStatus.DISCOVERED}),
@@ -640,6 +641,7 @@ async def sources(session: AsyncSession, settings: Settings, adapters: Adapters)
             for k, v in (row.config if row else src.default_config).items()
             if not k.startswith("_")
         }
+        verdict = await manual_runs.evaluate(session, settings, adapters, key, live=False)
         out.append(
             SourceOut(
                 key=key,
@@ -668,6 +670,13 @@ async def sources(session: AsyncSession, settings: Settings, adapters: Adapters)
                     )
                     for r in runs
                 ],
+                manual_run=ManualRunOut(
+                    limited=verdict.limited,
+                    allowed=verdict.allowed,
+                    reason=verdict.reason,
+                    next_allowed_at=verdict.next_allowed_at,
+                    usage=verdict.usage,
+                ),
             )
         )
     return out

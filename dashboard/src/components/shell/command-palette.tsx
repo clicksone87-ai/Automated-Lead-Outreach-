@@ -69,12 +69,15 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                 key={s.key}
                 value={`run source ${s.label}`}
                 onSelect={() => {
-                  runSource.mutate(s.key);
+                  // Sources on a limited free tier are confirmed on the Sources page.
+                  if (s.manual_run.limited) go("/sources");
+                  else runSource.mutate(s.key);
                   onOpenChange(false);
                 }}
               >
                 <Play className="size-4" />
                 <span>Run now: {s.label}</span>
+                {s.manual_run.limited && <span className="text-xs text-muted-foreground">confirm on Sources</span>}
               </CommandItem>
             ))}
           <CommandItem value="theme toggle dark light" onSelect={() => { setTheme(resolvedTheme === "dark" ? "light" : "dark"); onOpenChange(false); }}>

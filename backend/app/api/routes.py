@@ -15,6 +15,7 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 from sse_starlette.sse import EventSourceResponse
 
+from app.agents.discovery.sources import SOURCES
 from app.api.deps import AdaptersDep, SessionDep, SettingsDep
 from app.config import integration_status
 from app.db.session import session_scope
@@ -37,7 +38,7 @@ from app.schemas import (
     SourceOut,
     SourcePatch,
 )
-from app.services import admin, queries, runtime_settings
+from app.services import admin, manual_runs, queries, runtime_settings
 
 router = APIRouter(prefix="/api")
 public = APIRouter(prefix="/api")
@@ -150,9 +151,17 @@ async def patch_source(
 
 
 @router.post("/sources/{key}/run", status_code=status.HTTP_202_ACCEPTED)
-async def run_source_now(key: str) -> dict[str, bool]:
+async def run_source_now(
+    key: str, session: SessionDep, settings: SettingsDep, adapters: AdaptersDep
+) -> dict[str, bool]:
     from datetime import UTC, datetime  # noqa: PLC0415
 
+    if key not in SOURCES:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown source")
+    verdict = await manual_runs.authorize(session, settings, adapters, key)
+    if not verdict.allowed:
+        await session.commit()  # keep the refusal in the decision log
+        raise HTTPException(verdict.status_code, verdict.reason)
     return {
         "queued": await enqueue_source(key, datetime.now(UTC).strftime("%Y%m%d%H%M%S"), force=True)
     }

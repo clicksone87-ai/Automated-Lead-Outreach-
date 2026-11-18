@@ -92,6 +92,20 @@ export function SourceCard({ source, index }: { source: SourceOut; index: number
   const status = source.last_status ? SOURCE_STATUS[source.last_status] : undefined;
   const urlKey = "feeds" in source.config ? "feeds" : "listing_urls" in source.config ? "listing_urls" : null;
   const numericKeys = Object.entries(source.config).filter(([, v]) => typeof v === "number");
+  const manual = source.manual_run;
+  const usage = manual.usage ?? [];
+  const runDisabled = run.isPending || (unusable && !isMock) || !manual.allowed;
+  const runButton = (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={manual.limited ? undefined : () => run.mutate(source.key)}
+      disabled={runDisabled}
+      title={manual.reason ?? undefined}
+    >
+      <Play className="size-3.5" /> Run now
+    </Button>
+  );
 
   const setEnabled = (enabled: boolean) => patch.mutate({ key: source.key, patch: { enabled } });
   const toggle = (
@@ -200,18 +214,39 @@ export function SourceCard({ source, index }: { source: SourceOut; index: number
             ))}
           </SelectContent>
         </Select>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => run.mutate(source.key)}
-          disabled={run.isPending || (unusable && !isMock)}
-        >
-          <Play className="size-3.5" /> Run now
-        </Button>
+        {manual.limited && !runDisabled ? (
+          <ConfirmDialog
+            trigger={runButton}
+            title={`Run ${source.label} now?`}
+            description={
+              <div className="space-y-2">
+                <p>
+                  This source spends a limited free tier. Manual runs are limited to one per hour, and a run is
+                  refused when it could go past a free-tier cap.
+                </p>
+                {usage.length > 0 && (
+                  <ul className="space-y-0.5 rounded-md bg-surface-sunken px-3 py-2 font-mono text-[11px]">
+                    {usage.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            }
+            confirmLabel="Run now"
+            onConfirm={() => run.mutate(source.key)}
+          />
+        ) : (
+          runButton
+        )}
         <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           Details <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
         </Button>
       </div>
+
+      {manual.limited && !manual.allowed && manual.reason && (
+        <p className="mx-5 mb-3 rounded-md bg-warning-soft px-2 py-1 text-[11px] text-warning-soft-foreground">{manual.reason}</p>
+      )}
 
       <AnimatePresence initial={false}>
         {open && (

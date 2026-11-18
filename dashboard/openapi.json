@@ -3825,6 +3825,55 @@
     ],
     "title": "LeadRow"
    },
+   "ManualRunOut": {
+    "properties": {
+     "limited": {
+      "type": "boolean",
+      "title": "Limited"
+     },
+     "allowed": {
+      "type": "boolean",
+      "title": "Allowed"
+     },
+     "reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reason"
+     },
+     "next_allowed_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Next Allowed At"
+     },
+     "usage": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Usage"
+     }
+    },
+    "type": "object",
+    "required": [
+     "limited",
+     "allowed"
+    ],
+    "title": "ManualRunOut",
+    "description": "Whether \"Run now\" is allowed for a source that spends a limited free tier."
+   },
    "OverviewOut": {
     "properties": {
      "stages": {
@@ -4202,6 +4251,9 @@
       },
       "type": "array",
       "title": "Runs"
+     },
+     "manual_run": {
+      "$ref": "#/components/schemas/ManualRunOut"
      }
     },
     "type": "object",
@@ -4219,7 +4271,8 @@
      "last_error",
      "leads_found_total",
      "leads_7d",
-     "runs"
+     "runs",
+     "manual_run"
     ],
     "title": "SourceOut"
    },

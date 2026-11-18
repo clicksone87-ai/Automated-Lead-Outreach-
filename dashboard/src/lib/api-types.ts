@@ -1096,6 +1096,22 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * ManualRunOut
+         * @description Whether "Run now" is allowed for a source that spends a limited free tier.
+         */
+        ManualRunOut: {
+            /** Limited */
+            limited: boolean;
+            /** Allowed */
+            allowed: boolean;
+            /** Reason */
+            reason?: string | null;
+            /** Next Allowed At */
+            next_allowed_at?: string | null;
+            /** Usage */
+            usage?: string[];
+        };
         /** OverviewOut */
         OverviewOut: {
             /** Stages */
@@ -1243,6 +1259,7 @@ export interface components {
             runs: {
                 [key: string]: unknown;
             }[];
+            manual_run: components["schemas"]["ManualRunOut"];
         };
         /** SourcePatch */
         SourcePatch: {

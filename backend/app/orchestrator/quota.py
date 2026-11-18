@@ -43,12 +43,16 @@ class Quota:
     measure: Measure
     cap: float
     unit_label: str
+    # True: only usage recorded under this exact scope counts. False: all of the provider's
+    # usage counts (provider totals and provider-wide daily ceilings).
+    by_scope: bool = False
 
 
 def quotas(s: Settings) -> dict[str, Quota]:
     q = [
         Quota("gemini", "gemini", "day", "units", s.gemini_daily_request_cap, "requests/day"),
         Quota("serper", "serper", "lifetime", "units", s.serper_free_credits, "credits"),
+        Quota("serper", "serper:daily", "day", "units", s.serper_daily_credit_cap, "credits/day"),
         Quota("exa", "exa", "lifetime", "credit_usd", s.exa_free_credit_usd, "USD credit"),
         Quota("apify", "apify", "month", "credit_usd", s.apify_monthly_cap_usd, "USD/month"),
         Quota("pagespeed", "pagespeed", "day", "units", s.pagespeed_daily_cap, "requests/day"),
@@ -61,10 +65,24 @@ def quotas(s: Settings) -> dict[str, Quota]:
             "credit_usd",
             round(s.apify_monthly_cap_usd * share, 4),
             "USD/month",
+            by_scope=True,
         )
         for src, share in APIFY_SOURCE_SHARE.items()
     ]
     return {x.scope: x for x in q}
+
+
+def applicable(table: dict[str, Quota], provider: str, scope: str | None) -> list[Quota]:
+    """Every cap a call to `provider` (optionally under `scope`) must fit inside."""
+    keys = [provider, f"{provider}:daily", scope or ""]
+    seen: set[str] = set()
+    out = []
+    for k in keys:
+        q = table.get(k)
+        if q is not None and q.scope not in seen:
+            seen.add(q.scope)
+            out.append(q)
+    return out
 
 
 def _since(period: Period, now: datetime) -> datetime | None:
@@ -80,7 +98,7 @@ async def used(session: AsyncSession, quota: Quota, now: datetime | None = None)
     now = now or datetime.now(UTC)
     col = Cost.units if quota.measure == "units" else Cost.credit_usd
     stmt = select(func.coalesce(func.sum(col), 0)).where(Cost.free_tier.is_(True))
-    if ":" in quota.scope:
+    if quota.by_scope:
         stmt = stmt.where(Cost.quota_scope == quota.scope)
     else:
         stmt = stmt.where(Cost.provider == quota.provider)
@@ -107,9 +125,7 @@ async def consume(
         raise ValueError("usage must be >= 0")
     s = settings or get_settings()
     await session.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _LOCK_KEY})
-    table = quotas(s)
-    applicable = [q for q in (table.get(provider), table.get(scope or "")) if q is not None]
-    for q in applicable:
+    for q in applicable(quotas(s), provider, scope):
         amount = units if q.measure == "units" else credit_usd
         if amount <= 0:
             continue
