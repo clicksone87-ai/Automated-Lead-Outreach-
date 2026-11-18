@@ -37,8 +37,9 @@ from app.schemas import (
     SettingsPatch,
     SourceOut,
     SourcePatch,
+    TimingsOut,
 )
-from app.services import admin, manual_runs, queries, runtime_settings
+from app.services import admin, manual_runs, queries, runtime_settings, timings
 
 router = APIRouter(prefix="/api")
 public = APIRouter(prefix="/api")
@@ -74,6 +75,13 @@ async def health(session: SessionDep, settings: SettingsDep) -> HealthOut:
 @router.get("/overview", response_model=OverviewOut)
 async def overview(session: SessionDep) -> OverviewOut:
     return await queries.overview(session)
+
+
+@router.get("/timings", response_model=TimingsOut)
+async def lead_timings(
+    session: SessionDep, days: Annotated[int, Query(ge=1, le=90)] = 7
+) -> TimingsOut:
+    return await timings.timings(session, days=days)
 
 
 @router.get("/leads", response_model=LeadPage)

@@ -73,8 +73,10 @@ export const SERVICES: Record<string, string> = {
 
 export const AGENT_LABELS: Record<string, string> = {
   discovery: "Discovery",
+  prefilter: "Prefilter",
   requirements: "Requirements",
   contact_enrichment: "Contact enrichment",
+  audit_light: "Light audit",
   audit: "Audit & SEO",
   branding: "Branding",
   website_builder: "Website builder",

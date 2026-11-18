@@ -19,6 +19,7 @@ export const qk = {
   audit: (leadId: string) => ["audit", leadId] as const,
   freeTier: ["free-tier"] as const,
   gallery: ["gallery"] as const,
+  timings: (days: number) => ["timings", days] as const,
 };
 
 export interface LeadFilters {
@@ -51,6 +52,14 @@ export function useHealth() {
 
 export function useOverview() {
   return useQuery({ queryKey: qk.overview, queryFn: () => unwrap(api.GET("/api/overview")), ...LIVE });
+}
+
+export function useTimings(days = 7) {
+  return useQuery({
+    queryKey: qk.timings(days),
+    queryFn: () => unwrap(api.GET("/api/timings", { params: { query: { days } } })),
+    refetchInterval: 60_000,
+  });
 }
 
 export function useLeads(filters: LeadFilters) {

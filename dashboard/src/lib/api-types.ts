@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/timings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lead Timings */
+        get: operations["lead_timings_api_timings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/leads": {
         parameters: {
             query?: never;
@@ -985,6 +1002,21 @@ export interface components {
              */
             mock_in_use: boolean;
         };
+        /** LaneTiming */
+        LaneTiming: {
+            /** Lane */
+            lane: string;
+            /** Leads */
+            leads: number;
+            /** P50 S */
+            p50_s: number | null;
+            /** P90 S */
+            p90_s: number | null;
+            /** Target S */
+            target_s: number;
+            /** Within Target */
+            within_target: boolean;
+        };
         /** LeadDetail */
         LeadDetail: {
             lead: components["schemas"]["LeadRow"];
@@ -1290,6 +1322,21 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /** StepTiming */
+        StepTiming: {
+            /** Agent */
+            agent: string;
+            /** Runs */
+            runs: number;
+            /** P50 S */
+            p50_s: number;
+            /** P90 S */
+            p90_s: number;
+            /** Avg S */
+            avg_s: number;
+            /** Max S */
+            max_s: number;
+        };
         /** SuppressionIn */
         SuppressionIn: {
             /** Email */
@@ -1301,6 +1348,24 @@ export interface components {
              * @default manual
              */
             reason: string;
+        };
+        /**
+         * TimingsOut
+         * @description How long leads take, per step (agent_runs) and per lane, over the last `window_days`.
+         */
+        TimingsOut: {
+            /** Window Days */
+            window_days: number;
+            /** Steps */
+            steps: components["schemas"]["StepTiming"][];
+            /** Lanes */
+            lanes: components["schemas"]["LaneTiming"][];
+            /** To Proposal Leads */
+            to_proposal_leads: number;
+            /** To Proposal P50 S */
+            to_proposal_p50_s: number | null;
+            /** To Proposal P90 S */
+            to_proposal_p90_s: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1362,6 +1427,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OverviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lead_timings_api_timings_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimingsOut"];
                 };
             };
             /** @description Validation Error */
