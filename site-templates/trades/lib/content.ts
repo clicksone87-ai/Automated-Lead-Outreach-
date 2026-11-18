@@ -6,6 +6,8 @@
 import raw from "../content.json";
 
 export type Variant = "classic" | "bold" | "minimal";
+/** Every preview contains all three designs: "/" uses `content.variant`, "/design/<v>/" the rest. */
+export const DESIGNS: Variant[] = ["classic", "bold", "minimal"];
 export type SectionKey = "hero" | "services" | "about" | "areas" | "contact";
 
 export interface Service {
@@ -40,6 +42,10 @@ export interface SiteContent {
     fontHeading: string;
     fontBody: string;
     logoSvg: string;
+    /** Same logo with a one-off draw-in animation (generated from the sanitised SVG). */
+    logoSvgAnimated?: string;
+    /** For dark backgrounds: dark ink turned white (from the logo set). */
+    logoSvgReversed?: string;
   };
   seo: { title: string; description: string };
   hero: { headline: string; subheadline: string; cta: string };
@@ -54,4 +60,8 @@ export const content = raw as SiteContent;
 
 export function pageBySlug(slug: string): Page | undefined {
   return content.pages.find((p) => p.slug === slug);
+}
+
+export function homePage(): Page {
+  return pageBySlug("") ?? { slug: "", title: "Home", sections: ["hero", "services", "about", "areas", "contact"] };
 }

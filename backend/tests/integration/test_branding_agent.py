@@ -207,12 +207,18 @@ async def test_extracts_brand_with_evidence_for_every_value() -> None:
             .all()
         )
     assert [c.variant for c in concepts] == [1, 2, 3]
-    assert {c.typography["style"] for c in concepts} == {"wordmark", "icon_wordmark", "emblem"}
+    assert {c.typography["style"] for c in concepts} == {"wordmark", "monogram", "icon"}
     for c in concepts:
         assert c.svg_path and c.svg_path.endswith(".svg") and c.png_path.endswith("-1024.png")
         assert c.text == "Smith Plumbing" and c.language == "en"
         assert c.similarity["checked_against"] == 1 and c.similarity["text_check"] == "exact"
         assert c.qa_status == "pending"
+        # V2 logo set: colour / reversed / mono, square mark sizes, animated SVG
+        assert set(c.assets["set"]) == {"full", "reversed", "mono"}
+        assert c.assets["set"]["full"]["svg"] == c.svg_path
+        assert set(c.assets["mark"]) == {"full", "reversed", "mono"}
+        assert set(c.assets["mark"]["full"]["png"]) == {"512", "192", "64"}
+        assert c.assets["animated"].endswith("-animated.svg") and c.assets["mark_animated"]
 
     brand = [c for c in p.colors if c["role"] != "neutral"]
     assert brand[0] == {"hex": "#0b5fa5", "role": "primary", "weight": brand[0]["weight"]}

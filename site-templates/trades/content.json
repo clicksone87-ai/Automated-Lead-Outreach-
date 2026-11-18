@@ -10,7 +10,9 @@
     "surface": "#f8fafc",
     "fontHeading": "system-ui, sans-serif",
     "fontBody": "system-ui, sans-serif",
-    "logoSvg": ""
+    "logoSvg": "",
+    "logoSvgAnimated": "",
+    "logoSvgReversed": ""
   },
   "seo": { "title": "", "description": "" },
   "hero": { "headline": "", "subheadline": "", "cta": "" },

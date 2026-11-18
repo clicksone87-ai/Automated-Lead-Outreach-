@@ -20,6 +20,7 @@ from sqlalchemy import select
 from app.adapters.fetcher import FetchError, RobotsDisallowedError
 from app.adapters.llm import LLMOutputError, LLMRequest
 from app.agents.audit.browser import GuardedBrowser
+from app.agents.branding import logo_sets
 from app.agents.branding.extract import BrandExtraction, extract
 from app.agents.branding.logos import (
     STYLES,
@@ -54,6 +55,7 @@ MIN_LOGO_SIDE = 16
 _PIL_EXT = {"PNG": "png", "JPEG": "jpg", "GIF": "gif", "WEBP": "webp", "ICO": "ico", "BMP": "bmp"}
 ROLES = ("primary", "accent", "secondary", "extra", "extra")
 LOGO_SIZES = (1024, 512)
+MARK_SIZES = (512, 192, 64)  # app icon, Android icon, favicon
 _LEGAL_SUFFIX = re.compile(
     r"[,\s]+(ltd\.?|limited|llc|l\.l\.c\.|inc\.?|incorporated|co\.?|corp\.?|plc|gmbh|"
     r"s\.?l\.?|s\.?a\.?r\.?l\.?)$",
@@ -263,6 +265,10 @@ class BrandingAgent:
             png_paths[size] = ctx.adapters.storage.save_bytes(
                 f"logos/{owner}/concept-{variant}-{size}.png", png
             )
+        assets = await self._logo_set(
+            ctx, browser, owner=owner, variant=variant, svg=svg, svg_path=svg_path,
+            full_png=png_paths[LOGO_SIZES[0]], mark_raw=spec.mark_svg,
+        )  # fmt: skip
         main_png = ctx.adapters.storage.read_bytes(png_paths[LOGO_SIZES[0]])
         sims = compare(main_png, references)
         nearest = sims[0] if sims else None
@@ -289,6 +295,7 @@ class BrandingAgent:
                 "too_similar": bool(nearest and nearest.too_similar),
                 "text_check": text_matches(svg, text),
             },
+            "assets": assets,
             "attempts": attempts,
             "qa_status": "pending",
             "qa_report": {},
@@ -308,6 +315,65 @@ class BrandingAgent:
                 setattr(row, k, v)
         await ctx.session.flush()
         return row
+
+    @staticmethod
+    async def _logo_set(
+        ctx: AgentContext,
+        browser: GuardedBrowser,
+        *,
+        owner: str,
+        variant: int,
+        svg: str,
+        svg_path: str,
+        full_png: str,
+        mark_raw: str | None,
+    ) -> dict[str, Any]:
+        """Colour / reversed / mono versions, the square mark in app-icon sizes, and an
+        animated SVG — all derived in code from the sanitised concept."""
+        store = ctx.adapters.storage
+        base = f"logos/{owner}/concept-{variant}"
+        out: dict[str, Any] = {
+            "set": {"full": {"svg": svg_path, "png": full_png}},
+            "mark": {},
+        }
+        for name, code in (("reversed", logo_sets.reversed_(svg)), ("mono", logo_sets.mono(svg))):
+            png = await browser.render_png(logo_sets.wide_page(code, 1024), width=1024, height=512)
+            out["set"][name] = {
+                "svg": store.save_bytes(f"{base}-{name}.svg", code.encode("utf-8")),
+                "png": store.save_bytes(f"{base}-{name}-1024.png", png),
+            }
+        uid = f"{owner[:8]}{variant}"
+        out["animated"] = store.save_bytes(
+            f"{base}-animated.svg", logo_sets.animated(svg, uid).encode("utf-8")
+        )
+        mark: str | None = None
+        if mark_raw:
+            try:
+                mark = sanitize_svg(mark_raw)
+            except SvgRejectedError as exc:
+                logger.info("mark for concept %d rejected: %s", variant, exc)
+        if mark is None:
+            return out
+        versions = (
+            ("full", mark, MARK_SIZES),
+            ("reversed", logo_sets.reversed_(mark), MARK_SIZES[:1]),
+            ("mono", logo_sets.mono(mark), MARK_SIZES[:1]),
+        )
+        for name, code, sizes in versions:
+            pngs: dict[str, str] = {}
+            for size in sizes:
+                png = await browser.render_png(
+                    logo_sets.square_page(code, size), width=size, height=size
+                )
+                pngs[str(size)] = store.save_bytes(f"{base}-mark-{name}-{size}.png", png)
+            out["mark"][name] = {
+                "svg": store.save_bytes(f"{base}-mark-{name}.svg", code.encode("utf-8")),
+                "png": pngs,
+            }
+        out["mark_animated"] = store.save_bytes(
+            f"{base}-mark-animated.svg", logo_sets.animated(mark, f"{uid}m").encode("utf-8")
+        )
+        return out
 
     async def _reference_logos(self, ctx: AgentContext, profile: BrandProfile) -> dict[str, bytes]:
         """Competitor logos as PNG bytes (SVG ones are rendered first) for the similarity check."""
