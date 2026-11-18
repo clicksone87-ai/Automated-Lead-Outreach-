@@ -18,8 +18,8 @@ from app.agents.discovery.runner import run_source
 from app.config import get_settings, log_missing_integrations
 from app.db.session import session_scope
 from app.logging_setup import configure_logging
-from app.orchestrator import pipeline
-from app.orchestrator.queue import DEFAULT_QUEUE, enqueue_pipeline, redis_settings
+from app.orchestrator import lanes, pipeline
+from app.orchestrator.queue import DEFAULT_QUEUE, redis_settings
 from app.orchestrator.runs import TransientAgentError
 
 logger = logging.getLogger(__name__)
@@ -50,11 +50,14 @@ async def run_pipeline(ctx: dict[str, Any], lead_id: str) -> dict[str, Any]:
     return {"completed": state.get("completed"), "stopped_at": state.get("stopped_at")}
 
 
+async def run_fast_batch_job(ctx: dict[str, Any], lead_ids: list[str]) -> dict[str, Any]:
+    return await lanes.run_fast_batch([uuid.UUID(x) for x in lead_ids], get_adapters())
+
+
 async def run_source_job(ctx: dict[str, Any], key: str, force: bool = False) -> dict[str, Any]:
     async with session_scope() as session:
         result = await run_source(session, get_adapters(), get_settings(), key, force=force)
-    for lead_id in result.lead_ids or []:
-        await enqueue_pipeline(lead_id)
+    await lanes.enqueue_fast(result.lead_ids or [])
     return {
         "source": key,
         "status": result.status,
@@ -80,7 +83,7 @@ async def shutdown(ctx: dict[str, Any]) -> None:
 
 
 class WorkerSettings:
-    functions: ClassVar[list[Any]] = [run_pipeline, run_source_job]
+    functions: ClassVar[list[Any]] = [run_pipeline, run_source_job, run_fast_batch_job]
     cron_jobs: ClassVar[list[Any]] = [cron(heartbeat, minute=set(range(60)), run_at_startup=True)]
     on_startup = startup
     on_shutdown = shutdown

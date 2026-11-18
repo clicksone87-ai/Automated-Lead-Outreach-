@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 
 from arq import ArqRedis, create_pool
@@ -35,6 +36,16 @@ async def enqueue_pipeline(lead_id: uuid.UUID) -> bool:
     """Queue the per-lead pipeline. Deduplicated: one queued job per lead at a time."""
     pool = await get_pool()
     job = await pool.enqueue_job("run_pipeline", str(lead_id), _job_id=f"pipeline:{lead_id}")
+    return job is not None
+
+
+async def enqueue_fast_batch(lead_ids: list[uuid.UUID]) -> bool:
+    """One fast-lane batch. The job id is derived from the leads, so a batch is queued once."""
+    pool = await get_pool()
+    digest = hashlib.sha256("".join(sorted(str(x) for x in lead_ids)).encode()).hexdigest()[:20]
+    job = await pool.enqueue_job(
+        "run_fast_batch_job", [str(x) for x in lead_ids], _job_id=f"fast:{digest}"
+    )
     return job is not None
 
 
