@@ -9,6 +9,8 @@ Everything runs locally with Docker Compose. The default configuration uses free
 only and delivers every email to a local Mailpit inbox, so nothing leaves the machine until
 you switch to a real email provider.
 
+Setup, day-to-day operation, configuration and troubleshooting are in the [runbook](docs/RUNBOOK.md).
+
 ## Features
 
 - **Discovery** from licensed search APIs (Serper, Exa), public social posts via Apify (X,
