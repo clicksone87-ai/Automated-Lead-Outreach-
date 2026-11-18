@@ -69,6 +69,64 @@
     }
    }
   },
+  "/api/timings": {
+   "get": {
+    "summary": "Lead Timings",
+    "operationId": "lead_timings_api_timings_get",
+    "parameters": [
+     {
+      "name": "days",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 90,
+       "minimum": 1,
+       "default": 7,
+       "title": "Days"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TimingsOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/leads": {
    "get": {
     "summary": "List Leads",
@@ -3483,6 +3541,58 @@
     ],
     "title": "IntegrationOut"
    },
+   "LaneTiming": {
+    "properties": {
+     "lane": {
+      "type": "string",
+      "title": "Lane"
+     },
+     "leads": {
+      "type": "integer",
+      "title": "Leads"
+     },
+     "p50_s": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "P50 S"
+     },
+     "p90_s": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "P90 S"
+     },
+     "target_s": {
+      "type": "integer",
+      "title": "Target S"
+     },
+     "within_target": {
+      "type": "boolean",
+      "title": "Within Target"
+     }
+    },
+    "type": "object",
+    "required": [
+     "lane",
+     "leads",
+     "p50_s",
+     "p90_s",
+     "target_s",
+     "within_target"
+    ],
+    "title": "LaneTiming"
+   },
    "LeadDetail": {
     "properties": {
      "lead": {
@@ -4373,6 +4483,44 @@
     ],
     "title": "StageIn"
    },
+   "StepTiming": {
+    "properties": {
+     "agent": {
+      "type": "string",
+      "title": "Agent"
+     },
+     "runs": {
+      "type": "integer",
+      "title": "Runs"
+     },
+     "p50_s": {
+      "type": "number",
+      "title": "P50 S"
+     },
+     "p90_s": {
+      "type": "number",
+      "title": "P90 S"
+     },
+     "avg_s": {
+      "type": "number",
+      "title": "Avg S"
+     },
+     "max_s": {
+      "type": "number",
+      "title": "Max S"
+     }
+    },
+    "type": "object",
+    "required": [
+     "agent",
+     "runs",
+     "p50_s",
+     "p90_s",
+     "avg_s",
+     "max_s"
+    ],
+    "title": "StepTiming"
+   },
    "SuppressionIn": {
     "properties": {
      "email": {
@@ -4408,6 +4556,65 @@
     },
     "type": "object",
     "title": "SuppressionIn"
+   },
+   "TimingsOut": {
+    "properties": {
+     "window_days": {
+      "type": "integer",
+      "title": "Window Days"
+     },
+     "steps": {
+      "items": {
+       "$ref": "#/components/schemas/StepTiming"
+      },
+      "type": "array",
+      "title": "Steps"
+     },
+     "lanes": {
+      "items": {
+       "$ref": "#/components/schemas/LaneTiming"
+      },
+      "type": "array",
+      "title": "Lanes"
+     },
+     "to_proposal_leads": {
+      "type": "integer",
+      "title": "To Proposal Leads"
+     },
+     "to_proposal_p50_s": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "To Proposal P50 S"
+     },
+     "to_proposal_p90_s": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "To Proposal P90 S"
+     }
+    },
+    "type": "object",
+    "required": [
+     "window_days",
+     "steps",
+     "lanes",
+     "to_proposal_leads",
+     "to_proposal_p50_s",
+     "to_proposal_p90_s"
+    ],
+    "title": "TimingsOut",
+    "description": "How long leads take, per step (agent_runs) and per lane, over the last `window_days`."
    },
    "ValidationError": {
     "properties": {

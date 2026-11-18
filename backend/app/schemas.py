@@ -222,6 +222,36 @@ class OverviewOut(BaseModel):
     inbox_count: int
 
 
+class StepTiming(BaseModel):
+    agent: str
+    runs: int
+    p50_s: float
+    p90_s: float
+    avg_s: float
+    max_s: float
+
+
+class LaneTiming(BaseModel):
+    lane: str  # fast | heavy
+    leads: int
+    p50_s: float | None
+    p90_s: float | None
+    target_s: int
+    within_target: bool
+
+
+class TimingsOut(BaseModel):
+    """How long leads take, per step (agent_runs) and per lane, over the last `window_days`."""
+
+    window_days: int
+    steps: list[StepTiming]
+    lanes: list[LaneTiming]
+    #: first pipeline step → proposal drafted
+    to_proposal_leads: int
+    to_proposal_p50_s: float | None
+    to_proposal_p90_s: float | None
+
+
 class ManualRunOut(BaseModel):
     """Whether "Run now" is allowed for a source that spends a limited free tier."""
 

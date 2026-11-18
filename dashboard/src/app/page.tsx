@@ -11,6 +11,7 @@ import { StatusPill } from "@/components/common/status-pill";
 import { ActivityFeed } from "@/components/overview/activity-feed";
 import { AgentCards } from "@/components/overview/agent-cards";
 import { CostChart } from "@/components/overview/cost-chart";
+import { LaneSpeed } from "@/components/overview/lane-speed";
 import { PipelineFlow } from "@/components/overview/pipeline-flow";
 import { SystemHealth } from "@/components/overview/system-health";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -105,6 +106,8 @@ export default function OverviewPage() {
               )}
             </div>
           </Panel>
+
+          <LaneSpeed />
 
           <div className="grid gap-6 xl:grid-cols-3">
             <Panel className="xl:col-span-2">
