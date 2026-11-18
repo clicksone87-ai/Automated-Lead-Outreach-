@@ -17,6 +17,7 @@ import type { SettingsOut } from "@/lib/api";
 import { countryName, languageName, money, titleCase, usd } from "@/lib/format";
 import { useOverview, usePatchSettings, useSettings } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { LANGUAGES as LANGS } from "@/lib/markets";
 
 const SECTIONS = [
   ["autonomy", "Autonomy"],
@@ -29,7 +30,7 @@ const SECTIONS = [
   ["sender", "Sender identity"],
 ] as const;
 
-const LANGS = ["en", "de", "fr", "es"];
+//const LANGS = ["en", "de", "fr", "es"];
 const RECOMMENDED_MONTHLY_CAP = 120;
 
 type Runtime = {

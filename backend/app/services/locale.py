@@ -15,7 +15,8 @@ from lingua import Language, LanguageDetectorBuilder
 
 from app.services.dedup import tld_extract
 
-# Languages we can detect. Leads in anything other than enabled languages get parked.
+# Languages we can detect (the 16 V2 draft languages). Leads in anything other than enabled
+# languages get parked.
 _DETECTABLE = [
     Language.ENGLISH,
     Language.GERMAN,
@@ -29,6 +30,10 @@ _DETECTABLE = [
     Language.DANISH,
     Language.BOKMAL,
     Language.FINNISH,
+    Language.CZECH,
+    Language.ROMANIAN,
+    Language.GREEK,
+    Language.HUNGARIAN,
 ]
 _ISO = {
     Language.ENGLISH: "en",
@@ -43,6 +48,10 @@ _ISO = {
     Language.DANISH: "da",
     Language.BOKMAL: "nb",
     Language.FINNISH: "fi",
+    Language.CZECH: "cs",
+    Language.ROMANIAN: "ro",
+    Language.GREEK: "el",
+    Language.HUNGARIAN: "hu",
 }
 
 TLD_COUNTRY = {
@@ -65,6 +74,20 @@ TLD_COUNTRY = {
     "fi": "FI",
     "pl": "PL",
     "lu": "LU",
+    "gr": "GR",
+    "cz": "CZ",
+    "ro": "RO",
+    "hu": "HU",
+    "bg": "BG",
+    "hr": "HR",
+    "si": "SI",
+    "sk": "SK",
+    "ee": "EE",
+    "lv": "LV",
+    "lt": "LT",
+    "mt": "MT",
+    "cy": "CY",
+    "is": "IS",
     "us": "US",
 }
 
@@ -87,6 +110,21 @@ COUNTRY_DEFAULT_LANGUAGE = {
     "NO": "nb",
     "FI": "fi",
     "PL": "pl",
+    "CZ": "cs",
+    "RO": "ro",
+    "GR": "el",
+    "CY": "el",
+    "HU": "hu",
+    # Languages outside our 16 fall back to English (handoff, Item 1).
+    "BG": "en",
+    "HR": "en",
+    "SK": "en",
+    "SI": "en",
+    "EE": "en",
+    "LV": "en",
+    "LT": "en",
+    "MT": "en",
+    "IS": "en",
 }
 
 COUNTRY_TIMEZONE = {
@@ -107,6 +145,20 @@ COUNTRY_TIMEZONE = {
     "FI": "Europe/Helsinki",
     "PL": "Europe/Warsaw",
     "LU": "Europe/Luxembourg",
+    "CZ": "Europe/Prague",
+    "RO": "Europe/Bucharest",
+    "GR": "Europe/Athens",
+    "HU": "Europe/Budapest",
+    "BG": "Europe/Sofia",
+    "HR": "Europe/Zagreb",
+    "SK": "Europe/Bratislava",
+    "SI": "Europe/Ljubljana",
+    "EE": "Europe/Tallinn",
+    "LV": "Europe/Riga",
+    "LT": "Europe/Vilnius",
+    "MT": "Europe/Malta",
+    "CY": "Asia/Nicosia",
+    "IS": "Atlantic/Reykjavik",
 }
 
 _US_TZ_GROUPS = {

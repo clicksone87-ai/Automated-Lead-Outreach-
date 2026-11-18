@@ -16,7 +16,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import Settings, get_settings
 from app.db.models import SettingChange, SettingRow
 
-SUPPORTED_LANGUAGES = ("en", "de", "fr", "es")
+# The 16 V2 draft languages (anything else falls back to English).
+SUPPORTED_LANGUAGES = (
+    "en",
+    "de",
+    "fr",
+    "es",
+    "it",
+    "nl",
+    "pt",
+    "pl",
+    "sv",
+    "da",
+    "nb",
+    "fi",
+    "cs",
+    "ro",
+    "el",
+    "hu",
+)
 
 
 class BudgetCap(BaseModel):
