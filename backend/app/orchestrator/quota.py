@@ -35,6 +35,29 @@ APIFY_SOURCE_SHARE: dict[str, float] = {
 }
 
 
+# Gemini's daily request cap split per lane, so heavy-lane logos can never starve scoring and
+# drafting (fractions of GEMINI_DAILY_REQUEST_CAP; the provider-wide cap still applies).
+GEMINI_LANE_SHARE: dict[str, float] = {
+    "scoring": 0.15,
+    "fast": 0.45,
+    "heavy": 0.25,
+    "other": 0.15,
+}
+# Which lane an agent's LLM calls count against when the request does not say.
+AGENT_LANE: dict[str, str] = {
+    "requirements": "scoring",
+    "proposal": "fast",
+    "audit": "heavy",
+    "branding": "heavy",
+    "website_builder": "heavy",
+    "quality_check": "heavy",
+}
+
+
+def gemini_scope(agent: str, lane: str | None = None) -> str:
+    return f"gemini:{lane or AGENT_LANE.get(agent, 'other')}"
+
+
 class FreeQuotaExceededError(BudgetExceededError):
     pass
 
@@ -72,6 +95,18 @@ def quotas(s: Settings) -> dict[str, Quota]:
             by_scope=True,
         )
         for src, share in APIFY_SOURCE_SHARE.items()
+    ]
+    q += [
+        Quota(
+            "gemini",
+            f"gemini:{lane}",
+            "day",
+            "units",
+            max(1.0, float(int(s.gemini_daily_request_cap * share))),
+            "requests/day",
+            by_scope=True,
+        )
+        for lane, share in GEMINI_LANE_SHARE.items()
     ]
     return {x.scope: x for x in q}
 

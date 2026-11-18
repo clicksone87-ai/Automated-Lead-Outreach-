@@ -10,7 +10,8 @@ from arq.connections import RedisSettings
 
 from app.config import get_settings
 
-DEFAULT_QUEUE = "arq:queue"
+DEFAULT_QUEUE = "arq:queue"  # fast lane, discovery sources, resumes
+HEAVY_QUEUE = "arq:heavy"  # logos, previews, full audits: one at a time
 SCHEDULER_QUEUE = "arq:scheduler"
 
 _pool: ArqRedis | None = None
@@ -51,7 +52,9 @@ async def enqueue_fast_batch(lead_ids: list[uuid.UUID]) -> bool:
 
 async def enqueue_heavy(lead_id: uuid.UUID) -> bool:
     pool = await get_pool()
-    job = await pool.enqueue_job("run_heavy_job", str(lead_id), _job_id=f"heavy:{lead_id}")
+    job = await pool.enqueue_job(
+        "run_heavy_job", str(lead_id), _job_id=f"heavy:{lead_id}", _queue_name=HEAVY_QUEUE
+    )
     return job is not None
 
 

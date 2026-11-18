@@ -189,6 +189,7 @@ class GeminiLLM:
                 session,
                 "gemini",
                 agent=request.agent,
+                scope=quota.gemini_scope(request.agent, request.lane),
                 lead_id=request.lead_id,
                 description=f"{model} {request.kind}",
             )
