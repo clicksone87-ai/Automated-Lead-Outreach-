@@ -152,6 +152,7 @@ class ProposalAgent:
                             attached=sorted({a["kind"].split("_")[0] for a in attachments}),
                         ),
                         lead_id=lead.id,
+                        lane="heavy" if lead.lane == "heavy" else "fast",
                         max_output_tokens=2000,
                         mock_context={"name": business.name, "facts": facts},
                     ),

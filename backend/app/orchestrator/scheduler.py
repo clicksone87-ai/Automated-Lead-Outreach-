@@ -63,8 +63,9 @@ async def heavy_picker(ctx: dict[str, Any]) -> int:
         picked = await lanes.pick_for_heavy(session)
         if not picked:
             return 0
-        gemini = next(r for r in await quota.report(session) if r["scope"] == "gemini")
-    affordable = int(float(str(gemini["remaining"])) // lanes.GEMINI_PER_HEAVY_LEAD)
+        report = {r["scope"]: r for r in await quota.report(session)}
+    left = min(float(str(report[s]["remaining"])) for s in ("gemini", "gemini:heavy"))
+    affordable = int(left // lanes.GEMINI_PER_HEAVY_LEAD)
     return await lanes.send_to_heavy(picked[:affordable], requested_by="daily_pick")
 
 

@@ -359,17 +359,24 @@ async def request_assets(session: AsyncSession, lead_id: uuid.UUID) -> None:
 
 
 async def continue_lead(lead_id: uuid.UUID, adapters: Adapters | None = None) -> PipelineState:
-    """Run or resume one lead: its fast steps, then the heavy steps if it was picked for them.
-    Finished steps are skipped, so this is how a lead continues after a human approval."""
+    """Run or resume one lead's fast steps (finished ones are skipped, so this is how a lead
+    continues after a human approval); unfinished heavy work is put back on its queue."""
     async with session_scope() as s:
         lead = await s.get(Lead, lead_id)
         lane = lead.lane if lead else None
+        timings = dict(lead.lane_timings or {}) if lead else {}
     state = await pipeline.run_steps(lead_id, FAST_STEPS, adapters, timeouts=FAST_TIMEOUTS)
-    if lane == "heavy" and state.get("stopped_at") in (None, "proposal", "outreach"):
-        state = await pipeline.run_steps(
-            lead_id, HEAVY_STEPS, adapters, timeouts=HEAVY_TIMEOUTS, force_hooks=HEAVY_FORCE
-        )
+    if lane == "heavy" and heavy_unfinished(timings):
+        # Heavy work belongs on the heavy queue (one job at a time), never inline here.
+        from app.orchestrator.queue import enqueue_heavy  # noqa: PLC0415
+
+        await enqueue_heavy(lead_id)
     return state
+
+
+def heavy_unfinished(timings: dict[str, Any] | None) -> bool:
+    heavy = (timings or {}).get("heavy") or {}
+    return bool(heavy.get("queued")) and not heavy.get("finished")
 
 
 # ── sweep: leads that were never queued, got stuck or were deferred ─────────
