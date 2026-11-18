@@ -29,8 +29,81 @@ const LABELS: Record<string, Labels> = {
     send: "Enviar mensaje", formDisabled: "Vista previa — este formulario aún no está conectado.",
     menu: "Menú", rights: "Todos los derechos reservados.",
   },
+  it: {
+    call: "Chiama", services: "Servizi", about: "Chi siamo", areas: "Zone servite",
+    contact: "Contattaci", name: "Il tuo nome", email: "Email", message: "Come possiamo aiutarti?",
+    send: "Invia messaggio", formDisabled: "Anteprima — questo modulo non è ancora collegato.",
+    menu: "Menu", rights: "Tutti i diritti riservati.",
+  },
+  nl: {
+    call: "Bellen", services: "Diensten", about: "Over ons", areas: "Werkgebied",
+    contact: "Contact opnemen", name: "Uw naam", email: "E-mail", message: "Hoe kunnen we helpen?",
+    send: "Bericht verzenden", formDisabled: "Voorbeeld — dit formulier is nog niet gekoppeld.",
+    menu: "Menu", rights: "Alle rechten voorbehouden.",
+  },
+  pt: {
+    call: "Ligar", services: "Serviços", about: "Sobre nós", areas: "Áreas de atuação",
+    contact: "Contacte-nos", name: "O seu nome", email: "Email", message: "Como podemos ajudar?",
+    send: "Enviar mensagem", formDisabled: "Pré-visualização — este formulário ainda não está ligado.",
+    menu: "Menu", rights: "Todos os direitos reservados.",
+  },
+  pl: {
+    call: "Zadzwoń", services: "Usługi", about: "O nas", areas: "Obszar działania",
+    contact: "Kontakt", name: "Twoje imię", email: "E-mail", message: "W czym możemy pomóc?",
+    send: "Wyślij wiadomość", formDisabled: "Podgląd — ten formularz nie jest jeszcze podłączony.",
+    menu: "Menu", rights: "Wszelkie prawa zastrzeżone.",
+  },
+  sv: {
+    call: "Ring", services: "Tjänster", about: "Om oss", areas: "Områden vi täcker",
+    contact: "Kontakta oss", name: "Ditt namn", email: "E-post", message: "Hur kan vi hjälpa till?",
+    send: "Skicka meddelande", formDisabled: "Förhandsvisning — detta formulär är inte anslutet än.",
+    menu: "Meny", rights: "Alla rättigheter förbehållna.",
+  },
+  da: {
+    call: "Ring", services: "Ydelser", about: "Om os", areas: "Områder vi dækker",
+    contact: "Kontakt os", name: "Dit navn", email: "E-mail", message: "Hvad kan vi hjælpe med?",
+    send: "Send besked", formDisabled: "Forhåndsvisning — denne formular er ikke tilsluttet endnu.",
+    menu: "Menu", rights: "Alle rettigheder forbeholdes.",
+  },
+  nb: {
+    call: "Ring", services: "Tjenester", about: "Om oss", areas: "Områder vi dekker",
+    contact: "Kontakt oss", name: "Ditt navn", email: "E-post", message: "Hvordan kan vi hjelpe?",
+    send: "Send melding", formDisabled: "Forhåndsvisning — dette skjemaet er ikke tilkoblet ennå.",
+    menu: "Meny", rights: "Alle rettigheter forbeholdt.",
+  },
+  fi: {
+    call: "Soita", services: "Palvelut", about: "Tietoa meistä", areas: "Toiminta-alueet",
+    contact: "Ota yhteyttä", name: "Nimesi", email: "Sähköposti", message: "Miten voimme auttaa?",
+    send: "Lähetä viesti", formDisabled: "Esikatselu — tämä lomake ei ole vielä käytössä.",
+    menu: "Valikko", rights: "Kaikki oikeudet pidätetään.",
+  },
+  cs: {
+    call: "Zavolat", services: "Služby", about: "O nás", areas: "Oblast působnosti",
+    contact: "Kontakt", name: "Vaše jméno", email: "E-mail", message: "S čím vám můžeme pomoci?",
+    send: "Odeslat zprávu", formDisabled: "Náhled — tento formulář zatím není připojen.",
+    menu: "Menu", rights: "Všechna práva vyhrazena.",
+  },
+  ro: {
+    call: "Sunați", services: "Servicii", about: "Despre noi", areas: "Zone deservite",
+    contact: "Contactați-ne", name: "Numele dumneavoastră", email: "E-mail", message: "Cu ce vă putem ajuta?",
+    send: "Trimite mesaj", formDisabled: "Previzualizare — acest formular nu este încă conectat.",
+    menu: "Meniu", rights: "Toate drepturile rezervate.",
+  },
+  el: {
+    call: "Κλήση", services: "Υπηρεσίες", about: "Σχετικά με εμάς", areas: "Περιοχές κάλυψης",
+    contact: "Επικοινωνία", name: "Το όνομά σας", email: "Email", message: "Πώς μπορούμε να βοηθήσουμε;",
+    send: "Αποστολή μηνύματος", formDisabled: "Προεπισκόπηση — αυτή η φόρμα δεν είναι ακόμη συνδεδεμένη.",
+    menu: "Μενού", rights: "Με επιφύλαξη παντός δικαιώματος.",
+  },
+  hu: {
+    call: "Hívás", services: "Szolgáltatások", about: "Rólunk", areas: "Működési területek",
+    contact: "Kapcsolat", name: "Az Ön neve", email: "E-mail", message: "Miben segíthetünk?",
+    send: "Üzenet küldése", formDisabled: "Előnézet — ez az űrlap még nincs csatlakoztatva.",
+    menu: "Menü", rights: "Minden jog fenntartva.",
+  },
 };
 
 export function labels(lang: string): Labels {
-  return LABELS[lang] ?? (LABELS.en as Labels);
+  const code = lang === "no" ? "nb" : lang;
+  return LABELS[code] ?? (LABELS.en as Labels);
 }
