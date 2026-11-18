@@ -146,11 +146,13 @@ export function usePatchSource() {
 }
 
 export function useRunSource() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (key: string) =>
       unwrap(api.POST("/api/sources/{key}/run", { params: { path: { key } } })),
     onSuccess: (_d, key) => toast.success("Run queued", { description: `Source "${key}" will run shortly.` }),
-    onError: errorToast("Could not queue run"),
+    onError: errorToast("Run not started"),
+    onSettled: () => qc.invalidateQueries({ queryKey: qk.sources }),
   });
 }
 

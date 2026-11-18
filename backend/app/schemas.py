@@ -222,6 +222,16 @@ class OverviewOut(BaseModel):
     inbox_count: int
 
 
+class ManualRunOut(BaseModel):
+    """Whether "Run now" is allowed for a source that spends a limited free tier."""
+
+    limited: bool
+    allowed: bool
+    reason: str | None = None
+    next_allowed_at: datetime | None = None
+    usage: list[str] = Field(default_factory=list)
+
+
 class SourceOut(BaseModel):
     key: str
     label: str
@@ -237,6 +247,7 @@ class SourceOut(BaseModel):
     leads_found_total: int
     leads_7d: int
     runs: list[dict[str, Any]]
+    manual_run: ManualRunOut
 
 
 class SourcePatch(BaseModel):
