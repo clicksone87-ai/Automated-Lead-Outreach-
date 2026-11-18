@@ -32,20 +32,20 @@ async def _lead(s, *, country: str = "US", language: str = "en", source: str = "
     return lead
 
 
-async def test_drafting_allowed_for_us_blocked_for_de_and_unknown() -> None:
+async def test_drafting_allowed_for_supported_countries_blocked_for_unlisted() -> None:
     async with session_scope() as s:
         engine = PolicyEngine(s)
         assert (await engine.evaluate_drafting(await _lead(s, country="US"))).allowed
-        de = await engine.evaluate_drafting(await _lead(s, country="DE", language="de"))
-        assert not de.allowed
-        assert any(f.check == "country" for f in de.failures)
-        fr = await engine.evaluate_drafting(await _lead(s, country="FR", language="fr"))
-        assert "no rules loaded" in next(f.reason for f in fr.failures if f.check == "country")
+        assert (await engine.evaluate_drafting(await _lead(s, country="DE", language="de"))).allowed
+        assert (await engine.evaluate_drafting(await _lead(s, country="NO", language="nb"))).allowed
+        br = await engine.evaluate_drafting(await _lead(s, country="BR", language="pt"))
+        assert not br.allowed
+        assert "no rules loaded" in next(f.reason for f in br.failures if f.check == "country")
 
 
 async def test_parked_language_blocks_drafting() -> None:
     async with session_scope() as s:
-        verdict = await PolicyEngine(s).evaluate_drafting(await _lead(s, language="it"))
+        verdict = await PolicyEngine(s).evaluate_drafting(await _lead(s, language="ja"))
         assert [f.check for f in verdict.failures] == ["language"]
 
 

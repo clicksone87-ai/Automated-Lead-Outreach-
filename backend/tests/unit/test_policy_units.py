@@ -35,13 +35,12 @@ def test_wrap_sanitises_label() -> None:
 
 def test_shipped_country_rules() -> None:
     rules = load_rules()
-    us, gb, de, ie = (rules.get(c) for c in ("US", "GB", "DE", "IE"))
-    assert us and gb and de and ie
-    assert us.can_draft and gb.can_draft
+    us, gb, de, ie, no = (rules.get(c) for c in ("US", "GB", "DE", "IE", "NO"))
+    assert us and gb and de and ie and no
+    assert us.can_draft and gb.can_draft and de.can_draft and ie.can_draft and no.can_draft
     # Nothing can be sent until the legal review flips legal_reviewed.
-    assert not us.can_send and not gb.can_send
-    assert not de.can_draft and not ie.can_draft
-    assert rules.get("FR") is None  # unlisted => blocked
+    assert not us.can_send and not gb.can_send and not de.can_send and not ie.can_send and not no.can_send
+    assert rules.get("BR") is None  # unlisted => blocked
     assert rules.get(None) is None
 
 
