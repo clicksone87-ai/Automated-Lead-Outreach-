@@ -82,7 +82,12 @@ class FakeRender:
 
 
 async def fake_build(
-    *, template_dir: Path, data_dir: Path, preview_id: str, content: dict[str, Any]
+    *,
+    template_dir: Path,
+    data_dir: Path,
+    preview_id: str,
+    content: dict[str, Any],
+    cache_dir: Path | None = None,
 ) -> BuildResult:
     site = data_dir / "previews" / preview_id / "site"
     site.mkdir(parents=True, exist_ok=True)

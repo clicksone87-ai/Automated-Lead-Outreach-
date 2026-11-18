@@ -135,6 +135,7 @@ class WebsiteBuilderAgent:
                 data_dir=data_dir,
                 preview_id=preview_id,
                 content=content,
+                cache_dir=Path(ctx.settings.site_builder_root),
             )
         except BuildError as exc:
             if exc.timed_out:  # a slow machine, not a broken site: retry later with backoff

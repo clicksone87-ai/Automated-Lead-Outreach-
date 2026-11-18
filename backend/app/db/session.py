@@ -23,7 +23,7 @@ def get_engine() -> AsyncEngine:
         settings.database_url,
         # Fast-lane leads run side by side, each step in its own session.
         pool_size=10,
-        max_overflow=10,
+        max_overflow=15,
         pool_pre_ping=True,
     )
 

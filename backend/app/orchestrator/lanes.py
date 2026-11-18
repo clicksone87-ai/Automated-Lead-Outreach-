@@ -67,6 +67,7 @@ HEAVY_TIMEOUTS = {
     "outreach": 60,
 }
 RETRY_AFTER = timedelta(minutes=10)
+SCORING_TIMEOUT_S = 300  # one batch call, including a split retry and model fallbacks
 PAUSED_RETRY = timedelta(hours=1)
 STUCK_AFTER = timedelta(minutes=30)
 
@@ -107,6 +108,14 @@ async def mark(lead_ids: Iterable[uuid.UUID], lane: str, **values: Any) -> None:
         for lead in (await s.execute(select(Lead).where(Lead.id.in_(ids)))).scalars():
             timings = dict(lead.lane_timings or {})
             entry = {**timings.get(lane, {}), **values}
+            if values.get("started") and entry.get("queued"):
+                entry["queue_wait_s"] = round(
+                    (
+                        datetime.fromisoformat(entry["started"])
+                        - datetime.fromisoformat(entry["queued"])
+                    ).total_seconds(),
+                    1,
+                )
             if values.get("finished") and entry.get("started"):
                 entry["seconds"] = round(
                     (
@@ -137,6 +146,15 @@ async def _defer(
 # ── fast lane ───────────────────────────────────────────────────────────────
 
 
+def needs_fast(status: str, timings: dict[str, Any] | None) -> bool:
+    f = (timings or {}).get("fast") or {}
+    return (
+        not f.get("finished")
+        or bool(f.get("deferred") or f.get("retry_after"))
+        or status == LeadStatus.PAUSED_BUDGET
+    )
+
+
 async def run_fast_batch(
     lead_ids: Sequence[uuid.UUID],
     adapters: Adapters | None = None,
@@ -147,7 +165,14 @@ async def run_fast_batch(
     settings = settings or get_settings()
     async with session_scope() as s:
         rs = await runtime_settings.load(s)
-    ids = list(dict.fromkeys(lead_ids))
+        rows = (
+            await s.execute(
+                select(Lead.id, Lead.status, Lead.lane_timings).where(Lead.id.in_(list(lead_ids)))
+            )
+        ).all()
+    # A retried job (worker restart) must not redo finished leads or overwrite their timings.
+    todo = {lid for lid, status, timings in rows if needs_fast(status, timings)}
+    ids = [lid for lid in dict.fromkeys(lead_ids) if lid in todo]
     await mark(ids, "fast", started=_now(), deferred=None, retry_after=None)
     agents = load_agents()
 
@@ -215,12 +240,12 @@ async def _score(lead_ids: list[uuid.UUID], adapters: Adapters, batch_size: int)
         try:
             async with session_scope() as s:
                 rows = list((await s.execute(select(Lead).where(Lead.id.in_(part)))).scalars())
-                await classify_batch(s, adapters, rows)
+                await asyncio.wait_for(classify_batch(s, adapters, rows), SCORING_TIMEOUT_S)
         except BudgetExceededError as exc:  # free-tier cap: try again after it resets
             await _defer(part, "fast", f"scoring paused: {exc}", retry_in=PAUSED_RETRY)
             keep = [x for x in keep if x not in part]
-        except TransientAgentError as exc:
-            await _defer(part, "fast", f"scoring retry: {exc}")
+        except (TransientAgentError, TimeoutError) as exc:
+            await _defer(part, "fast", f"scoring retry: {exc or 'timed out'}")
             keep = [x for x in keep if x not in part]
     return keep
 

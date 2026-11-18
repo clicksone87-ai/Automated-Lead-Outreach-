@@ -56,6 +56,29 @@ MIN_LOGO_SIDE = 16
 _PIL_EXT = {"PNG": "png", "JPEG": "jpg", "GIF": "gif", "WEBP": "webp", "ICO": "ico", "BMP": "bmp"}
 ROLES = ("primary", "accent", "secondary", "extra", "extra")
 LOGO_SIZES = (1024, 512)
+# Free-tier logo models are sometimes slow or overloaded; concepts not ready by then are
+# dropped rather than holding up the whole heavy lane.
+LOGO_PHASE_BUDGET_S = 300.0
+
+
+async def within_budget(coros: list[Any], budget_s: float) -> list[Any]:
+    """Run concurrently; results in order, an exception per failure, TimeoutError if late."""
+    tasks = [asyncio.ensure_future(c) for c in coros]
+    _, pending = await asyncio.wait(tasks, timeout=budget_s)
+    for t in pending:
+        t.cancel()
+    await asyncio.gather(*pending, return_exceptions=True)
+    out: list[Any] = []
+    for t in tasks:
+        if t in pending:
+            out.append(TimeoutError(f"not ready within {budget_s:.0f}s"))
+        elif t.exception() is not None:
+            out.append(t.exception())
+        else:
+            out.append(t.result())
+    return out
+
+
 _LEGAL_SUFFIX = re.compile(
     r"[,\s]+(ltd\.?|limited|llc|l\.l\.c\.|inc\.?|incorporated|co\.?|corp\.?|plc|gmbh|"
     r"s\.?l\.?|s\.?a\.?r\.?l\.?)$",
@@ -205,15 +228,19 @@ class BrandingAgent:
         ]
         # The slow part is the model writing each SVG, so all concepts are requested at once;
         # rendering and saving stay sequential on this session and one browser.
-        specs = await asyncio.gather(
-            *(
+        specs = await within_budget(
+            [
                 self._spec(ctx, lead, task=task, style=style, mock=mock)
                 for _, style, task, mock in jobs
-            ),
-            return_exceptions=True,
+            ],
+            LOGO_PHASE_BUDGET_S,
         )
         failures = [r for r in specs if isinstance(r, BaseException)]
-        if failures and len(failures) == len(specs):
+        if (
+            failures
+            and len(failures) == len(specs)
+            and not all(isinstance(f, TimeoutError) for f in failures)
+        ):
             raise failures[0]
         made: list[LogoConcept] = []
         async with self._browser_factory() as browser:
