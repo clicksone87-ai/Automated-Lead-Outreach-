@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import type { CSSProperties, ReactNode } from "react";
-import { Footer, Header, PreviewRibbon } from "@/components/site";
 import { content } from "@/lib/content";
 import "./globals.css";
 
@@ -25,12 +24,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   } as CSSProperties;
   return (
     <html lang={content.language} style={style}>
-      <body>
-        <PreviewRibbon />
-        <Header />
-        {children}
-        <Footer />
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

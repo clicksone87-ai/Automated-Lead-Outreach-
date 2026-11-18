@@ -186,6 +186,8 @@ def build_content(
     fonts: list[str],
     logo_svg: str,
     agency: str,
+    logo_svg_animated: str = "",
+    logo_svg_reversed: str = "",
 ) -> dict[str, Any]:
     primary = colours[0] if colours else "#1d4ed8"
     accent = colours[1] if len(colours) > 1 else "#f59e0b"
@@ -223,6 +225,8 @@ def build_content(
             "fontHeading": heading,
             "fontBody": body,
             "logoSvg": logo_svg,
+            "logoSvgAnimated": logo_svg_animated,
+            "logoSvgReversed": logo_svg_reversed,
         },
         "seo": {"title": copy.seo_title, "description": copy.seo_description},
         "hero": {"headline": copy.headline, "subheadline": copy.subheadline, "cta": copy.cta},
