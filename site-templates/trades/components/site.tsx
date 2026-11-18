@@ -1,41 +1,46 @@
 import type { ReactNode } from "react";
-import { content, type Page, type SectionKey, type Variant } from "@/lib/content";
-import { labels } from "@/lib/i18n";
+import type { Page, SectionKey, SiteContent } from "../lib/content";
+import { labels } from "../lib/i18n";
 
-const t = labels(content.language);
-const v: Variant = content.variant;
-const tel = content.business.phone.replace(/[^\d+]/g, "");
+/** Every component takes the content as a prop, so the same code serves `next dev` and the
+ * per-lead static renderer (render/render.tsx). */
+type Props = { c: SiteContent };
 
-function Logo({ className = "" }: { className?: string }) {
-  if (content.brand.logoSvg) {
+const telOf = (c: SiteContent) => c.business.phone.replace(/[^\d+]/g, "");
+
+function Logo({ c, className = "" }: Props & { className?: string }) {
+  if (c.brand.logoSvg) {
     // Sanitised by the Branding agent (allowlist SVG, no scripts/external refs).
     return (
       <span
         className={`logo inline-flex h-11 items-center ${className}`}
-        aria-label={content.business.name}
-        dangerouslySetInnerHTML={{ __html: content.brand.logoSvg }}
+        aria-label={c.business.name}
+        dangerouslySetInnerHTML={{ __html: c.brand.logoSvg }}
       />
     );
   }
-  return <span className={`text-xl font-bold ${className}`}>{content.business.name}</span>;
+  return <span className={`text-xl font-bold ${className}`}>{c.business.name}</span>;
 }
 
-export function PreviewRibbon() {
+export function PreviewRibbon({ c }: Props) {
   return (
     <div className="bg-ink px-4 py-1.5 text-center text-xs font-medium text-white" role="note">
-      {content.preview.notice}
-      {content.preview.agency ? ` · ${content.preview.agency}` : ""}
+      {c.preview.notice}
+      {c.preview.agency ? ` · ${c.preview.agency}` : ""}
     </div>
   );
 }
 
-export function Header() {
-  const nav = content.pages.filter((p) => p.slug);
+export function Header({ c }: Props) {
+  const t = labels(c.language);
+  const v = c.variant;
+  const tel = telOf(c);
+  const nav = c.pages.filter((p) => p.slug);
   return (
     <header className={v === "bold" ? "bg-brand text-white" : "border-b border-black/5 bg-white"}>
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3">
         <a href="/" className="shrink-0">
-          <Logo />
+          <Logo c={c} />
         </a>
         <nav aria-label={t.menu} className="hidden items-center gap-6 text-sm font-medium md:flex">
           {nav.map((p) => (
@@ -51,7 +56,7 @@ export function Header() {
               v === "bold" ? "bg-white text-brand" : "bg-brand text-white"
             }`}
           >
-            {t.call} {content.business.phone}
+            {t.call} {c.business.phone}
           </a>
         )}
       </div>
@@ -59,8 +64,11 @@ export function Header() {
   );
 }
 
-function Hero() {
-  const h = content.hero;
+function Hero({ c }: Props) {
+  const t = labels(c.language);
+  const v = c.variant;
+  const tel = telOf(c);
+  const h = c.hero;
   if (!h.headline) return null;
   const cta = (
     <a
@@ -83,9 +91,9 @@ function Hero() {
     <section className={v === "bold" ? "bg-brand text-white" : "bg-surface"}>
       <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 py-20 md:grid-cols-[1.4fr_1fr] md:py-28">
         <div>
-          {content.business.city && (
+          {c.business.city && (
             <p className={`mb-4 text-sm font-semibold uppercase tracking-widest ${v === "bold" ? "text-white/80" : "text-brand"}`}>
-              {content.business.trade} · {content.business.city}
+              {c.business.trade} · {c.business.city}
             </p>
           )}
           <h1 className="text-4xl font-bold leading-tight sm:text-5xl">{h.headline}</h1>
@@ -95,20 +103,22 @@ function Hero() {
           <div className="mt-8 flex flex-wrap gap-3">{cta}</div>
         </div>
         <div className={`hidden aspect-square items-center justify-center rounded-3xl p-10 md:flex ${v === "bold" ? "bg-white/10" : "bg-white shadow-xl"}`}>
-          <Logo className="!h-auto w-full [&_svg]:w-full" />
+          <Logo c={c} className="!h-auto w-full [&_svg]:w-full" />
         </div>
       </div>
     </section>
   );
 }
 
-function Services() {
-  if (!content.services.length) return null;
+function Services({ c }: Props) {
+  const t = labels(c.language);
+  const v = c.variant;
+  if (!c.services.length) return null;
   return (
     <section id="services" className="mx-auto max-w-6xl px-5 py-20">
       <h2 className="text-3xl font-bold">{t.services}</h2>
       <div className={`mt-10 grid gap-5 ${v === "minimal" ? "md:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
-        {content.services.map((s) => (
+        {c.services.map((s) => (
           <article
             key={s.title}
             className={
@@ -127,25 +137,27 @@ function Services() {
   );
 }
 
-function About() {
-  if (!content.about) return null;
+function About({ c }: Props) {
+  const t = labels(c.language);
+  if (!c.about) return null;
   return (
-    <section className={v === "classic" ? "bg-surface" : ""}>
+    <section className={c.variant === "classic" ? "bg-surface" : ""}>
       <div className="mx-auto max-w-3xl px-5 py-20">
         <h2 className="text-3xl font-bold">{t.about}</h2>
-        <p className="mt-6 whitespace-pre-line text-lg leading-relaxed text-ink/80">{content.about}</p>
+        <p className="mt-6 whitespace-pre-line text-lg leading-relaxed text-ink/80">{c.about}</p>
       </div>
     </section>
   );
 }
 
-function Areas() {
-  if (!content.areas.length) return null;
+function Areas({ c }: Props) {
+  const t = labels(c.language);
+  if (!c.areas.length) return null;
   return (
     <section className="mx-auto max-w-6xl px-5 py-16">
       <h2 className="text-2xl font-bold">{t.areas}</h2>
       <ul className="mt-6 flex flex-wrap gap-2">
-        {content.areas.map((a) => (
+        {c.areas.map((a) => (
           <li key={a} className="rounded-full bg-brand/10 px-4 py-1.5 text-sm font-medium text-brand">
             {a}
           </li>
@@ -155,10 +167,12 @@ function Areas() {
   );
 }
 
-function Contact() {
-  const b = content.business;
+function Contact({ c }: Props) {
+  const t = labels(c.language);
+  const tel = telOf(c);
+  const b = c.business;
   return (
-    <section id="contact" className={v === "bold" ? "bg-ink text-white" : "bg-surface"}>
+    <section id="contact" className={c.variant === "bold" ? "bg-ink text-white" : "bg-surface"}>
       <div className="mx-auto grid max-w-6xl gap-10 px-5 py-20 md:grid-cols-2">
         <div>
           <h2 className="text-3xl font-bold">{t.contact}</h2>
@@ -183,7 +197,7 @@ function Contact() {
             )}
           </dl>
         </div>
-        <form className="space-y-3" aria-describedby="form-note" onSubmit={undefined}>
+        <form className="space-y-3" aria-describedby="form-note">
           <label className="block text-sm font-medium">
             {t.name}
             <input disabled className="mt-1 w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-ink" />
@@ -206,18 +220,19 @@ function Contact() {
   );
 }
 
-export function Footer() {
+export function Footer({ c }: Props) {
+  const t = labels(c.language);
   return (
     <footer className="border-t border-black/5 bg-white">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-5 py-8 text-sm text-ink/60 sm:flex-row">
-        <span>© {new Date().getFullYear()} {content.business.name}. {t.rights}</span>
-        <span>{content.preview.notice}</span>
+        <span>© {new Date().getFullYear()} {c.business.name}. {t.rights}</span>
+        <span>{c.preview.notice}</span>
       </div>
     </footer>
   );
 }
 
-const SECTIONS: Record<SectionKey, () => ReactNode> = {
+const SECTIONS: Record<SectionKey, (p: Props) => ReactNode> = {
   hero: Hero,
   services: Services,
   about: About,
@@ -225,7 +240,7 @@ const SECTIONS: Record<SectionKey, () => ReactNode> = {
   contact: Contact,
 };
 
-export function PageBody({ page }: { page: Page }) {
+export function PageBody({ c, page }: Props & { page: Page }) {
   return (
     <main>
       {page.slug && (
@@ -235,8 +250,20 @@ export function PageBody({ page }: { page: Page }) {
       )}
       {page.sections.map((key) => {
         const Section = SECTIONS[key];
-        return Section ? <Section key={key} /> : null;
+        return Section ? <Section key={key} c={c} /> : null;
       })}
     </main>
+  );
+}
+
+/** The whole <body> of one page: ribbon, header, page sections and footer. */
+export function SiteBody({ c, page }: Props & { page: Page }) {
+  return (
+    <>
+      <PreviewRibbon c={c} />
+      <Header c={c} />
+      <PageBody c={c} page={page} />
+      <Footer c={c} />
+    </>
   );
 }

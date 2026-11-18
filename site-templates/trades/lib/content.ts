@@ -3,7 +3,6 @@
  * The builder writes content.json; anything empty is simply not rendered — the template never
  * shows placeholder facts (no invented reviews, years in business or certifications).
  */
-import raw from "../content.json";
 
 export type Variant = "classic" | "bold" | "minimal";
 export type SectionKey = "hero" | "services" | "about" | "areas" | "contact";
@@ -50,8 +49,25 @@ export interface SiteContent {
   preview: { agency: string; notice: string };
 }
 
-export const content = raw as SiteContent;
+export const HOME_SECTIONS: SectionKey[] = ["hero", "services", "about", "areas", "contact"];
 
-export function pageBySlug(slug: string): Page | undefined {
-  return content.pages.find((p) => p.slug === slug);
+export function pageBySlug(c: SiteContent, slug: string): Page | undefined {
+  return c.pages.find((p) => p.slug === slug);
+}
+
+export function homePage(c: SiteContent): Page {
+  return pageBySlug(c, "") ?? { slug: "", title: "Home", sections: HOME_SECTIONS };
+}
+
+/** CSS custom properties for the brand, set on <html>. */
+export function brandVars(c: SiteContent): Record<string, string> {
+  const b = c.brand;
+  return {
+    "--brand": b.primary,
+    "--accent": b.accent,
+    "--ink": b.ink,
+    "--surface": b.surface,
+    "--font-heading": b.fontHeading,
+    "--font-body": b.fontBody,
+  };
 }

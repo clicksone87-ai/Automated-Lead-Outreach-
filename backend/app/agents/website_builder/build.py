@@ -1,8 +1,9 @@
 """Preview build pipeline and preview tests.
 
-Builds the template as a static export in a per-preview directory (shared node_modules, one
-build at a time) and publishes it atomically for Caddy. Tests: smoke test, screenshots,
-internal links and Lighthouse scores.
+Each template version is compiled once (TypeScript renderer + Tailwind stylesheet, cached by a
+hash of its sources). A lead's preview is then rendered from its content to static HTML in
+about a second and published atomically for Caddy; no per-lead Next.js build. Tests: smoke
+test, screenshots, internal links and Lighthouse scores.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import mimetypes
 import os
 import shutil
 import socket
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,10 +31,13 @@ from app.agents.audit.browser import GuardedBrowser
 
 logger = logging.getLogger(__name__)
 
-BUILD_TIMEOUT_S = 900
+BUILD_TIMEOUT_S = 300  # compiling one template version (once)
+RENDER_TIMEOUT_S = 60  # rendering one preview
 NPM_TIMEOUT_S = 600
 _BUILD_LOCK = asyncio.Lock()
-COPY_IGNORE = shutil.ignore_patterns("node_modules", "out", ".next", "*.tsbuildinfo")
+COPY_IGNORE = shutil.ignore_patterns(
+    "node_modules", "out", ".next", "*.tsbuildinfo", "dist-render", "styles.css"
+)
 LIGHTHOUSE_THRESHOLDS = {"performance": 60, "accessibility": 85, "best-practices": 80, "seo": 80}
 PREVIEW_ORIGIN = "http://preview.local"
 
@@ -61,13 +66,31 @@ class PreviewTests:
     pdf_path: str | None = None
 
 
+def _run_blocking(
+    cmd: list[str], cwd: Path, limit_s: float, env: dict[str, str]
+) -> tuple[int, str]:
+    try:
+        done = subprocess.run(  # noqa: S603 - fixed argv built by this module
+            cmd, cwd=str(cwd), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            timeout=limit_s, check=False,
+        )  # fmt: skip
+    except subprocess.TimeoutExpired:
+        return 124, f"timed out after {limit_s:.0f}s"
+    return done.returncode, done.stdout.decode("utf-8", errors="replace")
+
+
 async def _run(
     cmd: list[str], cwd: Path, *, limit_s: float, env: dict[str, str] | None = None
 ) -> tuple[int, str]:
+    full_env = {**os.environ, **(env or {})}
+    proactor = getattr(asyncio, "ProactorEventLoop", None)
+    if sys.platform == "win32" and not isinstance(asyncio.get_running_loop(), proactor or ()):
+        # Windows dev hosts run the selector loop (for psycopg), which cannot spawn processes.
+        return await asyncio.to_thread(_run_blocking, cmd, cwd, limit_s, full_env)
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         cwd=str(cwd),
-        env={**os.environ, **(env or {})},
+        env=full_env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
     )
@@ -78,10 +101,6 @@ async def _run(
         await proc.wait()
         return 124, f"timed out after {limit_s:.0f}s"
     return proc.returncode or 0, out.decode("utf-8", errors="replace")
-
-
-def _nice(cmd: list[str]) -> list[str]:
-    return ["nice", "-n", "10", *cmd] if shutil.which("nice") else cmd
 
 
 async def ensure_deps(template_dir: Path, cache_root: Path) -> Path:
@@ -106,6 +125,62 @@ async def ensure_deps(template_dir: Path, cache_root: Path) -> Path:
     return modules
 
 
+def link_dir(link: Path, target: Path) -> None:
+    """Directory link (a junction on Windows hosts, where symlinks need extra rights)."""
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except OSError:
+        if os.name != "nt":
+            raise
+        import _winapi  # noqa: PLC0415 - Windows-only module
+
+        _winapi.CreateJunction(str(target), str(link))
+
+
+def source_digest(template_dir: Path) -> str:
+    """Hash of everything that affects rendering, so a template change gets a fresh bundle."""
+    h = hashlib.sha256()
+    skip = {"node_modules", "out", ".next", "dist-render"}
+    for f in sorted(template_dir.rglob("*")):
+        rel = f.relative_to(template_dir)
+        if not f.is_file() or skip & set(rel.parts) or rel.name == "styles.css":
+            continue
+        h.update(rel.as_posix().encode())
+        h.update(f.read_bytes())
+    return h.hexdigest()[:16]
+
+
+async def ensure_bundle(template_dir: Path, data_dir: Path) -> Path:
+    """Compile the template once per version: renderer (tsc) and stylesheet (Tailwind)."""
+    bundle = (
+        data_dir / "site-builder" / "bundles" / f"{template_dir.name}-{source_digest(template_dir)}"
+    )
+    if (bundle / ".ok").exists():
+        return bundle
+    async with _BUILD_LOCK:
+        if (bundle / ".ok").exists():
+            return bundle
+        modules = await ensure_deps(template_dir, data_dir / "site-builder")
+        shutil.rmtree(bundle, ignore_errors=True)
+        shutil.copytree(template_dir, bundle, ignore=COPY_IGNORE)
+        link_dir(bundle / "node_modules", modules)
+        log = []
+        for cmd in (
+            ["node", str(modules / "typescript" / "bin" / "tsc"), "-p", "tsconfig.render.json"],
+            ["node", "render/build-css.mjs"],
+        ):
+            code, out = await _run(cmd, bundle, limit_s=BUILD_TIMEOUT_S)
+            log.append(f"$ {' '.join(cmd[1:])}\n{out}")
+            if code != 0:
+                (bundle / "build.log").write_text("\n".join(log), encoding="utf-8")
+                raise BuildError(
+                    f"template compile failed ({code}): {out[-600:]}", timed_out=code == 124
+                )
+        (bundle / "build.log").write_text("\n".join(log), encoding="utf-8")
+        (bundle / ".ok").write_text(bundle.name)
+        return bundle
+
+
 async def build_site(
     *,
     template_dir: Path,
@@ -113,55 +188,39 @@ async def build_site(
     preview_id: str,
     content: dict[str, Any],
 ) -> BuildResult:
-    """Build one preview (serialised: one build at a time)."""
-    async with _BUILD_LOCK:
-        loop = asyncio.get_running_loop()
-        started = loop.time()
-        modules = await ensure_deps(template_dir, data_dir / "site-builder")
-        work = data_dir / "builds" / preview_id
-        if work.exists():
-            shutil.rmtree(work / "out", ignore_errors=True)
-            shutil.rmtree(work / ".next", ignore_errors=True)
-        shutil.copytree(template_dir, work, ignore=COPY_IGNORE, dirs_exist_ok=True)
-        link = work / "node_modules"
-        if link.is_symlink() or link.exists():
-            if link.is_symlink() or link.is_file():
-                link.unlink()
-            else:
-                shutil.rmtree(link)
-        link.symlink_to(modules, target_is_directory=True)
-        (work / "content.json").write_text(
-            json.dumps(content, ensure_ascii=False, indent=2), encoding="utf-8"
+    """Render one preview from its content with the compiled template and publish it."""
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    bundle = await ensure_bundle(template_dir, data_dir)
+    work = data_dir / "builds" / preview_id
+    work.mkdir(parents=True, exist_ok=True)
+    (work / "content.json").write_text(
+        json.dumps(content, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    (work / "template.txt").write_text(bundle.name + "\n", encoding="utf-8")
+    commit = await _git_commit(work, content)
+    log_path = data_dir / "builds" / f"{preview_id}.log"
+    site = data_dir / "previews" / preview_id / "site"
+    tmp = site.with_name("site.tmp")
+    shutil.rmtree(tmp, ignore_errors=True)
+    code, out = await _run(
+        ["node", str(bundle / "render" / "cli.cjs"), str(work / "content.json"), str(tmp)],
+        bundle,
+        limit_s=RENDER_TIMEOUT_S,
+    )
+    log_path.write_text(f"template {bundle.name}\n{out}", encoding="utf-8")
+    if code != 0 or not (tmp / "index.html").exists():
+        raise BuildError(
+            f"preview render failed ({code}); see {log_path.name}: {out[-600:]}",
+            timed_out=code == 124,
         )
-        commit = await _git_commit(work, content)
-        log_path = data_dir / "builds" / f"{preview_id}.log"
-        code, out = await _run(
-            _nice(["node", str(modules / "next" / "dist" / "bin" / "next"), "build"]),
-            work,
-            limit_s=BUILD_TIMEOUT_S,
-            env={
-                "NODE_OPTIONS": "--max-old-space-size=900",
-                "NEXT_TELEMETRY_DISABLED": "1",
-                "CI": "1",
-            },
-        )
-        log_path.write_text(out, encoding="utf-8")
-        if code != 0 or not (work / "out" / "index.html").exists():
-            raise BuildError(
-                f"next build failed ({code}); see {log_path.name}: {out[-600:]}",
-                timed_out=code == 124,
-            )
-        site = data_dir / "previews" / preview_id / "site"
-        tmp = site.with_name("site.tmp")
-        shutil.rmtree(tmp, ignore_errors=True)
-        shutil.copytree(work / "out", tmp)
-        old = site.with_name("site.old")
-        shutil.rmtree(old, ignore_errors=True)
-        if site.exists():
-            site.rename(old)
-        tmp.rename(site)
-        shutil.rmtree(old, ignore_errors=True)
-        return BuildResult(site, work, commit, log_path, loop.time() - started)
+    old = site.with_name("site.old")
+    shutil.rmtree(old, ignore_errors=True)
+    if site.exists():
+        site.rename(old)
+    tmp.rename(site)
+    shutil.rmtree(old, ignore_errors=True)
+    return BuildResult(site, work, commit, log_path, loop.time() - started)
 
 
 async def _git_commit(work: Path, content: dict[str, Any]) -> str | None:
