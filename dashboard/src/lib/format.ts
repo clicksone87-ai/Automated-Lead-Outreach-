@@ -49,13 +49,24 @@ export function titleCase(value: string): string {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-const COUNTRY_NAMES: Record<string, string> = {
-  US: "United States", GB: "United Kingdom", IE: "Ireland", DE: "Germany", FR: "France",
-  ES: "Spain", NO: "Norway", IT: "Italy", NL: "Netherlands",
-};
+// Country and language names come from the browser's built-in Intl data, so every market
+// (about 32 countries, 16 languages) gets a proper English name without a hand-kept list.
+const regionNames =
+  typeof Intl !== "undefined" && "DisplayNames" in Intl
+    ? new Intl.DisplayNames(["en"], { type: "region" })
+    : null;
+const languageNames =
+  typeof Intl !== "undefined" && "DisplayNames" in Intl
+    ? new Intl.DisplayNames(["en"], { type: "language" })
+    : null;
 
 export function countryName(code: string | null | undefined): string {
-  return code ? (COUNTRY_NAMES[code] ?? code) : "Unknown";
+  if (!code) return "Unknown";
+  try {
+    return regionNames?.of(code.toUpperCase()) ?? code;
+  } catch {
+    return code;
+  }
 }
 
 export function flag(code: string | null | undefined): string {
@@ -63,11 +74,12 @@ export function flag(code: string | null | undefined): string {
   return String.fromCodePoint(...[...code.toUpperCase()].map((c) => 0x1f1a5 + c.charCodeAt(0)));
 }
 
-const LANGUAGE_NAMES: Record<string, string> = {
-  en: "English", de: "German", fr: "French", es: "Spanish", nb: "Norwegian", it: "Italian",
-  nl: "Dutch", pt: "Portuguese",
-};
-
 export function languageName(code: string | null | undefined): string {
-  return code ? (LANGUAGE_NAMES[code] ?? code.toUpperCase()) : "Unknown";
+  if (!code) return "Unknown";
+  if (code === "nb") return "Norwegian"; // Intl says "Norwegian Bokmål"; keep the short name
+  try {
+    return languageNames?.of(code) ?? code.toUpperCase();
+  } catch {
+    return code.toUpperCase();
+  }
 }
