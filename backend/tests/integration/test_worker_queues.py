@@ -81,3 +81,46 @@ async def test_resume_puts_unfinished_heavy_work_back_on_its_queue(
     await lanes.continue_lead(lead_id)
     assert queued == [lead_id]
     assert lanes.heavy_unfinished({"heavy": {"queued": "x", "finished": "y"}}) is False
+
+
+def test_discovery_has_its_own_queue() -> None:
+    discovery = worker._worker(worker.DiscoveryWorkerSettings)
+    fast = worker._worker(worker.WorkerSettings)
+    assert discovery.queue_name == "arq:discovery" and set(discovery.functions) == {
+        "run_source_job"
+    }
+    assert "run_source_job" not in fast.functions
+
+
+@pytest.mark.usefixtures("db")
+async def test_stalled_gemini_call_falls_back_to_the_next_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio  # noqa: PLC0415
+
+    import httpx  # noqa: PLC0415
+    import respx  # noqa: PLC0415
+    from pydantic import BaseModel  # noqa: PLC0415
+
+    from app.adapters import gemini  # noqa: PLC0415
+    from app.adapters.llm import LLMRequest  # noqa: PLC0415
+
+    class Out(BaseModel):
+        ok: bool
+
+    async def stall(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(5)
+        return httpx.Response(500)
+
+    monkeypatch.setattr(gemini, "REQUEST_DEADLINE_S", 0.2)
+    ok = {"candidates": [{"content": {"parts": [{"text": '{"ok": true}'}]}}]}
+    with respx.mock:
+        respx.post(f"{gemini.BASE}/models/m-text:generateContent").mock(side_effect=stall)
+        respx.post(f"{gemini.BASE}/models/m-fallback:generateContent").mock(
+            return_value=httpx.Response(200, json=ok)
+        )
+        llm = gemini.GeminiLLM("k", text_model="m-text", vision_model="m-text", logo_model="m-text",
+                               fallback_models=["m-fallback"], rpm=6000)  # fmt: skip
+        async with session_scope() as s:
+            out = await llm.structured(s, LLMRequest(agent="requirements", task="t"), Out)
+    assert out.ok

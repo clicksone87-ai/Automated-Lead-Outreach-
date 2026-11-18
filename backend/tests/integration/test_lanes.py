@@ -209,3 +209,28 @@ async def test_continue_lead_after_approval_runs_outreach() -> None:
             .all()
         )
     assert outreach_runs
+
+
+async def test_retried_batch_keeps_the_first_timings() -> None:
+    ids = await _demo_leads(4)
+    await lanes.run_fast_batch(ids)
+    async with session_scope() as s:
+        before = {
+            lead.id: dict(lead.lane_timings["fast"])
+            for lead in (await s.execute(select(Lead).where(Lead.id.in_(ids)))).scalars()
+        }
+    out = await lanes.run_fast_batch(ids)  # e.g. arq retrying the job after a worker restart
+    assert out["leads"] == 0
+    async with session_scope() as s:
+        after = {
+            lead.id: dict(lead.lane_timings["fast"])
+            for lead in (await s.execute(select(Lead).where(Lead.id.in_(ids)))).scalars()
+        }
+    assert after == before
+
+
+def test_needs_fast() -> None:
+    assert lanes.needs_fast("discovered", {})
+    assert not lanes.needs_fast("awaiting_approval", {"fast": {"finished": "x"}})
+    assert lanes.needs_fast("audited", {"fast": {"finished": "x", "retry_after": "y"}})
+    assert lanes.needs_fast("paused_budget", {"fast": {"finished": "x"}})

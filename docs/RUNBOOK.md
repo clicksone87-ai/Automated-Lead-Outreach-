@@ -8,7 +8,7 @@ what the system does is in the [README](../README.md).
 ```
 backend/            FastAPI app, agents, orchestrator, policy layer, Alembic migrations, tests
 dashboard/          Next.js dashboard
-site-templates/     Next.js website template used for previews
+site-templates/     website templates (compiled once, rendered per lead to static HTML)
 email-templates/    React Email templates and the render script
 caddy/              Caddyfile for private previews
 docker-compose.yml  the full local stack
@@ -52,6 +52,29 @@ All ports are bound to 127.0.0.1.
 
 The scheduler runs discovery, sending, reply ingestion, delivery tracking, follow-ups, the
 weekly report and backups on its own.
+
+### Lanes
+
+Every lead goes through the **fast lane**: a rule-based prefilter (no LLM), batch scoring
+(up to 20 leads per Gemini call), contact finding, a light audit (static checks and cached
+PageSpeed, no browser) and a text-only draft. Leads that hit a free-tier cap or a transient
+error wait for the sweep (every 5 minutes) instead of retrying in place.
+
+The **heavy lane** adds logo concepts, a website preview and the full audit (screenshots,
+vision review, competitors, PDF), then redrafts the proposal with those attachments. The
+scheduler picks the day's best leads every 15 minutes (`heavy_lane_daily_limit`, default 10;
+verified email first, then intent); **Generate assets** on a lead sends it there directly.
+
+The worker runs both queues in one process: the fast queue (`arq:queue`, several jobs side by
+side) and the heavy queue (`arq:heavy`, one job at a time, because Chromium and Lighthouse are
+memory-heavy). Gemini's daily cap is split per lane (scoring, fast, heavy, other) so logos can
+never starve scoring. The Overview's **Speed** panel shows median and p90 time per lane and
+per step against the targets (fast < 3 min, heavy < 10 min).
+
+Manual **Run now** on a source that spends a limited free tier (Apify, Serper) asks for
+confirmation, is limited to one run per source per hour, and is refused when the free cap
+cannot cover the run. Serper credits are one-time, so a daily ceiling
+(`SERPER_DAILY_CREDIT_CAP`, default 60) spreads them out.
 
 Day to day, the dashboard is the main interface:
 
@@ -180,5 +203,5 @@ about 4.5 GB of memory; 4 vCPU / 8 GB is enough.
 | Ports stop answering after Docker restarts | `docker compose up -d --force-recreate` |
 | A source shows "Degraded" | the provider failed or returned nothing; details are on the source card |
 | Leads paused on a free-tier or budget cap | the cap resets daily or monthly (see Sources) |
-| Website builds are slow | builds run one at a time in the worker with a 2 GB limit |
+| The first preview after a template change is slow | the template is compiled once per version (npm install + tsc + CSS); later previews render in about a second |
 | Docker disk filling up | `docker builder prune --keep-storage 3GB` |

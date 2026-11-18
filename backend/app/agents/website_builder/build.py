@@ -150,17 +150,15 @@ def source_digest(template_dir: Path) -> str:
     return h.hexdigest()[:16]
 
 
-async def ensure_bundle(template_dir: Path, data_dir: Path) -> Path:
+async def ensure_bundle(template_dir: Path, cache_root: Path) -> Path:
     """Compile the template once per version: renderer (tsc) and stylesheet (Tailwind)."""
-    bundle = (
-        data_dir / "site-builder" / "bundles" / f"{template_dir.name}-{source_digest(template_dir)}"
-    )
+    bundle = cache_root / "bundles" / f"{template_dir.name}-{source_digest(template_dir)}"
     if (bundle / ".ok").exists():
         return bundle
     async with _BUILD_LOCK:
         if (bundle / ".ok").exists():
             return bundle
-        modules = await ensure_deps(template_dir, data_dir / "site-builder")
+        modules = await ensure_deps(template_dir, cache_root)
         shutil.rmtree(bundle, ignore_errors=True)
         shutil.copytree(template_dir, bundle, ignore=COPY_IGNORE)
         link_dir(bundle / "node_modules", modules)
@@ -187,11 +185,12 @@ async def build_site(
     data_dir: Path,
     preview_id: str,
     content: dict[str, Any],
+    cache_dir: Path | None = None,
 ) -> BuildResult:
     """Render one preview from its content with the compiled template and publish it."""
     loop = asyncio.get_running_loop()
     started = loop.time()
-    bundle = await ensure_bundle(template_dir, data_dir)
+    bundle = await ensure_bundle(template_dir, cache_dir or data_dir / "site-builder")
     work = data_dir / "builds" / preview_id
     work.mkdir(parents=True, exist_ok=True)
     (work / "content.json").write_text(

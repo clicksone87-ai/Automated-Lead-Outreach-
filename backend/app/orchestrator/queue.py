@@ -12,6 +12,7 @@ from app.config import get_settings
 
 DEFAULT_QUEUE = "arq:queue"  # fast lane, discovery sources, resumes
 HEAVY_QUEUE = "arq:heavy"  # logos, previews, full audits: one at a time
+DISCOVERY_QUEUE = "arq:discovery"  # source runs: slow crawls must never hold up the fast lane
 SCHEDULER_QUEUE = "arq:scheduler"
 
 _pool: ArqRedis | None = None
@@ -60,5 +61,7 @@ async def enqueue_heavy(lead_id: uuid.UUID) -> bool:
 
 async def enqueue_source(key: str, slot: str, *, force: bool = False) -> bool:
     pool = await get_pool()
-    job = await pool.enqueue_job("run_source_job", key, force, _job_id=f"source:{key}:{slot}")
+    job = await pool.enqueue_job(
+        "run_source_job", key, force, _job_id=f"source:{key}:{slot}", _queue_name=DISCOVERY_QUEUE
+    )
     return job is not None

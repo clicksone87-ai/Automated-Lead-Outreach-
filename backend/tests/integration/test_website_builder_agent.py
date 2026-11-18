@@ -79,7 +79,13 @@ class FakeBuild:
         self.content: dict[str, Any] | None = None
 
     async def __call__(
-        self, *, template_dir: Path, data_dir: Path, preview_id: str, content: dict[str, Any]
+        self,
+        *,
+        template_dir: Path,
+        data_dir: Path,
+        preview_id: str,
+        content: dict[str, Any],
+        cache_dir: Path | None = None,
     ) -> BuildResult:
         self.content = content
         if self.fail:

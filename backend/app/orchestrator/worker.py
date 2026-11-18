@@ -1,4 +1,4 @@
-"""Arq worker: the fast queue (fast lane, sources, resumes) and the heavy queue, one process.
+"""Arq worker: fast, discovery and heavy queues in one process.
 
 Retries: transient failures are retried with exponential backoff up to MAX_JOB_ATTEMPTS.
 Expected stops (budget cap, missing API key, policy) are recorded and not retried.
@@ -22,7 +22,7 @@ from app.config import get_settings, log_missing_integrations
 from app.db.session import session_scope
 from app.logging_setup import configure_logging
 from app.orchestrator import lanes, pipeline
-from app.orchestrator.queue import DEFAULT_QUEUE, HEAVY_QUEUE, redis_settings
+from app.orchestrator.queue import DEFAULT_QUEUE, DISCOVERY_QUEUE, HEAVY_QUEUE, redis_settings
 from app.orchestrator.runs import TransientAgentError
 
 logger = logging.getLogger(__name__)
@@ -91,10 +91,10 @@ async def shutdown(ctx: dict[str, Any]) -> None:
 
 
 class WorkerSettings:
-    """Fast queue: fast-lane batches, discovery sources and resumes. Network-bound work, so
-    several jobs run side by side."""
+    """Fast queue: fast-lane batches and resumes. Network-bound work, so several jobs run side
+    by side."""
 
-    functions: ClassVar[list[Any]] = [run_pipeline, run_source_job, run_fast_batch_job]
+    functions: ClassVar[list[Any]] = [run_pipeline, run_fast_batch_job]
     cron_jobs: ClassVar[list[Any]] = [cron(heartbeat, minute=set(range(60)), run_at_startup=True)]
     on_startup = startup
     on_shutdown = shutdown
@@ -103,6 +103,18 @@ class WorkerSettings:
     max_jobs = 4
     job_timeout = 1800
     max_tries = get_settings().max_job_attempts
+    keep_result = 3600
+
+
+class DiscoveryWorkerSettings:
+    """Discovery queue: source runs (crawls with polite per-site delays can take minutes)."""
+
+    functions: ClassVar[list[Any]] = [run_source_job]
+    redis_settings = redis_settings()
+    queue_name = DISCOVERY_QUEUE
+    max_jobs = 3
+    job_timeout = 1800
+    max_tries = 1
     keep_result = 3600
 
 
@@ -126,8 +138,12 @@ def _worker(settings: type, **overrides: Any) -> Worker:
 
 
 async def run_workers() -> None:
-    """Both queues in one process (one Python interpreter's memory, not two)."""
-    workers = [_worker(WorkerSettings), _worker(HeavyWorkerSettings)]
+    """All queues in one process (one Python interpreter's memory, not three)."""
+    workers = [
+        _worker(WorkerSettings),
+        _worker(DiscoveryWorkerSettings),
+        _worker(HeavyWorkerSettings),
+    ]
     loop = asyncio.get_running_loop()
 
     def stop(sig: signal.Signals) -> None:
