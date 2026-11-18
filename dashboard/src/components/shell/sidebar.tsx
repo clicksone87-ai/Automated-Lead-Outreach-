@@ -1,10 +1,12 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ChevronsLeft, Sparkles } from "lucide-react";
+import { ChevronsLeft } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BrandLockup } from "@/components/brand/brand-mark";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useLive } from "@/lib/live";
 import { useOverview } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { NAV } from "./nav";
@@ -26,6 +28,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const { data: overview } = useOverview();
+  const live = useLive();
   const badges: Record<string, number | undefined> = {
     "/leads": overview?.leads_today || undefined,
   };
@@ -40,23 +43,15 @@ export function Sidebar({
       )}
       aria-label="Main navigation"
     >
-      <div className={cn("flex h-14 items-center gap-2.5 px-4", collapsed && "justify-center px-0")}>
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-glow">
-          <Sparkles className="size-4" aria-hidden />
-        </div>
-        {!collapsed && (
-          <div className="min-w-0 leading-tight">
-            <div className="truncate text-sm font-semibold text-foreground">Leads Engine</div>
-            <div className="truncate text-[11px] text-muted-foreground">Agency automation</div>
-          </div>
-        )}
-      </div>
+      <Link href="/" onClick={onNavigate} className={cn("flex h-16 items-center px-4", collapsed && "justify-center px-0")} aria-label="Leads Engine overview">
+        <BrandLockup live={live.connected} compact={collapsed} />
+      </Link>
 
       <nav className="scrollbar-thin flex-1 space-y-5 overflow-y-auto px-3 py-3">
         {NAV.map((group) => (
           <div key={group.label}>
             {!collapsed && (
-              <div className="px-2 pb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
+              <div className="px-2 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-sidebar-muted">
                 {group.label}
               </div>
             )}
@@ -71,25 +66,25 @@ export function Sidebar({
                     aria-current={active ? "page" : undefined}
                     className={cn(
                       "group relative flex h-9 items-center gap-3 rounded-lg px-2.5 text-sm font-medium transition-colors",
-                      "hover:bg-sidebar-active hover:text-foreground",
-                      active && "bg-sidebar-active text-foreground shadow-xs ring-1 ring-sidebar-border",
+                      "hover:bg-sidebar-active hover:text-sidebar-strong",
+                      active && "bg-sidebar-active text-sidebar-strong ring-1 ring-inset ring-white/[0.06]",
                       collapsed && "justify-center px-0",
                     )}
                   >
                     {active && (
                       <motion.span
                         layoutId="nav-active"
-                        className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-primary"
+                        className="absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-brand-gradient"
                         transition={{ duration: 0.25 }}
                       />
                     )}
                     <item.icon
-                      className={cn("size-4 shrink-0", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground")}
+                      className={cn("size-4 shrink-0 transition-colors", active ? "text-sidebar-accent" : "text-sidebar-muted group-hover:text-sidebar-strong")}
                       aria-hidden
                     />
                     {!collapsed && <span className="truncate">{item.label}</span>}
                     {!collapsed && badge ? (
-                      <span className="tabular ml-auto rounded-full bg-primary-soft px-1.5 text-[11px] font-semibold text-primary-soft-foreground">
+                      <span className="tabular ml-auto rounded-full bg-brand-gradient px-1.5 text-[11px] font-semibold text-white">
                         {badge}
                       </span>
                     ) : null}
@@ -119,14 +114,14 @@ export function Sidebar({
             type="button"
             onClick={onToggle}
             className={cn(
-              "flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-sidebar-active hover:text-foreground",
+              "flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-sidebar-muted transition-colors hover:bg-sidebar-active hover:text-sidebar-strong",
               collapsed && "justify-center px-0",
             )}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             <ChevronsLeft className={cn("size-4 transition-transform", collapsed && "rotate-180")} aria-hidden />
             {!collapsed && <span>Collapse</span>}
-            {!collapsed && <kbd className="ml-auto rounded border bg-background px-1 font-mono text-[10px]">[</kbd>}
+            {!collapsed && <kbd className="ml-auto rounded border border-sidebar-border px-1 font-mono text-[10px]">[</kbd>}
           </button>
         </div>
       )}
