@@ -57,6 +57,9 @@ class RuntimeSettings(BaseModel):
     target_countries: list[str] = Field(default_factory=lambda: ["US", "GB"])
     active_industry: str = "home_services"
     min_intent_score: int = Field(default=60, ge=0, le=100)
+    # Fast lane: leads per batch LLM scoring call, and leads processed side by side
+    scoring_batch_size: int = Field(default=20, ge=1, le=40)
+    fast_lane_concurrency: int = Field(default=4, ge=1, le=12)
     # Prefilter: oldest post (hours) worth acting on, per source family ("default" for the rest)
     max_post_age_hours: dict[str, int] = Field(
         default_factory=lambda: {"social": 24, "default": 168}

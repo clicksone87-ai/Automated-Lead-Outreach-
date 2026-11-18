@@ -141,6 +141,7 @@ class ApprovalStatus(StrEnum):
     APPROVED = "approved"
     REJECTED = "rejected"
     AUTO_APPROVED = "auto_approved"
+    SUPERSEDED = "superseded"  # replaced by a newer draft (e.g. one with the heavy-lane assets)
 
 
 class DeliveryStatus(StrEnum):

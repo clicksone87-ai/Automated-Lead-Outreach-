@@ -11,7 +11,7 @@ import uuid
 from typing import Any, ClassVar, Self
 
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.adapters.llm import LLMOutputError, LLMRequest
 from app.db.models import (
@@ -77,6 +77,20 @@ SYSTEM = (
 )
 
 
+ASSET_NAMES = {"logo": "logo concepts", "preview": "a website preview", "audit": "a website audit"}
+
+
+def _assets_line(attached: list[str]) -> str:
+    """What the email may say about drafts: only what is really attached."""
+    names = [ASSET_NAMES[k] for k in ("logo", "preview", "audit") if k in attached]
+    if names:
+        return f"We already prepared free drafts for them, attached to this email: {', '.join(names)}.\n"
+    return (
+        "Nothing is attached. Offer to prepare free drafts (logo concepts or a website preview) "
+        "if they are interested; never say anything is attached or already made.\n"
+    )
+
+
 class ProposalAgent:
     name: ClassVar[str] = "proposal"
     expensive: ClassVar[bool] = True
@@ -118,6 +132,7 @@ class ProposalAgent:
 
         facts = await self._facts(ctx, lead)
         allowed = {f["evidence_id"] for f in facts}
+        attachments, preview_url = await self._attachments(ctx, lead)
         draft: ProposalDraft | None = None
         problem = ""
         for attempt in (1, 2):
@@ -134,6 +149,7 @@ class ProposalAgent:
                             language=language,
                             attempt=attempt,
                             problem=problem,
+                            attached=sorted({a["kind"].split("_")[0] for a in attachments}),
                         ),
                         lead_id=lead.id,
                         max_output_tokens=2000,
@@ -153,7 +169,6 @@ class ProposalAgent:
         if draft is None:
             return AgentOutcome(False, LeadStatus.NEEDS_REVIEW, f"proposal rejected: {problem}")
 
-        attachments, preview_url = await self._attachments(ctx, lead)
         email = contact.value if contact.type == ContactType.EMAIL else None
         token = make_token(ctx.settings, business.id, email or f"lead:{lead.id}")
         sender = {
@@ -226,6 +241,14 @@ class ProposalAgent:
                 "unsubscribe_url": unsubscribe_url(ctx.settings, token),
             },
         )
+        await s.execute(
+            update(Proposal)
+            .where(
+                Proposal.lead_id == lead.id,
+                Proposal.approval_status.in_([ApprovalStatus.PENDING, ApprovalStatus.DRAFT]),
+            )
+            .values(approval_status=ApprovalStatus.SUPERSEDED)
+        )
         s.add(proposal)
         await s.flush()
         if email is None:
@@ -267,7 +290,7 @@ class ProposalAgent:
 
     @staticmethod
     def _task(*, business: Business, brief: dict[str, Any], facts: list[dict[str, Any]], language: str,
-              attempt: int, problem: str) -> str:  # fmt: skip
+              attempt: int, problem: str, attached: list[str] | None = None) -> str:  # fmt: skip
         lines = [
             f"- evidence_id={f['evidence_id']} [{f['severity']}] {f['title']}: {f['detail']}"
             for f in facts
@@ -281,9 +304,9 @@ class ProposalAgent:
         return (
             f"Write a first email to {business.name} ({brief.get('business_type') or 'local business'}"
             f"{', ' + str(brief.get('location')) if brief.get('location') else ''}) in language '{language}'.\n"
-            f"We can help with: {services}. We already prepared free drafts for them "
-            "(logo concepts and/or a website preview, and an audit) which are attached.\n"
-            "Findings you may use as claims (copy the evidence_id exactly):\n"
+            f"We can help with: {services}. "
+            + _assets_line(attached or [])
+            + "Findings you may use as claims (copy the evidence_id exactly):\n"
             + ("\n".join(lines) if lines else "(none — make no factual claims)")
             + retry
             + "\nKeep it under 150 words. Subject: specific and calm, no clickbait."
