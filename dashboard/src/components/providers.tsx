@@ -1,6 +1,7 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MotionConfig } from "framer-motion";
 import { ThemeProvider } from "next-themes";
 import { useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
@@ -25,8 +26,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={client}>
         <LiveEvents>
           <TooltipProvider delayDuration={250}>
-            {children}
-            <Toaster />
+            {/* Every framer-motion animation follows the OS "reduce motion" setting. */}
+            <MotionConfig reducedMotion="user">
+              {children}
+              <Toaster />
+            </MotionConfig>
           </TooltipProvider>
         </LiveEvents>
       </QueryClientProvider>

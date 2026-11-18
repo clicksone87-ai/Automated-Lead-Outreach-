@@ -34,7 +34,7 @@ function HealthIndicator() {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div className="flex h-8 items-center gap-2 rounded-lg border bg-surface-raised px-2.5 text-xs font-medium" role="status" aria-label={label}>
+        <div className="flex h-8 shrink-0 items-center gap-2 rounded-full border bg-surface-raised px-3 text-xs font-medium" role="status" aria-label={label}>
           <span className="relative flex size-2">
             {ok && live.connected && (
               <span className={cn("absolute inline-flex size-full animate-ping rounded-full opacity-60", tone)} />
@@ -65,11 +65,12 @@ function TestingModeBadge() {
       <TooltipTrigger asChild>
         <Link
           href="/sources"
-          className="flex h-8 items-center gap-1.5 rounded-lg bg-warning-soft px-2.5 text-xs font-semibold text-warning-soft-foreground ring-1 ring-inset ring-warning/30"
+          className="flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-warning-soft px-3 text-xs font-semibold text-warning-soft-foreground ring-1 ring-inset ring-warning/30"
         >
           <FlaskConical className="size-3.5" aria-hidden />
-          <span className="hidden sm:inline">Testing mode — free tier</span>
-          <span className="sm:hidden">Testing</span>
+          <span className="hidden xl:inline">Testing mode · free tier</span>
+          <span className="hidden sm:inline xl:hidden">Testing</span>
+          <span className="sr-only sm:hidden">Testing mode</span>
         </Link>
       </TooltipTrigger>
       <TooltipContent>Live free-tier APIs only. Paid integrations are off and every email goes to Mailpit (nothing is really sent).</TooltipContent>
@@ -86,10 +87,10 @@ function BudgetIndicator() {
       <TooltipTrigger asChild>
         <Link
           href="/settings#budgets"
-          className="hidden h-8 min-w-[196px] flex-col justify-center gap-1 rounded-lg border bg-surface-raised px-2.5 lg:flex"
+          className="hidden h-8 w-[200px] shrink-0 flex-col justify-center gap-1 rounded-full border bg-surface-raised px-3.5 xl:flex"
           aria-label="Budget used this month"
         >
-          <div className="flex items-center justify-between gap-3 text-[11px] font-medium">
+          <div className="flex items-center justify-between gap-3 whitespace-nowrap text-[11px] font-medium">
             <span className="text-muted-foreground">Budget (month)</span>
             <span className="tabular">
               {!budget ? "—" : blocked ? "Paid calls blocked" : `${usd(budget.spent_month)} / ${usd(budget.monthly_cap, 0)}`}
@@ -118,10 +119,11 @@ function AutonomyBadge() {
       <TooltipTrigger asChild>
         <Link
           href="/settings#autonomy"
-          className="flex h-8 items-center gap-1.5 rounded-lg bg-primary-soft px-2.5 text-xs font-semibold text-primary-soft-foreground ring-1 ring-inset ring-primary/20 transition-colors hover:bg-primary-soft/80"
+          className="hidden h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-primary-soft px-3 sm:flex text-xs font-semibold text-primary-soft-foreground ring-1 ring-inset ring-primary/20 transition-colors hover:bg-primary-soft/80"
         >
           <ShieldCheck className="size-3.5" aria-hidden />
-          <span>Autonomy · {copy.label}</span>
+          <span className="hidden lg:inline">Autonomy ·</span>
+          <span>{copy.label}</span>
         </Link>
       </TooltipTrigger>
       <TooltipContent>{copy.hint}</TooltipContent>
@@ -132,21 +134,21 @@ function AutonomyBadge() {
 export function Topbar({ onOpenSearch, onOpenMobileNav }: { onOpenSearch: () => void; onOpenMobileNav: () => void }) {
   const { resolvedTheme, setTheme } = useTheme();
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur-xl md:px-6">
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-background/75 px-4 backdrop-blur-xl md:px-6">
       <Button variant="ghost" size="icon" className="md:hidden" onClick={onOpenMobileNav} aria-label="Open navigation">
         <Menu className="size-4" />
       </Button>
       <button
         type="button"
         onClick={onOpenSearch}
-        className="group flex h-8 w-full max-w-sm items-center gap-2 rounded-lg border bg-surface-raised px-2.5 text-sm text-muted-foreground shadow-xs transition-colors hover:border-border-strong hover:text-foreground"
+        className="group flex h-9 w-full min-w-0 max-w-sm items-center gap-2 rounded-full border bg-surface-raised px-3.5 text-sm text-muted-foreground shadow-xs transition-colors hover:border-border-strong hover:text-foreground"
         aria-label="Search (Ctrl+K)"
       >
         <Search className="size-3.5" aria-hidden />
         <span className="truncate">Search leads, pages, actions…</span>
         <kbd className="ml-auto hidden rounded border bg-background px-1.5 font-mono text-[10px] sm:inline">⌘K</kbd>
       </button>
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
         <TestingModeBadge />
         <AutonomyBadge />
         <BudgetIndicator />
