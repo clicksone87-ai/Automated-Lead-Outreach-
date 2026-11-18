@@ -19,6 +19,7 @@ from app.agents.discovery.sources import SOURCES
 from app.api.deps import AdaptersDep, SessionDep, SettingsDep
 from app.config import integration_status
 from app.db.session import session_scope
+from app.orchestrator import lanes
 from app.orchestrator.queue import enqueue_pipeline, enqueue_source
 from app.schemas import (
     ActivityOut,
@@ -136,6 +137,19 @@ async def rerun_lead(lead_id: uuid.UUID, session: SessionDep) -> dict[str, bool]
     except KeyError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "lead not found") from exc
     return {"queued": await enqueue_pipeline(lead_id)}
+
+
+@router.post("/leads/{lead_id}/assets", status_code=status.HTTP_202_ACCEPTED)
+async def generate_assets(lead_id: uuid.UUID, session: SessionDep) -> dict[str, bool]:
+    """Send one lead to the heavy lane: logos, website preview and the full audit."""
+    try:
+        await lanes.request_assets(session, lead_id)
+    except KeyError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "lead not found") from exc
+    except lanes.AssetsRequestError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await session.commit()
+    return {"queued": await lanes.send_to_heavy([lead_id], requested_by="dashboard") == 1}
 
 
 @router.get("/sources", response_model=list[SourceOut])

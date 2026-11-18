@@ -49,6 +49,12 @@ async def enqueue_fast_batch(lead_ids: list[uuid.UUID]) -> bool:
     return job is not None
 
 
+async def enqueue_heavy(lead_id: uuid.UUID) -> bool:
+    pool = await get_pool()
+    job = await pool.enqueue_job("run_heavy_job", str(lead_id), _job_id=f"heavy:{lead_id}")
+    return job is not None
+
+
 async def enqueue_source(key: str, slot: str, *, force: bool = False) -> bool:
     pool = await get_pool()
     job = await pool.enqueue_job("run_source_job", key, force, _job_id=f"source:{key}:{slot}")

@@ -18,13 +18,13 @@ from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.registry import Adapters, get_adapters
 from app.agents.requirements.batch import classify_batch
 from app.config import Settings, get_settings
-from app.db.models import ApprovalStatus, Lead, LeadStatus, Proposal, TriggerType
+from app.db.models import ApprovalStatus, Brief, Lead, LeadStatus, Proposal, TriggerType
 from app.db.session import session_scope
 from app.orchestrator import pipeline
 from app.orchestrator.agents import load_agents
@@ -258,6 +258,101 @@ async def run_heavy(lead_id: uuid.UUID, adapters: Adapters | None = None) -> Pip
         raise
     await _finish(lead_id, "heavy", state)
     return state
+
+
+HEAVY_AGENTS = {"audit", "branding", "website_builder"}
+HEAVY_READY = (LeadStatus.AWAITING_APPROVAL, LeadStatus.APPROVED)
+GEMINI_PER_HEAVY_LEAD = 8  # logos (3 + repairs), site copy, vision review, proposal
+
+
+class AssetsRequestError(Exception):
+    pass
+
+
+def _heavy_work(brief: dict[str, Any] | None) -> bool:
+    return bool(HEAVY_AGENTS & set((brief or {}).get("agents_to_run", [])))
+
+
+async def heavy_slots_left(session: AsyncSession, daily_limit: int) -> int:
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    used = (
+        await session.execute(
+            select(func.count()).where(
+                Lead.lane_timings["heavy"]["queued"].astext >= today.isoformat()
+            )
+        )
+    ).scalar_one()
+    return max(0, daily_limit - int(used))
+
+
+async def pick_for_heavy(session: AsyncSession, *, now: datetime | None = None) -> list[uuid.UUID]:
+    """Today's best leads that finished the fast lane, up to the daily heavy-lane limit:
+    a verified email first, then intent, then the newest."""
+    now = now or datetime.now(UTC)
+    rs = await runtime_settings.load(session)
+    slots = await heavy_slots_left(session, rs.heavy_lane_daily_limit)
+    if slots <= 0:
+        return []
+    since = (now - timedelta(days=1)).isoformat()
+    rows = (
+        await session.execute(
+            select(Lead, Brief.data)
+            .join(Brief, Brief.lead_id == Lead.id)
+            .where(
+                or_(Lead.lane.is_(None), Lead.lane == "fast"),
+                Lead.status.in_([str(x) for x in HEAVY_READY]),
+                Lead.intent_score >= rs.heavy_lane_min_score,
+                Lead.lane_timings["fast"]["finished"].astext >= since,
+            )
+        )
+    ).all()
+    candidates = [lead for lead, brief in rows if _heavy_work(brief)]
+    candidates.sort(
+        key=lambda lead: (
+            lead.pipeline_state.get("contact_channel") == "email",
+            lead.intent_score or 0,
+            lead.created_at,
+        ),
+        reverse=True,
+    )
+    return [lead.id for lead in candidates[:slots]]
+
+
+async def send_to_heavy(lead_ids: Sequence[uuid.UUID], *, requested_by: str) -> int:
+    from app.orchestrator.queue import enqueue_heavy  # noqa: PLC0415
+
+    queued = 0
+    for lead_id in lead_ids:
+        async with session_scope() as s:
+            lead = await s.get(Lead, lead_id)
+            if lead is None:
+                continue
+            lead.lane = "heavy"
+        if await enqueue_heavy(lead_id):
+            await mark([lead_id], "heavy", queued=_now(), requested_by=requested_by,
+                       started=None, finished=None, seconds=None)  # fmt: skip
+            queued += 1
+    return queued
+
+
+async def request_assets(session: AsyncSession, lead_id: uuid.UUID) -> None:
+    """Checks for the dashboard's "Generate assets" button. A person chose this lead, so the
+    daily heavy-lane limit does not apply; free-tier caps still do."""
+    lead = await session.get(Lead, lead_id)
+    if lead is None:
+        raise KeyError(lead_id)
+    brief = await session.get(Brief, lead_id)
+    if brief is None:
+        raise AssetsRequestError("the lead has not been qualified yet")
+    if not lead.pipeline_state.get("contact_id"):
+        raise AssetsRequestError("no contact route: assets are only made for reachable leads")
+    if lead.status in (LeadStatus.SUPPRESSED, LeadStatus.SENT, LeadStatus.REPLIED):
+        raise AssetsRequestError(f"lead is {lead.status}")
+    if not _heavy_work(brief.data):
+        raise AssetsRequestError("this lead needs no logo, preview or audit (SEO only, no site)")
+    heavy = (lead.lane_timings or {}).get("heavy") or {}
+    if heavy.get("queued") and not heavy.get("finished") and not heavy.get("deferred"):
+        raise AssetsRequestError("assets are already being generated")
 
 
 # ── resume ──────────────────────────────────────────────────────────────────
