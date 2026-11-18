@@ -78,6 +78,20 @@ def _client(ctx: SourceContext) -> ApifyClient:
     return ApifyClient(token.get_secret_value())
 
 
+MAX_POST_AGE: timedelta = timedelta(hours=8)
+
+
+def _is_recent(dt: datetime | None, max_age: timedelta = MAX_POST_AGE) -> bool:
+    """Strict post age cutoff: only posts from the last 8 hours (V2 Social Sources).
+
+    Undated items are kept: some Facebook results carry no time, and dropping them would
+    hide real requests. Every dated item older than the cutoff is dropped.
+    """
+    if dt is None:
+        return True
+    return dt >= datetime.now(UTC) - max_age
+
+
 def _parse_dt(value: Any) -> datetime | None:
     if value in (None, ""):
         return None
@@ -187,6 +201,9 @@ class ApifyXSource(_ApifySource):
         for t in items:
             if t.get("isRetweet") or not t.get("id"):
                 continue
+            posted = _parse_dt(t.get("createdAt"))
+            if posted and not _is_recent(posted):
+                continue
             text = str(t.get("fullText") or t.get("text") or "")
             author = t.get("author") or {}
             handle = author.get("userName") if isinstance(author, dict) else None
@@ -198,7 +215,7 @@ class ApifyXSource(_ApifySource):
                     url,
                     text,
                     handle=handle,
-                    posted=_parse_dt(t.get("createdAt")),
+                    posted=posted,
                     extra={
                         "lang": t.get("lang"),
                         "location": author.get("location") if isinstance(author, dict) else None,
@@ -214,7 +231,7 @@ class ApifyInstagramSource(_ApifySource):
     key: ClassVar[str] = "social_instagram"
     label: ClassVar[str] = "Instagram (via Apify)"
     description: ClassVar[str] = "Public posts on request hashtags (need a website / logo)."
-    default_schedule_minutes: ClassVar[int] = 1440
+    default_schedule_minutes: ClassVar[int] = 480  # matches the 8-hour post cutoff
     constraints: ClassVar[str] = (
         "Licensed provider (apify/instagram-hashtag-scraper); public hashtag posts only; "
         "read-only; capped per run and per month."
@@ -242,6 +259,9 @@ class ApifyInstagramSource(_ApifySource):
         for p in items:
             if not p.get("id") or not p.get("url"):
                 continue
+            posted = _parse_dt(p.get("timestamp"))
+            if posted and not _is_recent(posted):
+                continue
             leads.append(
                 _lead(
                     "instagram",
@@ -249,7 +269,7 @@ class ApifyInstagramSource(_ApifySource):
                     str(p["url"]),
                     str(p.get("caption") or ""),
                     handle=p.get("ownerUsername"),
-                    posted=_parse_dt(p.get("timestamp")),
+                    posted=posted,
                     extra={
                         "hashtag": tags[0] if tags else None,
                         "owner_name": p.get("ownerFullName"),
@@ -268,7 +288,7 @@ class ApifyFacebookSource(_ApifySource):
         "Public posts asking for a web designer (keyword search) plus configured PUBLIC "
         "groups and pages."
     )
-    default_schedule_minutes: ClassVar[int] = 1440
+    default_schedule_minutes: ClassVar[int] = 480  # matches the 8-hour post cutoff
     constraints: ClassVar[str] = (
         "Licensed provider (apify/facebook-search-scraper, facebook-groups-scraper, "
         "facebook-posts-scraper); public pages and PUBLIC groups only — never private groups "
@@ -329,10 +349,12 @@ class ApifyFacebookSource(_ApifySource):
             {"categories": kw, "searchType": "posts", "resultsLimit": n},
             source=self.key,
         )
-        leads += [x for p in items if (x := self._map(p, "search"))]
+        leads += [x for p in items if (x := self._map(p, "search")) and _is_recent(x.posted_at)]
         groups = [g for g in ctx.config.get("public_group_urls") or [] if "/groups/" in str(g)]
         if groups:
-            since = (datetime.now(UTC) - timedelta(days=7)).strftime("%Y-%m-%d")
+            since = (datetime.now(UTC) - MAX_POST_AGE).strftime(
+                "%Y-%m-%d"
+            )  # day precision; filtered below
             g = _rotate(ctx, "group", groups, 1)
             try:
                 gitems = await _run(
@@ -346,7 +368,11 @@ class ApifyFacebookSource(_ApifySource):
                     },
                     source=self.key,
                 )
-                leads += [x for p in gitems if (x := self._map(p, "public_group"))]
+                leads += [
+                    x
+                    for p in gitems
+                    if (x := self._map(p, "public_group")) and _is_recent(x.posted_at)
+                ]
             except SourceDegradedError as exc:
                 ctx.state["_degraded"] = f"group run failed: {exc}"
         pages = list(ctx.config.get("public_page_urls") or [])
@@ -359,7 +385,11 @@ class ApifyFacebookSource(_ApifySource):
                     {"startUrls": [{"url": u} for u in pg], "resultsLimit": n},
                     source=self.key,
                 )
-                leads += [x for p in pitems if (x := self._map(p, "public_page"))]
+                leads += [
+                    x
+                    for p in pitems
+                    if (x := self._map(p, "public_page")) and _is_recent(x.posted_at)
+                ]
             except SourceDegradedError as exc:
                 ctx.state["_degraded"] = f"page run failed: {exc}"
         if not items and not leads:
@@ -396,7 +426,7 @@ class ApifyRedditSource(_ApifySource):
                 "subredditName": sub,
                 "subredditKeywords": list(ctx.config.get("keywords") or ["website"]),
                 "subredditSort": "new",
-                "subredditTimeframe": "week",
+                "subredditTimeframe": "day",
                 "maxPosts": int(ctx.config.get("max_items", 8)),
                 "scrapeComments": False,
             },
@@ -405,6 +435,9 @@ class ApifyRedditSource(_ApifySource):
         leads = []
         for p in items:
             if p.get("kind", "post") != "post" or p.get("is_deleted_or_removed"):
+                continue
+            posted = _parse_dt(p.get("created_utc"))
+            if posted and not _is_recent(posted):
                 continue
             text = f"{p.get('title') or ''}\n\n{p.get('body') or ''}".strip()
             url = str(p.get("url") or f"https://www.reddit.com{p.get('permalink', '')}")
@@ -416,7 +449,7 @@ class ApifyRedditSource(_ApifySource):
                     text,
                     title=p.get("title"),
                     handle=p.get("author"),
-                    posted=_parse_dt(p.get("created_utc")),
+                    posted=posted,
                     extra={"subreddit": p.get("subreddit")},
                 )
             )

@@ -463,6 +463,67 @@
     }
    }
   },
+  "/api/leads/{lead_id}/generate-preview": {
+   "post": {
+    "summary": "Generate Preview",
+    "description": "Heavy lane on demand: audit (if they have a site), logo concepts and a website preview.",
+    "operationId": "generate_preview_api_leads__lead_id__generate_preview_post",
+    "parameters": [
+     {
+      "name": "lead_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Lead Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "202": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "boolean"
+         },
+         "title": "Response Generate Preview Api Leads  Lead Id  Generate Preview Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/sources": {
    "get": {
     "summary": "List Sources",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 from arq import ArqRedis, create_pool
 from arq.connections import RedisSettings
@@ -11,6 +12,7 @@ from app.config import get_settings
 
 DEFAULT_QUEUE = "arq:queue"
 SCHEDULER_QUEUE = "arq:scheduler"
+HEAVY_QUEUE = "arq:heavy"  # audit, logos, website builds: own worker, never blocks fast lane
 
 _pool: ArqRedis | None = None
 
@@ -41,4 +43,18 @@ async def enqueue_pipeline(lead_id: uuid.UUID) -> bool:
 async def enqueue_source(key: str, slot: str, *, force: bool = False) -> bool:
     pool = await get_pool()
     job = await pool.enqueue_job("run_source_job", key, force, _job_id=f"source:{key}:{slot}")
+    return job is not None
+
+
+async def enqueue_heavy(lead_id: uuid.UUID) -> bool:
+    """Queue the heavy lane on its own queue.
+
+    Callers guard against duplicates with the lead's heavy-lane state; the job id carries a
+    timestamp so a finished job's kept result never blocks a later request.
+    """
+    pool = await get_pool()
+    slot = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+    job = await pool.enqueue_job(
+        "run_heavy", str(lead_id), _job_id=f"heavy:{lead_id}:{slot}", _queue_name=HEAVY_QUEUE
+    )
     return job is not None

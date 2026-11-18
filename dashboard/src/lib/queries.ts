@@ -179,3 +179,19 @@ export function useRerunLead() {
     onError: errorToast("Could not queue re-run"),
   });
 }
+
+/** Heavy lane on demand: audit, logo concepts and a website preview for one lead. */
+export function useGeneratePreview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.POST("/api/leads/{lead_id}/generate-preview", { params: { path: { lead_id: id } } })),
+    onSuccess: (d, id) => {
+      const res = d as { queued?: boolean; already_running?: boolean } | undefined;
+      if (res?.already_running) toast.info("Previews are already being made for this lead");
+      else toast.success("Preview generation queued — logos and website appear in Drafts when ready");
+      qc.invalidateQueries({ queryKey: qk.lead(id) });
+    },
+    onError: errorToast("Could not queue preview generation"),
+  });
+}

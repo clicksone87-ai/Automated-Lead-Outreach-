@@ -191,3 +191,84 @@ async def test_one_lead_through_the_whole_pipeline(tmp_path: Path) -> None:
     email = mailpit.inbox[0]
     assert email.to == "info@acme.example.com" and "List-Unsubscribe" in email.headers
     assert {a.filename for a in email.attachments} >= {"website-audit.pdf", "website-preview.pdf"}
+
+
+async def test_fast_lane_drafts_then_heavy_lane_redrafts_with_assets(tmp_path: Path) -> None:
+    """V2 speed split: fast lane drafts without assets; heavy lane builds them and redrafts."""
+    settings = Settings(_env_file=None, demo_mode=True, data_dir=tmp_path, sender_name="Sam",  # type: ignore[call-arg]
+                        sender_business_name="Test Agency", sender_postal_address="1 Test St",
+                        portfolio_url="https://example.com")  # fmt: skip
+    adapters = build_adapters(settings)
+    adapters.fetcher = _fetcher()
+    adapters.email = Mailpit()
+    agents = {
+        "requirements": RequirementsAgent(),
+        "contact_enrichment": ContactEnrichmentAgent(),
+        "audit": AuditAgent(
+            browser_factory=lambda: GuardedBrowser(fulfill={SITE: (200, "text/html", HOME)})
+        ),
+        "branding": BrandingAgent(browser_factory=FakeRender),
+        "website_builder": WebsiteBuilderAgent(builder=fake_build, tester=fake_tests),
+        "quality_check": QualityCheckAgent(),
+        "proposal": ProposalAgent(),
+        "outreach": OutreachAgent(),
+    }
+    async with session_scope() as s:
+        biz = Business(name="Acme Plumbing Ltd", normalized_name="acme plumbing", domain="acme.example.com",
+                       country="US", address="Austin, TX", industry="home_services", has_website=True)  # fmt: skip
+        s.add(biz)
+        await s.flush()
+        lead = Lead(business_id=biz.id, source="rss", source_url="https://forum.example.com/t/2",
+                    source_item_id=uuid.uuid4().hex, trigger_type="explicit_request", country="US",
+                    language="en", timezone="America/Chicago", status="discovered", pipeline_state={},
+                    title="Need a website redesign and a new logo",
+                    raw_text="We need a website redesign and a new logo for our plumbing business. Budget $2000, asap.")  # fmt: skip
+        s.add(lead)
+        await s.flush()
+        lead_id = lead.id
+    start = {"lead_id": str(lead_id), "completed": [], "stopped_at": None, "reason": ""}
+
+    fast = await build_graph(agents, adapters, settings, lane="fast").ainvoke(start)
+    assert fast["completed"] == ["requirements", "contact_enrichment", "proposal"], fast
+    assert fast["stopped_at"] == "proposal"
+    async with session_scope() as s:
+        v1 = (await s.execute(select(Proposal).where(Proposal.lead_id == lead_id))).scalar_one()
+        assert v1.attachments == [] and v1.approval_status == "pending"
+        from app.db.models import Audit  # noqa: PLC0415
+
+        assert (
+            await s.execute(select(Audit).where(Audit.lead_id == lead_id))
+        ).scalar_one_or_none() is None
+
+    heavy = await build_graph(agents, adapters, settings, lane="heavy").ainvoke(start)
+    assert heavy["completed"] == [
+        "audit",
+        "branding",
+        "website_builder",
+        "quality_check",
+        "proposal",
+    ], heavy
+    assert heavy["stopped_at"] == "proposal"  # Stage 1: the redraft waits for a human
+    async with session_scope() as s:
+        rows = (
+            (
+                await s.execute(
+                    select(Proposal).where(Proposal.lead_id == lead_id).order_by(Proposal.version)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert [p.version for p in rows] == [1, 2]
+    assert rows[0].approval_status == "rejected" and "superseded" in (
+        rows[0].rejection_reason or ""
+    )
+    assert rows[1].approval_status == "pending" and rows[1].attachments and rows[1].claims
+
+    again = await build_graph(agents, adapters, settings, lane="heavy").ainvoke(start)
+    assert again["stopped_at"] == "proposal"
+    async with session_scope() as s:
+        count = len(
+            (await s.execute(select(Proposal).where(Proposal.lead_id == lead_id))).scalars().all()
+        )
+    assert count == 2  # a draft that already has its assets is not redrafted

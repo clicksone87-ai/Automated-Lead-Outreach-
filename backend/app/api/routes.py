@@ -17,8 +17,10 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.api.deps import AdaptersDep, SessionDep, SettingsDep
 from app.config import integration_status
+from app.db.models import Lead
 from app.db.session import session_scope
-from app.orchestrator.queue import enqueue_pipeline, enqueue_source
+from app.orchestrator import lanes
+from app.orchestrator.queue import enqueue_heavy, enqueue_pipeline, enqueue_source
 from app.schemas import (
     ActivityOut,
     AuditDetail,
@@ -127,6 +129,22 @@ async def rerun_lead(lead_id: uuid.UUID, session: SessionDep) -> dict[str, bool]
     except KeyError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "lead not found") from exc
     return {"queued": await enqueue_pipeline(lead_id)}
+
+
+@router.post("/leads/{lead_id}/generate-preview", status_code=status.HTTP_202_ACCEPTED)
+async def generate_preview(lead_id: uuid.UUID, session: SessionDep) -> dict[str, bool]:
+    """Heavy lane on demand: audit (if they have a site), logo concepts and a website preview."""
+    lead = await session.get(Lead, lead_id)
+    if lead is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "lead not found")
+    if lanes.is_active(lead):
+        return {"queued": False, "already_running": True}
+    try:
+        await lanes.request(session, lead_id)
+    except LookupError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await session.commit()  # the heavy worker must see the updated brief
+    return {"queued": await enqueue_heavy(lead_id), "already_running": False}
 
 
 @router.get("/sources", response_model=list[SourceOut])
