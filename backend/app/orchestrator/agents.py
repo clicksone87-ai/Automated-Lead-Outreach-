@@ -41,8 +41,10 @@ class LeadAgent(Protocol):
 
 # Pipeline order. Discovery creates leads and is not a per-lead step.
 PIPELINE_ORDER: tuple[str, ...] = (
+    "prefilter",
     "requirements",
     "contact_enrichment",
+    "audit_light",
     "audit",
     "branding",
     "website_builder",
