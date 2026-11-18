@@ -80,6 +80,11 @@ class Settings(BaseSettings):
     apify_api_token: SecretStr | None = None
     apify_monthly_cap_usd: float = Field(default=5.0, ge=0)
 
+    # Scout profiles: official APIs (both optional; free)
+    twitch_client_id: SecretStr | None = None
+    twitch_client_secret: SecretStr | None = None
+    github_token: SecretStr | None = None
+
     # PageSpeed free quota guard (Google's own limit is far higher)
     pagespeed_daily_cap: int = Field(default=400, ge=0)
 

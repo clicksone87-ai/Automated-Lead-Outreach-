@@ -19,6 +19,7 @@ export const qk = {
   audit: (leadId: string) => ["audit", leadId] as const,
   freeTier: ["free-tier"] as const,
   gallery: ["gallery"] as const,
+  platforms: (days: number) => ["platforms", days] as const,
 };
 
 export interface LeadFilters {
@@ -193,5 +194,14 @@ export function useGeneratePreview() {
       qc.invalidateQueries({ queryKey: qk.lead(id) });
     },
     onError: errorToast("Could not queue preview generation"),
+  });
+}
+
+/** Leads per social platform (X, Reddit, Instagram, Facebook) over the last `days`. */
+export function usePlatformReport(days = 7) {
+  return useQuery({
+    queryKey: qk.platforms(days),
+    queryFn: () => unwrap(api.GET("/api/reports/platforms", { params: { query: { days } } })),
+    ...LIVE,
   });
 }

@@ -1,13 +1,14 @@
 """Contact enrichment agent: finds a usable contact route before any drafting money is spent.
 
-Checked in order: an email in the lead's own post, the business website, the post author's
-public Instagram bio, then the platform's public reply (manual). Emails must pass verification
-and are never guessed.
+Checked in order: an email in the lead's own post, the post author's public Instagram bio,
+link-in-bio pages (Scout), the business website, then the platform's public reply or profile
+DM (manual). Emails must pass verification and are never guessed.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -25,6 +26,8 @@ from app.agents.contact_enrichment.extract import (
     extract_emails,
     rank_email,
 )
+from app.agents.scout.client import ScoutClient
+from app.agents.scout.parsers import LINK_HUBS, is_link_hub
 from app.db.models import (
     Business,
     Contact,
@@ -53,9 +56,13 @@ PLATFORM_SOURCES = {
     "social_instagram",
     "social_facebook",
     "social_reddit",
+    "scout_profiles",
 }
+#: Profile leads (no post to reply to): the manual route is a DM on the profile.
+PROFILE_SOURCES = {"scout_profiles"}
 INSTAGRAM_PROFILE_ACTOR = "apify/instagram-profile-scraper"
-LINK_HUBS = {"linktr.ee", "linkin.bio", "beacons.ai", "lnk.bio", "taplink.cc", "bio.link"}
+MAX_LINK_HUBS = 2
+_URL = re.compile(r"https?://[^\s)\"'<>,]+")
 MAX_PAGES = 6
 MAX_VERIFICATIONS = 3
 USABLE = {VerificationStatus.VALID, VerificationStatus.CATCH_ALL}
@@ -83,6 +90,8 @@ class ContactEnrichmentAgent:
         candidates = self._from_post(lead)
         if not candidates and lead.source == "social_instagram":
             candidates += await self._instagram_bio(ctx, lead, business)
+        if not candidates:
+            candidates += await self._link_hubs(ctx, lead, business)
         forms: list[tuple[str, str]] = []
         if business.domain:
             site_candidates, forms = await self._crawl_site(ctx, lead, business)
@@ -99,10 +108,9 @@ class ContactEnrichmentAgent:
                 status=VerificationStatus.NOT_APPLICABLE,
             )
         manual_route = None
-        if (
-            chosen is None
-            and lead.trigger_type == TriggerType.EXPLICIT_REQUEST
-            and lead.source in PLATFORM_SOURCES
+        if chosen is None and (
+            (lead.trigger_type == TriggerType.EXPLICIT_REQUEST and lead.source in PLATFORM_SOURCES)
+            or lead.source in PROFILE_SOURCES
         ):
             manual_route = await self._upsert(
                 s,
@@ -222,6 +230,53 @@ class ContactEnrichmentAgent:
             Candidate(f.email, profile_url, f.context)
             for f in extract_emails("\n".join(text_parts))
         ]
+
+    async def _link_hubs(
+        self, ctx: AgentContext, lead: Lead, business: Business
+    ) -> list[Candidate]:
+        """Scout bio extraction: link-in-bio pages named in the lead or its evidence.
+
+        Only hosts whose robots.txt allows crawling are read (the safe fetcher enforces it);
+        a website found there becomes the business domain so the site crawl can run.
+        """
+        from app.db.models import Evidence  # noqa: PLC0415
+
+        urls = _URL.findall("\n".join(filter(None, [lead.title, lead.raw_text])))
+        for data in (
+            await ctx.session.execute(select(Evidence.data).where(Evidence.lead_id == lead.id))
+        ).scalars():
+            urls += [str(u) for u in (data or {}).get("links") or []]
+        if business.domain in LINK_HUBS:
+            urls.append(f"https://{business.domain}/")
+        hubs = list(dict.fromkeys(u for u in urls if is_link_hub(u)))[:MAX_LINK_HUBS]
+        if not hubs:
+            return []
+        client = ScoutClient(ctx.session, ctx.adapters, ctx.settings)
+        out: list[Candidate] = []
+        for url in hubs:
+            page = await client.link_hub(url)
+            if page is None:
+                continue
+            await evidence.capture(
+                ctx.session,
+                ctx.adapters.storage,
+                kind=EvidenceKind.PAGE,
+                lead_id=lead.id,
+                business_id=business.id,
+                url=page.profile_url,
+                text="\n".join(filter(None, [page.full_name, page.bio, page.email, *page.links])),
+                file_ext="txt",
+                data={"purpose": "link_in_bio", "provider": "scout", "website": page.website,
+                      "links": page.links},
+            )  # fmt: skip
+            if page.email:
+                out.append(
+                    Candidate(page.email, page.profile_url, f"link in bio: {page.bio[:160]}")
+                )
+            site = normalize_domain(page.website) if page.website else None
+            if site and (not business.domain or business.domain in LINK_HUBS):
+                business.domain, business.has_website = site, True
+        return out
 
     @staticmethod
     async def _author_handle(ctx: AgentContext, lead: Lead) -> str | None:

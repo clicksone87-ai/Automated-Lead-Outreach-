@@ -33,13 +33,14 @@ from app.schemas import (
     LeadDetail,
     LeadPage,
     OverviewOut,
+    PlatformReport,
     SearchHit,
     SettingsOut,
     SettingsPatch,
     SourceOut,
     SourcePatch,
 )
-from app.services import admin, queries, runtime_settings
+from app.services import admin, platforms, queries, runtime_settings
 
 router = APIRouter(prefix="/api")
 public = APIRouter(prefix="/api")
@@ -145,6 +146,14 @@ async def generate_preview(lead_id: uuid.UUID, session: SessionDep) -> dict[str,
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     await session.commit()  # the heavy worker must see the updated brief
     return {"queued": await enqueue_heavy(lead_id), "already_running": False}
+
+
+@router.get("/reports/platforms", response_model=PlatformReport)
+async def platform_report(
+    session: SessionDep, days: Annotated[int, Query(ge=1, le=90)] = 7
+) -> PlatformReport:
+    """Leads per social platform: X, Reddit, Instagram and Facebook side by side."""
+    return await platforms.platform_report(session, days)
 
 
 @router.get("/sources", response_model=list[SourceOut])
