@@ -1,7 +1,7 @@
-import { PageBody } from "@/components/site";
-import { pageBySlug } from "@/lib/content";
+import { SiteBody } from "@/components/site";
+import { homePage } from "@/lib/content";
+import { sample } from "@/lib/sample";
 
 export default function Home() {
-  const page = pageBySlug("") ?? { slug: "", title: "Home", sections: ["hero", "services", "about", "areas", "contact"] as const };
-  return <PageBody page={{ ...page, sections: [...page.sections] }} />;
+  return <SiteBody c={sample} page={homePage(sample)} />;
 }
