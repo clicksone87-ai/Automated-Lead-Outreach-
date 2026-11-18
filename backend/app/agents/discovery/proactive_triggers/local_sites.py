@@ -18,17 +18,69 @@ from app.agents.discovery.base import RawBusiness, RawLead, SourceContext, indus
 from app.agents.discovery.proactive_triggers.signals import classify_site
 from app.db.models import EvidenceKind, TriggerType
 from app.services.dedup import PLATFORM_DOMAINS, normalize_domain
+from app.services.locale import COUNTRY_DEFAULT_LANGUAGE
 
 logger = logging.getLogger(__name__)
 
 # Small and mid-sized towns: local trades there are far more likely to run dated sites
-# than the businesses ranking top in big cities.
+# than the businesses ranking top in big cities (covers all 32 V2 markets).
 CITIES: dict[str, list[str]] = {
     "GB": ["Wakefield", "Barnsley", "Rotherham", "Doncaster", "Huddersfield", "Halifax",
            "Burnley", "Wigan", "Stoke-on-Trent", "Telford", "Grimsby", "Kidderminster"],
     "US": ["Abilene TX", "Lubbock TX", "Joplin MO", "Dothan AL", "Muncie IN", "Casper WY",
            "Erie PA", "Duluth MN", "Yakima WA", "Macon GA", "Pueblo CO", "Bangor ME"],
-}  # fmt: skip
+    "AT": ["Linz", "Klagenfurt", "Villach", "Wels", "Sankt Pölten", "Dornbirn", "Steyr", "Feldkirch", "Bregenz", "Baden"],
+    "BE": ["Namur", "Mons", "Aalst", "Mechelen", "Kortrijk", "Hasselt", "Tournai", "Ostend", "Sint-Niklaas", "Verviers"],
+    "BG": ["Plovdiv", "Varna", "Burgas", "Ruse", "Stara Zagora", "Pleven", "Sliven", "Dobrich", "Shumen", "Pernik"],
+    "HR": ["Split", "Rijeka", "Osijek", "Zadar", "Slavonski Brod", "Pula", "Karlovac", "Varaždin", "Šibenik", "Sisak"],
+    "CY": ["Limassol", "Larnaca", "Paphos", "Famagusta", "Kyrenia", "Aradippou", "Paralimni", "Geri", "Ypsonas", "Dali"],
+    "CZ": ["Plzeň", "Liberec", "Olomouc", "České Budějovice", "Hradec Králové", "Ústí nad Labem", "Pardubice", "Zlín", "Havířov", "Kladno"],
+    "DK": ["Odense", "Aalborg", "Esbjerg", "Randers", "Kolding", "Horsens", "Vejle", "Roskilde", "Herning", "Silkeborg"],
+    "EE": ["Tartu", "Narva", "Pärnu", "Kohtla-Järve", "Viljandi", "Rakvere", "Maardu", "Sillamäe", "Kuressaare", "Võru"],
+    "FI": ["Tampere", "Oulu", "Turku", "Jyväskylä", "Lahti", "Kuopio", "Pori", "Kouvola", "Joensuu", "Vaasa"],
+    "FR": ["Limoges", "Poitiers", "Pau", "Béziers", "Bourges", "Valence", "Lorient", "Quimper", "Troyes", "Tarbes", "Angoulême", "Niort"],
+    "DE": ["Bielefeld", "Hagen", "Hamm", "Mülheim", "Herne", "Solingen", "Osnabrück", "Paderborn", "Göttingen", "Recklinghausen", "Bottrop", "Bremerhaven"],
+    "GR": ["Patras", "Heraklion", "Larissa", "Volos", "Ioannina", "Trikala", "Chalcis", "Serres", "Alexandroupoli", "Xanthi"],
+    "HU": ["Debrecen", "Szeged", "Miskolc", "Pécs", "Győr", "Nyíregyháza", "Kecskemét", "Székesfehérvár", "Szombathely", "Szolnok"],
+    "IE": ["Waterford", "Drogheda", "Dundalk", "Bray", "Navan", "Kilkenny", "Ennis", "Carlow", "Tralee", "Athlone"],
+    "IT": ["Bergamo", "Brescia", "Vicenza", "Treviso", "Forlì", "Ferrara", "Novara", "Piacenza", "Cremona", "Asti", "Ragusa", "Sassari"],
+    "LV": ["Daugavpils", "Liepāja", "Jelgava", "Jūrmala", "Ventspils", "Rēzekne", "Valmiera", "Ogre", "Jēkabpils", "Tukums"],
+    "LT": ["Kaunas", "Klaipėda", "Šiauliai", "Panevėžys", "Alytus", "Marijampolė", "Mažeikiai", "Jonava", "Utena", "Kėdainiai"],
+    "LU": ["Esch-sur-Alzette", "Differdange", "Dudelange", "Ettelbruck", "Diekirch", "Wiltz", "Echternach", "Remich"],
+    "MT": ["Birkirkara", "Qormi", "Mosta", "Żabbar", "San Pawl il-Baħar", "Saint John", "Fgura", "Żejtun", "Sliema", "Naxxar"],
+    "NL": ["Apeldoorn", "Arnhem", "Enschede", "Zwolle", "Dordrecht", "Amersfoort", "Leiden", "Deventer", "Alkmaar", "Leeuwarden"],
+    "PL": ["Radom", "Toruń", "Sosnowiec", "Kielce", "Gliwice", "Zabrze", "Bielsko-Biała", "Olsztyn", "Rzeszów", "Ruda Śląska"],
+    "PT": ["Braga", "Guimarães", "Coimbra", "Setúbal", "Aveiro", "Viseu", "Leiria", "Faro", "Évora", "Portimão"],
+    "RO": ["Timișoara", "Cluj-Napoca", "Iași", "Constanța", "Craiova", "Brașov", "Galați", "Ploiești", "Oradea", "Brăila"],
+    "SK": ["Košice", "Prešov", "Žilina", "Nitra", "Banská Bystrica", "Trnava", "Martin", "Trenčín", "Poprad", "Prievidza"],
+    "SI": ["Maribor", "Celje", "Kranj", "Koper", "Velenje", "Novo Mesto", "Ptuj", "Kamnik", "Trbovlje", "Jesenice"],
+    "ES": ["Albacete", "Burgos", "Salamanca", "Logroño", "Badajoz", "Huelva", "Lleida", "Tarragona", "León", "Jaén", "Ourense", "Algeciras"],
+    "SE": ["Norrköping", "Jönköping", "Helsingborg", "Lund", "Borås", "Sundsvall", "Gävle", "Halmstad", "Karlstad", "Växjö"],
+    "NO": ["Drammen", "Fredrikstad", "Kristiansand", "Sandnes", "Tromsø", "Sarpsborg", "Skien", "Ålesund", "Sandefjord", "Haugesund"],
+    "CH": ["Winterthur", "St. Gallen", "Biel", "Schaffhausen", "Fribourg", "Chur", "Neuchâtel", "Uster", "Sion", "Thun"],
+    "IS": ["Kópavogur", "Hafnarfjörður", "Reykjanesbær", "Akureyri", "Garðabær", "Mosfellsbær", "Árborg", "Akranes", "Fjarðabyggð", "Ísafjörður"],
+}
+
+# Localized search words per language for home_services.
+# Norwegian uses "nb" as per project standard.
+TRADE_KEYWORDS_BY_LANG: dict[str, list[str]] = {
+    "en": ["plumber", "electrician", "roofing", "handyman", "carpenter", "painter decorator", "landscaper", "builder"],
+    "de": ["Klempner", "Elektriker", "Dachdecker", "Handwerker", "Schreiner", "Maler", "Gartenbau", "Bauunternehmen"],
+    "fr": ["plombier", "électricien", "couvreur", "bricoleur", "menuisier", "peintre en bâtiment", "paysagiste", "maçon"],
+    "es": ["fontanero", "electricista", "techador", "manitas", "carpintero", "pintor", "jardinería", "reformas"],
+    "it": ["idraulico", "elettricista", "coperturista", "tuttofare", "falegname", "imbianchino", "giardiniere", "impresa edile"],
+    "nl": ["loodgieter", "elektricien", "dakdekker", "klusjesman", "timmerman", "schilder", "hovenier", "aannemer"],
+    "pt": ["canalizador", "eletricista", "telhador", "biscateiro", "carpinteiro", "pintor", "jardineiro", "construtor"],
+    "pl": ["hydraulik", "elektryk", "dekarz", "złota rączka", "stolarz", "malarz", "ogrodnik", "usługi budowlane"],
+    "sv": ["rörmokare", "elektriker", "takläggare", "hantverkare", "snickare", "målare", "trädgårdsanläggning", "byggföretag"],
+    "da": ["blikkenslager", "elektriker", "tagdækker", "håndværker", "tømrer", "maler", "anlægsgartner", "byggefirma"],
+    "nb": ["rørlegger", "elektriker", "taktekker", "handverker", "snekker", "maler", "anleggsgartner", "byggmester"],
+    "fi": ["putkimies", "sähköasentaja", "kattoremontti", "remontoija", "puuseppä", "maalari", "pihasuunnittelu", "rakennusliike"],
+    "cs": ["instalatér", "elektrikář", "pokrývač", "hodinový manžel", "truhlář", "malíř pokojů", "zahradník", "stavební firma"],
+    "ro": ["instalator", "electrician", "acoperișuri", "meșter", "tâmplar", "zugrav", "amenajări grădini", "firmă construcții"],
+    "el": ["υδραυλικός", "ηλεκτρολόγος", "σκεπές", "τεχνικός", "ξυλουργός", "ελαιοχρωματιστής", "κηπουρός", "οικοδομικές εργασίες"],
+    "hu": ["vízvezeték szerelő", "villanyszerelő", "tetőfedő", "ezermester", "asztalos", "szobafestő", "kertépítés", "kivitelező"],
+}
 # Directories, marketplaces and aggregators are not a business's own website.
 NOT_A_BUSINESS_SITE = PLATFORM_DOMAINS | {
     "checkatrade.com", "trustatrader.com", "mybuilder.com", "ratedpeople.com", "bark.com",
@@ -92,16 +144,21 @@ class LocalSitesSource:
         return signals
 
     def queries(self, ctx: SourceContext) -> list[tuple[str, str, int]]:
-        trades = industry_keywords(ctx.runtime.active_industry)[:8]
+        industry = ctx.runtime.active_industry
         countries = [c for c in (ctx.runtime.target_countries or ["GB", "US"]) if c in CITIES]
         pages = range(1, max(1, int(ctx.config.get("pages", 2))) + 1)
-        return [
-            (f"{t} {city}", c, page)
-            for page in pages
-            for c in countries
-            for city in CITIES[c]
-            for t in trades
-        ]
+        res: list[tuple[str, str, int]] = []
+        for page in pages:
+            for c in countries:
+                lang = COUNTRY_DEFAULT_LANGUAGE.get(c, "en")
+                if industry == "home_services":
+                    trades = TRADE_KEYWORDS_BY_LANG.get(lang, TRADE_KEYWORDS_BY_LANG["en"])
+                else:
+                    trades = industry_keywords(industry)[:8]
+                for city in CITIES[c]:
+                    for t in trades:
+                        res.append((f"{t} {city}", c, page))
+        return res
 
     @staticmethod
     def city_of(query: str, country: str) -> str:

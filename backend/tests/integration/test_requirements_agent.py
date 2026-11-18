@@ -152,14 +152,14 @@ async def test_german_lead_parked_until_country_rules_exist() -> None:
     assert "DE not a target country" in outcome.reason
 
 
-async def test_italian_lead_parked_by_language() -> None:
+async def test_unsupported_language_lead_parked_by_language() -> None:
     async with session_scope() as s:
         lead = await _lead(
             s,
-            title="Cerco un web designer",
-            text="Ho bisogno di un sito web.",
+            title="Web designer needed",
+            text="Need a website for my business.",
             country="US",
-            language="it",
+            language="ja",
         )
     outcome = await _run(lead.id)
     assert outcome.status == LeadStatus.PARKED_LANGUAGE
