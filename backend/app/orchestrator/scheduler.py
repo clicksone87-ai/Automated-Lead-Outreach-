@@ -54,6 +54,20 @@ async def fast_sweep(ctx: dict[str, Any]) -> int:
     return await lanes.enqueue_fast(due)
 
 
+async def heavy_picker(ctx: dict[str, Any]) -> int:
+    """Send today's best fast-lane leads to the heavy lane, within the daily limit and the
+    Gemini quota left."""
+    from app.orchestrator import quota  # noqa: PLC0415
+
+    async with session_scope() as session:
+        picked = await lanes.pick_for_heavy(session)
+        if not picked:
+            return 0
+        gemini = next(r for r in await quota.report(session) if r["scope"] == "gemini")
+    affordable = int(float(str(gemini["remaining"])) // lanes.GEMINI_PER_HEAVY_LEAD)
+    return await lanes.send_to_heavy(picked[:affordable], requested_by="daily_pick")
+
+
 async def reddit_deletion_sync(ctx: dict[str, Any]) -> int:
     """Delete stored Reddit posts that were deleted on Reddit (official API or Apify)."""
     s = get_settings()
@@ -133,6 +147,7 @@ class SchedulerSettings:
     cron_jobs: ClassVar[list[Any]] = [
         cron(tick_sources, minute=set(range(60)), run_at_startup=True),
         cron(fast_sweep, minute=set(range(1, 60, 5))),
+        cron(heavy_picker, minute={4, 19, 34, 49}),
         cron(reddit_deletion_sync, hour={4}, minute={7}),
         cron(daily_backup, hour={3}, minute={15}),
         cron(send_due, minute=set(range(0, 60, 5))),

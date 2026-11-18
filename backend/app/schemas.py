@@ -91,6 +91,11 @@ class LeadRow(ORM):
     language: str | None
     timezone: str | None
     is_demo: bool = False
+    posted_at: datetime | None = None
+    source_family: str | None = None
+    lane: str | None = None
+    prefilter_reason: str | None = None
+    lane_timings: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 

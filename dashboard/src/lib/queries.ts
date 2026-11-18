@@ -178,6 +178,19 @@ export function usePatchSettings() {
   });
 }
 
+export function useGenerateAssets() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.POST("/api/leads/{lead_id}/assets", { params: { path: { lead_id: id } } })),
+    onSuccess: (_d, id) => {
+      toast.success("Generating assets", { description: "Logo concepts, a website preview and the full audit are on their way." });
+      qc.invalidateQueries({ queryKey: qk.lead(id) });
+    },
+    onError: errorToast("Assets not started"),
+  });
+}
+
 export function useRerunLead() {
   const qc = useQueryClient();
   return useMutation({

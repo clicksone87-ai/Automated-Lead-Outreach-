@@ -13,6 +13,7 @@ import {
   Palette,
   RotateCw,
   Shield,
+  Sparkles,
   ShieldAlert,
   XCircle,
 } from "lucide-react";
@@ -24,7 +25,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fileUrl, type LeadDetail } from "@/lib/api";
 import { ago, countryName, dateTime, languageName, titleCase } from "@/lib/format";
-import { useLead, useRerunLead } from "@/lib/queries";
+import { duration } from "@/components/overview/lane-speed";
+import { useGenerateAssets, useLead, useRerunLead } from "@/lib/queries";
 import { AGENT_LABELS, TRIGGERS } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { AuditSummaryCard, BriefView } from "./brief-view";
@@ -103,6 +105,51 @@ function Timeline({ detail }: { detail: LeadDetail }) {
   );
 }
 
+type LaneEntry = { queued?: string; started?: string; finished?: string | null; seconds?: number | null; deferred?: string | null; stopped_at?: string | null };
+
+function laneEntry(timings: Record<string, unknown> | undefined, lane: string): LaneEntry | undefined {
+  const value = timings?.[lane];
+  return value && typeof value === "object" ? (value as LaneEntry) : undefined;
+}
+
+function heavyRunning(timings: Record<string, unknown> | undefined): boolean {
+  const heavy = laneEntry(timings, "heavy");
+  return Boolean(heavy?.queued && !heavy.finished && !heavy.deferred);
+}
+
+/** One line: which lane the lead is in and how long each lane took. */
+function LaneLine({ lead }: { lead: LeadDetail["lead"] }) {
+  const fast = laneEntry(lead.lane_timings, "fast");
+  const heavy = laneEntry(lead.lane_timings, "heavy");
+  if (!fast && !heavy && !lead.prefilter_reason) return null;
+  const part = (label: string, e: LaneEntry | undefined) => {
+    if (!e) return null;
+    const state = e.deferred
+      ? `waiting: ${e.deferred}`
+      : e.seconds !== null && e.seconds !== undefined
+        ? duration(e.seconds)
+        : e.started
+          ? "running"
+          : "queued";
+    return (
+      <span>
+        <span className="font-medium text-foreground">{label}</span> {state}
+      </span>
+    );
+  };
+  return (
+    <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      {part("Fast lane", fast)}
+      {part("Heavy lane", heavy)}
+      {lead.prefilter_reason && (
+        <span>
+          <span className="font-medium text-foreground">Prefilter</span> {lead.prefilter_reason}
+        </span>
+      )}
+    </p>
+  );
+}
+
 function NotYet({ icon, title, description }: { icon: typeof Bot; title: string; description: string }) {
   return <EmptyState icon={icon} title={title} description={description} className="py-10" />;
 }
@@ -110,6 +157,7 @@ function NotYet({ icon, title, description }: { icon: typeof Bot; title: string;
 export function LeadDetailView({ id, compact = false }: { id: string; compact?: boolean }) {
   const { data, isLoading, isError, error, refetch } = useLead(id);
   const rerun = useRerunLead();
+  const assets = useGenerateAssets();
 
   if (isLoading) return <RowsSkeleton rows={8} />;
   if (isError || !data) return <ErrorState error={error} onRetry={() => refetch()} />;
@@ -132,10 +180,24 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
             <p className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{lead.status_reason}</p>
           )}
         </div>
-        <Button variant="outline" size="sm" onClick={() => rerun.mutate(lead.id)} disabled={rerun.isPending}>
-          <RotateCw className={cn("size-3.5", rerun.isPending && "animate-spin")} /> Re-run pipeline
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => assets.mutate(lead.id)}
+            disabled={assets.isPending || heavyRunning(lead.lane_timings)}
+            title="Logo concepts, a website preview and the full audit (heavy lane)"
+          >
+            <Sparkles className={cn("size-3.5", assets.isPending && "animate-pulse")} />
+            {heavyRunning(lead.lane_timings) ? "Generating assets…" : "Generate assets"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => rerun.mutate(lead.id)} disabled={rerun.isPending}>
+            <RotateCw className={cn("size-3.5", rerun.isPending && "animate-spin")} /> Re-run pipeline
+          </Button>
+        </div>
       </div>
+
+      <LaneLine lead={lead} />
 
       <dl className="grid grid-cols-2 gap-4 rounded-xl border bg-surface-sunken/50 p-4 sm:grid-cols-4">
         <Fact label="Country">{countryName(lead.country)}</Fact>

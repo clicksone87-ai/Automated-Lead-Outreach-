@@ -60,6 +60,9 @@ class RuntimeSettings(BaseModel):
     # Fast lane: leads per batch LLM scoring call, and leads processed side by side
     scoring_batch_size: int = Field(default=20, ge=1, le=40)
     fast_lane_concurrency: int = Field(default=4, ge=1, le=12)
+    # Heavy lane (logos, website preview, full audit): leads picked per day, minimum intent
+    heavy_lane_daily_limit: int = Field(default=10, ge=0, le=200)
+    heavy_lane_min_score: int = Field(default=70, ge=0, le=100)
     # Prefilter: oldest post (hours) worth acting on, per source family ("default" for the rest)
     max_post_age_hours: dict[str, int] = Field(
         default_factory=lambda: {"social": 24, "default": 168}

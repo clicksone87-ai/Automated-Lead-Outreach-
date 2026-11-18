@@ -106,6 +106,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/leads/{lead_id}/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Assets
+         * @description Send one lead to the heavy lane: logos, website preview and the full audit.
+         */
+        post: operations["generate_assets_api_leads__lead_id__assets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sources": {
         parameters: {
             query?: never;
@@ -1117,6 +1137,18 @@ export interface components {
              * @default false
              */
             is_demo: boolean;
+            /** Posted At */
+            posted_at?: string | null;
+            /** Source Family */
+            source_family?: string | null;
+            /** Lane */
+            lane?: string | null;
+            /** Prefilter Reason */
+            prefilter_reason?: string | null;
+            /** Lane Timings */
+            lane_timings?: {
+                [key: string]: unknown;
+            };
             /**
              * Created At
              * Format: date-time
@@ -1553,6 +1585,41 @@ export interface operations {
         };
     };
     rerun_lead_api_leads__lead_id__rerun_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                lead_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_assets_api_leads__lead_id__assets_post: {
         parameters: {
             query?: never;
             header?: {

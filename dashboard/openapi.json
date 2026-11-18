@@ -521,6 +521,67 @@
     }
    }
   },
+  "/api/leads/{lead_id}/assets": {
+   "post": {
+    "summary": "Generate Assets",
+    "description": "Send one lead to the heavy lane: logos, website preview and the full audit.",
+    "operationId": "generate_assets_api_leads__lead_id__assets_post",
+    "parameters": [
+     {
+      "name": "lead_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Lead Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "202": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "boolean"
+         },
+         "title": "Response Generate Assets Api Leads  Lead Id  Assets Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/sources": {
    "get": {
     "summary": "List Sources",
@@ -3904,6 +3965,56 @@
       "type": "boolean",
       "title": "Is Demo",
       "default": false
+     },
+     "posted_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Posted At"
+     },
+     "source_family": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Source Family"
+     },
+     "lane": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Lane"
+     },
+     "prefilter_reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Prefilter Reason"
+     },
+     "lane_timings": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Lane Timings"
      },
      "created_at": {
       "type": "string",

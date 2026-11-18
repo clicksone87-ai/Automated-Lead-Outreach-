@@ -54,6 +54,11 @@ async def run_fast_batch_job(ctx: dict[str, Any], lead_ids: list[str]) -> dict[s
     return await lanes.run_fast_batch([uuid.UUID(x) for x in lead_ids], get_adapters())
 
 
+async def run_heavy_job(ctx: dict[str, Any], lead_id: str) -> dict[str, Any]:
+    state = await lanes.run_heavy(uuid.UUID(lead_id), get_adapters())
+    return {"completed": state.get("completed"), "stopped_at": state.get("stopped_at")}
+
+
 async def run_source_job(ctx: dict[str, Any], key: str, force: bool = False) -> dict[str, Any]:
     async with session_scope() as session:
         result = await run_source(session, get_adapters(), get_settings(), key, force=force)
@@ -83,7 +88,12 @@ async def shutdown(ctx: dict[str, Any]) -> None:
 
 
 class WorkerSettings:
-    functions: ClassVar[list[Any]] = [run_pipeline, run_source_job, run_fast_batch_job]
+    functions: ClassVar[list[Any]] = [
+        run_pipeline,
+        run_source_job,
+        run_fast_batch_job,
+        run_heavy_job,
+    ]
     cron_jobs: ClassVar[list[Any]] = [cron(heartbeat, minute=set(range(60)), run_at_startup=True)]
     on_startup = startup
     on_shutdown = shutdown

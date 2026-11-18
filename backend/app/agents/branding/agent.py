@@ -7,6 +7,7 @@ sanitised, rendered and checked for wording and similarity to the competitor log
 
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 import re
@@ -40,6 +41,7 @@ from app.db.models import (
     LeadStatus,
     LogoConcept,
 )
+from app.db.session import session_scope
 from app.orchestrator.agents import AgentContext, AgentOutcome, register
 from app.policy.engine import PolicyEngine
 from app.quality.images import compare
@@ -183,39 +185,82 @@ class BrandingAgent:
         ]
         industry = profile.industry or "local business"
         references = await self._reference_logos(ctx, profile)
-        made: list[LogoConcept] = []
-        async with self._browser_factory() as browser:
-            for variant, (style, style_desc) in enumerate(STYLES, start=1):
-                concept = await self._one_concept(
-                    ctx,
-                    lead,
-                    browser,
-                    variant=variant,
-                    style=style,
-                    task=LogoPrompt.task(
-                        text=text,
-                        language=language,
-                        industry=industry,
-                        style=style,
-                        style_desc=style_desc,
-                        colours=colours,
-                        fonts=fonts,
-                        avoid_colours=avoid,
-                    ),
+        jobs = [
+            (
+                variant,
+                style,
+                LogoPrompt.task(
                     text=text,
                     language=language,
-                    references=references,
-                    mock={
-                        "text": text,
-                        "style": style,
-                        "colour": colours[0] if colours else "#1d4ed8",
-                    },
-                )
-                if concept is not None:
-                    made.append(concept)
+                    industry=industry,
+                    style=style,
+                    style_desc=style_desc,
+                    colours=colours,
+                    fonts=fonts,
+                    avoid_colours=avoid,
+                ),
+                {"text": text, "style": style, "colour": colours[0] if colours else "#1d4ed8"},
+            )
+            for variant, (style, style_desc) in enumerate(STYLES, start=1)
+        ]
+        # The slow part is the model writing each SVG, so all concepts are requested at once;
+        # rendering and saving stay sequential on this session and one browser.
+        specs = await asyncio.gather(
+            *(
+                self._spec(ctx, lead, task=task, style=style, mock=mock)
+                for _, style, task, mock in jobs
+            ),
+            return_exceptions=True,
+        )
+        failures = [r for r in specs if isinstance(r, BaseException)]
+        if failures and len(failures) == len(specs):
+            raise failures[0]
+        made: list[LogoConcept] = []
+        async with self._browser_factory() as browser:
+            for (variant, style, task, _), result in zip(jobs, specs, strict=True):
+                if isinstance(result, BaseException):
+                    logger.info("logo %s skipped: %s", style, result)
+                    continue
+                spec, svg, attempts = result
+                if spec is None or svg is None:
+                    continue
+                made.append(
+                    await self._save_concept(
+                        ctx, lead, browser, variant=variant, style=style, task=task, text=text,
+                        language=language, references=references, spec=spec, svg=svg,
+                        attempts=attempts,
+                    )
+                )  # fmt: skip
         return made
 
-    async def _one_concept(
+    async def _spec(
+        self, ctx: AgentContext, lead: Lead, *, task: str, style: str, mock: dict[str, Any]
+    ) -> tuple[LogoSpec | None, str | None, int]:
+        """Ask the model for one concept (one repair attempt). Own session: runs concurrently."""
+        spec: LogoSpec | None = None
+        attempts = 0
+        for attempts in (1, 2):
+            try:
+                async with session_scope() as own:
+                    spec = await ctx.adapters.llm.structured(
+                        own,
+                        LLMRequest(
+                            agent=self.name,
+                            task=task,
+                            system=LogoPrompt.SYSTEM,
+                            kind="logo",
+                            lead_id=lead.id,
+                            max_output_tokens=6000,
+                            mock_context=mock,
+                        ),
+                        LogoSpec,
+                    )
+                return spec, sanitize_svg(spec.svg), attempts
+            except (LLMOutputError, SvgRejectedError) as exc:
+                logger.info("logo %s attempt %d rejected: %s", style, attempts, exc)
+        return spec, None, attempts
+
+    async def _save_concept(
         self,
         ctx: AgentContext,
         lead: Lead,
@@ -227,32 +272,10 @@ class BrandingAgent:
         text: str,
         language: str,
         references: dict[str, bytes],
-        mock: dict[str, Any],
-    ) -> LogoConcept | None:
-        svg: str | None = None
-        spec: LogoSpec | None = None
-        attempts = 0
-        for attempts in (1, 2):
-            try:
-                spec = await ctx.adapters.llm.structured(
-                    ctx.session,
-                    LLMRequest(
-                        agent=self.name,
-                        task=task,
-                        system=LogoPrompt.SYSTEM,
-                        kind="logo",
-                        lead_id=lead.id,
-                        max_output_tokens=6000,
-                        mock_context=mock,
-                    ),
-                    LogoSpec,
-                )
-                svg = sanitize_svg(spec.svg)
-                break
-            except (LLMOutputError, SvgRejectedError) as exc:
-                logger.info("logo %s attempt %d rejected: %s", style, attempts, exc)
-        if spec is None or svg is None:
-            return None
+        spec: LogoSpec,
+        svg: str,
+        attempts: int,
+    ) -> LogoConcept:
         owner = lead.id.hex
         svg_path = ctx.adapters.storage.save_bytes(
             f"logos/{owner}/concept-{variant}.svg", svg.encode("utf-8")
