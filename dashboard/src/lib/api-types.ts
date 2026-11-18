@@ -109,6 +109,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/platforms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Platform Report
+         * @description Leads per social platform: X, Reddit, Instagram and Facebook side by side.
+         */
+        get: operations["platform_report_api_reports_platforms_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sources": {
         parameters: {
             query?: never;
@@ -1139,6 +1159,49 @@ export interface components {
             /** Inbox Count */
             inbox_count: number;
         };
+        /** PlatformReport */
+        PlatformReport: {
+            /** Days */
+            days: number;
+            /** Platforms */
+            platforms: components["schemas"]["PlatformStat"][];
+        };
+        /**
+         * PlatformStat
+         * @description Leads per social platform (V2 Social sources: leads-per-platform reporting).
+         */
+        PlatformStat: {
+            /** Platform */
+            platform: string;
+            /** Label */
+            label: string;
+            /** Sources */
+            sources: string[];
+            /** Enabled */
+            enabled: boolean;
+            /** Leads */
+            leads: number;
+            /** Leads 24H */
+            leads_24h: number;
+            /** Qualified */
+            qualified: number;
+            /** High */
+            high: number;
+            /** Sellers Filtered */
+            sellers_filtered: number;
+            /** Items Seen */
+            items_seen: number;
+            /** Runs */
+            runs: number;
+            /** Failed Runs */
+            failed_runs: number;
+            /** Last Run At */
+            last_run_at: string | null;
+            /** Last Status */
+            last_status: string | null;
+            /** Daily */
+            daily: number[];
+        };
         /** PolicyDecisionOut */
         PolicyDecisionOut: {
             /** Id */
@@ -1514,6 +1577,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: boolean;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    platform_report_api_reports_platforms_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReport"];
                 };
             };
             /** @description Validation Error */

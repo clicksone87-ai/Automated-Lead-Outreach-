@@ -13,6 +13,7 @@ from app.agents.discovery.sources.mock_demo import MockDemoSource
 from app.agents.discovery.sources.reddit import RedditSource
 from app.agents.discovery.sources.registries import CompaniesHouseSource, OpenCorporatesSource
 from app.agents.discovery.sources.rss import RssSource
+from app.agents.discovery.sources.scout import ScoutProfilesSource
 from app.agents.discovery.sources.search_api import SearchApiSource
 from app.agents.discovery.sources.social import MetaSource, XSource
 from app.agents.discovery.sources.social_apify import (
@@ -43,6 +44,7 @@ _ALL: list[DiscoverySource] = [
     SiteHealthSource(),
     LocalSitesSource(),
     NoWebsiteSource(),
+    ScoutProfilesSource(),
 ]
 # Fixture source for the automated test suite only — never registered in the running system.
 if get_settings().mocks_allowed:
