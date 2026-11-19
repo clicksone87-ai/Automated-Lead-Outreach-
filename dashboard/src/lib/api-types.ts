@@ -1070,6 +1070,11 @@ export interface components {
             lane: string;
             /** Leads */
             leads: number;
+            /**
+             * Runs
+             * @default 0
+             */
+            runs: number;
             /** P50 S */
             p50_s: number | null;
             /** P90 S */

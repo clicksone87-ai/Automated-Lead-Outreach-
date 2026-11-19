@@ -26,8 +26,15 @@ async def _lead(s: object, **kw: object) -> Lead:
 async def test_step_and_lane_timings() -> None:
     t0 = datetime.now(UTC) - timedelta(hours=1)
     async with session_scope() as s:
-        lead = await _lead(s, lane_timings={"fast": {"seconds": 90}})
-        await _lead(s, lane_timings={"fast": {"seconds": 150}, "heavy": {"seconds": 420}})
+        lead = await _lead(s, lane_timings={"fast": {"seconds": 90, "stopped_at": "proposal"}})
+        await _lead(s, lane_timings={"fast": {"seconds": 0.3, "stopped_at": "prefilter"}})
+        await _lead(
+            s,
+            lane_timings={
+                "fast": {"seconds": 150, "stopped_at": "proposal"},
+                "heavy": {"seconds": 420, "stopped_at": "proposal"},
+            },
+        )
         for agent, secs in (("requirements", 2), ("contact_enrichment", 4), ("proposal", 30)):
             s.add(AgentRun(agent=agent, lead_id=lead.id, status=RunStatus.SUCCEEDED,
                            started_at=t0, finished_at=t0 + timedelta(seconds=secs)))  # fmt: skip
@@ -41,6 +48,7 @@ async def test_step_and_lane_timings() -> None:
     assert set(steps) == {"requirements", "contact_enrichment", "proposal"}
     assert steps["proposal"].p50_s == 30
     lanes = {x.lane: x for x in out.lanes}
+    assert lanes["fast"].runs == 3  # the prefilter stop below is counted, not timed
     assert lanes["fast"].leads == 2 and lanes["fast"].p50_s == 120
     assert lanes["fast"].within_target and lanes["fast"].target_s == 180
     assert lanes["heavy"].leads == 1 and lanes["heavy"].within_target

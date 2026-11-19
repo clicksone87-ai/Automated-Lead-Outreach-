@@ -3732,6 +3732,11 @@
       "type": "integer",
       "title": "Leads"
      },
+     "runs": {
+      "type": "integer",
+      "title": "Runs",
+      "default": 0
+     },
      "p50_s": {
       "anyOf": [
        {

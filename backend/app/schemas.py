@@ -238,7 +238,10 @@ class StepTiming(BaseModel):
 
 class LaneTiming(BaseModel):
     lane: str  # fast | heavy
+    #: runs that reached a draft (the percentiles are over these)
     leads: int
+    #: every timed run, including ones that stopped early
+    runs: int = 0
     p50_s: float | None
     p90_s: float | None
     target_s: int

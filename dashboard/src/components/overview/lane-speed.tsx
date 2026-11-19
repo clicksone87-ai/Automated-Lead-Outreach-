@@ -19,8 +19,8 @@ export function duration(seconds: number | null | undefined): string {
     const rest = s % 60;
     return rest ? `${m} min ${String(rest).padStart(2, "0")} s` : `${m} min`;
   }
-  const h = Math.floor(s / 3600);
-  return `${h} h ${Math.round((s % 3600) / 60)} min`;
+  const minutes = Math.round(s / 60);
+  return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 }
 
 const LANE_NAMES: Record<string, { label: string; hint: string }> = {
@@ -52,7 +52,8 @@ function LaneTile({ lane }: { lane: Schemas["LaneTiming"] }) {
       </div>
       <p className="mt-2 text-2xl font-semibold tabular">{duration(lane.p50_s)}</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        median · p90 {duration(lane.p90_s)} · target {duration(lane.target_s)} · {lane.leads} lead{lane.leads === 1 ? "" : "s"}
+        median · p90 {duration(lane.p90_s)} · target {duration(lane.target_s)} · {lane.leads} complete run{lane.leads === 1 ? "" : "s"}
+        {lane.runs > lane.leads ? ` (${lane.runs} in total; early stops not timed)` : ""}
       </p>
       <p className="mt-2 text-[11px] text-muted-foreground">{meta.hint}</p>
     </div>

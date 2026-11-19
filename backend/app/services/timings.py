@@ -15,6 +15,7 @@ from app.db.models import AgentRun, Lead, RunStatus
 from app.schemas import LaneTiming, StepTiming, TimingsOut
 
 FAST_TARGET_S = 180
+COMPLETE_STOPS = ("proposal", "outreach")  # drafted (waiting for approval) or sent
 HEAVY_TARGET_S = 600
 
 
@@ -61,11 +62,17 @@ async def timings(session: AsyncSession, *, days: int = 7) -> TimingsOut:
 
     lanes: list[LaneTiming] = []
     for lane, target in (("fast", FAST_TARGET_S), ("heavy", HEAVY_TARGET_S)):
-        lane_secs = cast(Lead.lane_timings[lane]["seconds"].astext, Float)
+        entry = Lead.lane_timings[lane]
+        lane_secs = cast(entry["seconds"].astext, Float)
+        timed = and_(entry["seconds"].is_not(None), Lead.updated_at >= since)
+        # The targets are for runs that went all the way to a draft; runs that stopped early
+        # (prefilter, no contact, a free-tier cap) would make the lane look faster than it is.
+        complete = entry["stopped_at"].astext.in_(COMPLETE_STOPS)
+        total = int((await session.execute(select(func.count()).where(timed))).scalar_one())
         row = (
             await session.execute(
                 select(func.count(), _pct(lane_secs, 0.5), _pct(lane_secs, 0.9)).where(
-                    Lead.lane_timings[lane]["seconds"].is_not(None), Lead.updated_at >= since
+                    timed, complete
                 )
             )
         ).one()
@@ -74,6 +81,7 @@ async def timings(session: AsyncSession, *, days: int = 7) -> TimingsOut:
             LaneTiming(
                 lane=lane,
                 leads=n,
+                runs=total,
                 p50_s=round(float(p50), 1) if p50 is not None else None,
                 p90_s=round(float(p90), 1) if p90 is not None else None,
                 target_s=target,
