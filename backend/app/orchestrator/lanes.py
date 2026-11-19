@@ -20,6 +20,7 @@ import uuid
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +29,7 @@ from app.adapters.registry import Adapters, get_adapters
 from app.agents.requirements.batch import classify_batch
 from app.config import Settings, get_settings
 from app.db.models import (
+    AgentRun,
     ApprovalStatus,
     Brief,
     Business,
@@ -35,6 +37,7 @@ from app.db.models import (
     LeadStatus,
     Message,
     Proposal,
+    RunStatus,
     TriggerType,
 )
 from app.db.session import session_scope
@@ -401,10 +404,37 @@ async def heavy_slots_left(session: AsyncSession, daily_limit: int) -> int:
     return max(0, daily_limit - int(used))
 
 
+def gemini_day_start(now: datetime) -> datetime:
+    """Gemini's free-tier daily quota resets at midnight Pacific time."""
+    pacific = now.astimezone(ZoneInfo("America/Los_Angeles"))
+    return pacific.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
+
+
+async def gemini_daily_limit_hit(session: AsyncSession, now: datetime | None = None) -> bool:
+    """Google's own daily request limit was hit since its last reset (logo models have a much
+    smaller daily allowance than the text model): heavy-lane runs would stop at branding."""
+    since = gemini_day_start(now or datetime.now(UTC))
+    hit = (
+        await session.execute(
+            select(AgentRun.id)
+            .where(
+                AgentRun.status == RunStatus.SKIPPED,
+                AgentRun.error.like("%gemini:daily(server)%"),
+                AgentRun.finished_at >= since,
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return hit is not None
+
+
 async def pick_for_heavy(session: AsyncSession, *, now: datetime | None = None) -> list[uuid.UUID]:
     """Today's best leads that finished the fast lane, up to the daily heavy-lane limit:
-    a verified email first, then intent, then the newest."""
+    a verified email first, then intent, then the newest. Nothing is picked while Gemini's own
+    daily limit is used up (a picked lead would just stop at branding and waste its slot)."""
     now = now or datetime.now(UTC)
+    if await gemini_daily_limit_hit(session, now):
+        return []
     rs = await runtime_settings.load(session)
     slots = await heavy_slots_left(session, rs.heavy_lane_daily_limit)
     if slots <= 0:
@@ -442,7 +472,7 @@ async def promote_high_intent(lead_ids: Sequence[uuid.UUID]) -> int:
     async with session_scope() as s:
         rs = await runtime_settings.load(s)
         slots = await heavy_slots_left(s, rs.heavy_lane_daily_limit)
-        if slots <= 0:
+        if slots <= 0 or await gemini_daily_limit_hit(s):
             return 0
         rows = (
             await s.execute(

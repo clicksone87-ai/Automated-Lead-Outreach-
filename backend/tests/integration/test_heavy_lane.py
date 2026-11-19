@@ -282,3 +282,19 @@ async def test_failed_heavy_run_is_recorded_not_left_running(
         heavy = lead.lane_timings["heavy"]
     assert heavy["stopped_at"] == "error" and "not writable" in heavy["error"]
     assert not lanes.heavy_in_progress(heavy)
+
+
+async def test_no_heavy_picks_while_gemini_daily_limit_is_used_up() -> None:
+    lead_id = await _ready_lead(score=90)
+    now = datetime.now(UTC)
+    async with session_scope() as s:
+        s.add(AgentRun(agent="branding", lead_id=lead_id, status=RunStatus.SKIPPED,
+                       error="budget cap reached for gemini:daily(server): spent $0 + $1 > cap $0",
+                       started_at=now, finished_at=now))  # fmt: skip
+    async with session_scope() as s:
+        assert await lanes.gemini_daily_limit_hit(s)
+        assert await lanes.pick_for_heavy(s) == []
+    # the next Pacific day starts fresh
+    tomorrow = lanes.gemini_day_start(now) + timedelta(days=1, hours=1)
+    async with session_scope() as s:
+        assert not await lanes.gemini_daily_limit_hit(s, tomorrow)
