@@ -47,9 +47,11 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 COPY . .
+# /cache/site-builder must exist and belong to appuser here: a new named volume takes its
+# owner from the image directory it is mounted on, otherwise it is root-owned and unwritable.
 RUN pip install --no-deps -e . \
  && useradd --create-home --uid 1000 appuser \
- && mkdir -p /data && chown -R appuser /data /app
+ && mkdir -p /data /cache/site-builder && chown -R appuser /data /cache /app
 
 # Lighthouse uses Playwright's Chromium
 RUN CHROME=$(find /ms-playwright -type f -name chrome -path "*chrome-linux*" | head -n1) \
