@@ -247,3 +247,36 @@ async def test_concurrent_competitor_lookups_share_one_search() -> None:
     a, b = await asyncio.gather(one(), one())
     assert a == b == ["rival-plumbing.example.com"]
     assert CountingSearch.calls == 1
+
+
+def test_heavy_in_progress_expires() -> None:
+    now = datetime.now(UTC)
+    recent = {"queued": (now - timedelta(minutes=5)).isoformat()}
+    assert lanes.heavy_in_progress(recent, now)
+    assert not lanes.heavy_in_progress({**recent, "finished": now.isoformat()}, now)
+    stale = {
+        "queued": (now - timedelta(hours=3)).isoformat(),
+        "started": (now - timedelta(hours=3)).isoformat(),
+    }
+    assert not lanes.heavy_in_progress(stale, now)  # its worker died: a new request may start
+
+
+async def test_failed_heavy_run_is_recorded_not_left_running(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.orchestrator import pipeline  # noqa: PLC0415
+
+    lead_id = await _ready_lead()
+
+    async def broken(*args: object, **kwargs: object) -> None:
+        raise PermissionError("cache not writable")
+
+    monkeypatch.setattr(pipeline, "run_steps", broken)
+    with pytest.raises(PermissionError):
+        await lanes.run_heavy(lead_id)
+    async with session_scope() as s:
+        lead = await s.get(Lead, lead_id)
+        assert lead is not None
+        heavy = lead.lane_timings["heavy"]
+    assert heavy["stopped_at"] == "error" and "not writable" in heavy["error"]
+    assert not lanes.heavy_in_progress(heavy)

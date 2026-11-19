@@ -70,6 +70,7 @@ RETRY_AFTER = timedelta(minutes=10)
 SCORING_TIMEOUT_S = 300  # one batch call, including a split retry and model fallbacks
 PAUSED_RETRY = timedelta(hours=1)
 STUCK_AFTER = timedelta(minutes=30)
+HEAVY_STALE = timedelta(hours=2)  # a heavy job older than this died with its worker
 
 
 def chunks(items: Sequence[uuid.UUID], size: int) -> Iterable[list[uuid.UUID]]:
@@ -281,6 +282,10 @@ async def run_heavy(lead_id: uuid.UUID, adapters: Adapters | None = None) -> Pip
     except TransientAgentError as exc:
         await _defer([lead_id], "heavy", str(exc))
         raise
+    except Exception as exc:
+        # Recorded as finished-with-error so the lead is never stuck as "being generated".
+        await mark([lead_id], "heavy", finished=_now(), stopped_at="error", error=str(exc)[:300])
+        raise
     await _finish(lead_id, "heavy", state)
     return state
 
@@ -375,9 +380,16 @@ async def request_assets(session: AsyncSession, lead_id: uuid.UUID) -> None:
         raise AssetsRequestError(f"lead is {lead.status}")
     if not _heavy_work(brief.data):
         raise AssetsRequestError("this lead needs no logo, preview or audit (SEO only, no site)")
-    heavy = (lead.lane_timings or {}).get("heavy") or {}
-    if heavy.get("queued") and not heavy.get("finished") and not heavy.get("deferred"):
+    if heavy_in_progress((lead.lane_timings or {}).get("heavy") or {}):
         raise AssetsRequestError("assets are already being generated")
+
+
+def heavy_in_progress(heavy: dict[str, Any], now: datetime | None = None) -> bool:
+    """Queued or running, and recent enough that the job is still alive."""
+    if not heavy.get("queued") or heavy.get("finished") or heavy.get("deferred"):
+        return False
+    mark_at = heavy.get("started") or heavy["queued"]
+    return (now or datetime.now(UTC)) - datetime.fromisoformat(mark_at) < HEAVY_STALE
 
 
 # ── resume ──────────────────────────────────────────────────────────────────
