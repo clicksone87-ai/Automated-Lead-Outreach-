@@ -218,13 +218,20 @@ async def build_site(
             f"preview render failed ({code}); see {log_path.name}: {out[-600:]}",
             timed_out=code == 124,
         )
-    old = site.with_name("site.old")
-    shutil.rmtree(old, ignore_errors=True)
-    if site.exists():
-        site.rename(old)
-    tmp.rename(site)
-    shutil.rmtree(old, ignore_errors=True)
+    publish(tmp, site)
     return BuildResult(site, work, commit, log_path, loop.time() - started)
+
+
+def publish(rendered: Path, site: Path) -> None:
+    """Replace the served site with the rendered one. Copies instead of renaming directories:
+    on a Windows bind mount (the local Docker setup) directory renames can silently leave an
+    empty or stale site behind. Fails loudly if the result has no home page."""
+    shutil.rmtree(site.with_name("site.old"), ignore_errors=True)  # left by older versions
+    shutil.rmtree(site, ignore_errors=True)
+    shutil.copytree(rendered, site, dirs_exist_ok=True)
+    shutil.rmtree(rendered, ignore_errors=True)
+    if not (site / "index.html").is_file():
+        raise BuildError(f"publishing the preview failed: no index.html in {site}")
 
 
 async def _git_commit(work: Path, content: dict[str, Any]) -> str | None:

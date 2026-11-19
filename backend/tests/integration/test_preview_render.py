@@ -93,3 +93,23 @@ async def test_network_failure_during_install_is_transient(
     with pytest.raises(build.BuildError) as exc:
         await build.ensure_deps(TEMPLATE, tmp_path)
     assert exc.value.timed_out  # retried later, not sent to human review
+
+
+def test_publish_replaces_the_site_and_removes_leftovers(tmp_path: Path) -> None:
+    site = tmp_path / "p" / "site"
+    (site / "old-page").mkdir(parents=True)
+    (site / "old-page" / "index.html").write_text("old", encoding="utf-8")
+    (tmp_path / "p" / "site.old").mkdir()
+    rendered = tmp_path / "p" / "site.tmp"
+    (rendered / "design" / "bold").mkdir(parents=True)
+    (rendered / "index.html").write_text("new", encoding="utf-8")
+    (rendered / "design" / "bold" / "index.html").write_text("bold", encoding="utf-8")
+    build.publish(rendered, site)
+    assert (site / "index.html").read_text(encoding="utf-8") == "new"
+    assert (site / "design" / "bold" / "index.html").exists()
+    assert not (site / "old-page").exists() and not rendered.exists()
+    assert not (tmp_path / "p" / "site.old").exists()
+    empty = tmp_path / "e" / "site.tmp"
+    empty.mkdir(parents=True)
+    with pytest.raises(build.BuildError):
+        build.publish(empty, tmp_path / "e" / "site")
