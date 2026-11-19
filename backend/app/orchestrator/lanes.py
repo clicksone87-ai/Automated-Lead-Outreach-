@@ -106,7 +106,20 @@ async def _proposal_needs_assets(session: AsyncSession, lead_id: uuid.UUID) -> b
     return not sent
 
 
-HEAVY_FORCE = {"proposal": _proposal_needs_assets}
+async def _qa_needs_rerun(session: AsyncSession, lead_id: uuid.UUID) -> bool:
+    """A producer ran again after the last quality check (e.g. QA returned its work for a fix):
+    the old verdict no longer applies, so the check runs again instead of being skipped."""
+    qa = await last_success(session, "quality_check", lead_id)
+    if qa is None or qa.finished_at is None:
+        return False
+    for producer in ("branding", "website_builder"):
+        run = await last_success(session, producer, lead_id)
+        if run is not None and run.finished_at is not None and run.finished_at > qa.finished_at:
+            return True
+    return False
+
+
+HEAVY_FORCE = {"proposal": _proposal_needs_assets, "quality_check": _qa_needs_rerun}
 
 
 # ── heavy-lane state on the lead (read by the dashboard) ────────────────────

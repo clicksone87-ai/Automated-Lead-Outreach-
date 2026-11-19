@@ -298,3 +298,20 @@ async def test_no_heavy_picks_while_gemini_daily_limit_is_used_up() -> None:
     tomorrow = lanes.gemini_day_start(now) + timedelta(days=1, hours=1)
     async with session_scope() as s:
         assert not await lanes.gemini_daily_limit_hit(s, tomorrow)
+
+
+async def test_quality_check_reruns_after_its_producer_ran_again() -> None:
+    lead_id = await _ready_lead()
+    t0 = datetime.now(UTC) - timedelta(minutes=30)
+    async with session_scope() as s:
+        s.add(AgentRun(agent="website_builder", lead_id=lead_id, status=RunStatus.SUPERSEDED,
+                       started_at=t0, finished_at=t0 + timedelta(minutes=2)))  # fmt: skip
+        s.add(AgentRun(agent="quality_check", lead_id=lead_id, status=RunStatus.SUCCEEDED,
+                       output={"proceed": False}, started_at=t0 + timedelta(minutes=3),
+                       finished_at=t0 + timedelta(minutes=3)))  # fmt: skip
+    async with session_scope() as s:
+        assert not await lanes._qa_needs_rerun(s, lead_id)  # nothing new since the check
+        s.add(AgentRun(agent="website_builder", lead_id=lead_id, status=RunStatus.SUCCEEDED,
+                       started_at=t0 + timedelta(minutes=10), finished_at=t0 + timedelta(minutes=12)))  # fmt: skip
+    async with session_scope() as s:
+        assert await lanes._qa_needs_rerun(s, lead_id)  # rebuilt after the failed check
