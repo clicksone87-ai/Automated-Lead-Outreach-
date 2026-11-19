@@ -16,6 +16,7 @@ import json
 import logging
 import mimetypes
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -40,6 +41,7 @@ COPY_IGNORE = shutil.ignore_patterns(
 )
 LIGHTHOUSE_THRESHOLDS = {"performance": 60, "accessibility": 85, "best-practices": 80, "seo": 80}
 PREVIEW_ORIGIN = "http://preview.local"
+NETWORK_ERRORS = re.compile(r"ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|ECONNREFUSED|network", re.I)
 
 
 class BuildError(Exception):
@@ -115,12 +117,15 @@ async def ensure_deps(template_dir: Path, cache_root: Path) -> Path:
     shutil.copy2(template_dir / "package.json", target / "package.json")
     shutil.copy2(lock, target / "package-lock.json")
     code, out = await _run(
-        ["npm", "ci", "--no-audit", "--no-fund", "--loglevel=error"],
+        ["npm", "ci", "--no-audit", "--no-fund", "--loglevel=error",
+         "--fetch-retries=5", "--fetch-retry-mintimeout=5000", "--fetch-retry-maxtimeout=60000"],
         target,
         limit_s=NPM_TIMEOUT_S,
-    )
+    )  # fmt: skip
     if code != 0:
-        raise BuildError(f"npm ci failed ({code}): {out[-800:]}")
+        # A dropped connection is not a broken template: retried later like a timeout.
+        network = bool(NETWORK_ERRORS.search(out))
+        raise BuildError(f"npm ci failed ({code}): {out[-800:]}", timed_out=code == 124 or network)
     (target / ".ok").write_text(digest)
     return modules
 
