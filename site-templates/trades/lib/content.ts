@@ -5,6 +5,8 @@
  */
 
 export type Variant = "classic" | "bold" | "minimal";
+/** Every preview contains all three designs: "/" uses `content.variant`, "/design/<v>/" all three. */
+export const DESIGNS: Variant[] = ["classic", "bold", "minimal"];
 export type SectionKey = "hero" | "services" | "about" | "areas" | "contact";
 
 export interface Service {
@@ -39,6 +41,10 @@ export interface SiteContent {
     fontHeading: string;
     fontBody: string;
     logoSvg: string;
+    /** Same logo with a one-off draw-in animation (generated from the sanitised SVG). */
+    logoSvgAnimated?: string;
+    /** For dark backgrounds: dark ink turned white (from the logo set). */
+    logoSvgReversed?: string;
   };
   seo: { title: string; description: string };
   hero: { headline: string; subheadline: string; cta: string };

@@ -86,14 +86,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </a>
       <Sidebar collapsed={collapsed} onToggle={toggle} className="hidden md:flex" />
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-[260px] p-0">
+        <SheetContent
+          side="left"
+          className="w-[260px] border-r-0 bg-sidebar p-0 [&>button]:text-sidebar-strong [&>button]:ring-offset-sidebar [&>button]:data-[state=open]:bg-sidebar-active"
+        >
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <Sidebar collapsed={false} onNavigate={() => setMobileOpen(false)} className="w-full border-r-0" />
         </SheetContent>
       </Sheet>
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar onOpenSearch={() => setPaletteOpen(true)} onOpenMobileNav={() => setMobileOpen(true)} />
-        <main id="main" className="scrollbar-thin flex-1 overflow-y-auto">
+        <main id="main" className="page-glow scrollbar-thin flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-8 md:py-8">{children}</div>
         </main>
       </div>

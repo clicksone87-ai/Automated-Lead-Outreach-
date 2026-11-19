@@ -129,12 +129,14 @@ async def test_generate_assets_endpoint(monkeypatch: pytest.MonkeyPatch) -> None
     transport = httpx.ASGITransport(app=create_app())
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         assert (await client.post(f"/api/leads/{uuid.uuid4()}/assets")).status_code == 404
-        assert (await client.post(f"/api/leads/{ok}/assets")).json() == {"queued": True}
-        again = await client.post(f"/api/leads/{ok}/assets")
-        assert again.status_code == 409 and "already" in again.json()["detail"]
-        nothing = await client.post(f"/api/leads/{seo_only}/assets")
-        assert nothing.status_code == 409
-    assert sent == [ok]
+        first = (await client.post(f"/api/leads/{ok}/assets")).json()
+        assert first == {"queued": True, "already_running": False}
+        again = await client.post(f"/api/leads/{ok}/generate-preview")  # the other path
+        assert again.status_code == 202 and again.json()["already_running"] is True
+        # a person may ask for assets on an SEO-only lead: logo and website get added
+        added = await client.post(f"/api/leads/{seo_only}/assets")
+        assert added.json()["queued"] is True
+    assert sent == [ok, seo_only]
 
 
 class _Done:
@@ -160,7 +162,7 @@ async def test_heavy_lane_redrafts_a_pending_proposal_and_supersedes_the_old_one
 
         await runs.execute(ctx, agents["proposal"], lead_id)
     graph = build_graph(
-        agents, get_adapters(), steps=lanes.HEAVY_STEPS, force_hooks=lanes.HEAVY_FORCE
+        agents, get_adapters(), steps=lanes.HEAVY_GRAPH, force_hooks=lanes.HEAVY_FORCE
     )
     state = await graph.ainvoke(
         {"lead_id": str(lead_id), "completed": [], "stopped_at": None, "reason": ""}

@@ -1,6 +1,7 @@
 """Rule-based prefilter for explicit requests: plain code, no LLM.
 
-Phrase lists cover the 16 drafting languages (EN DE FR ES IT NL PT PL SV DA FI NO CS RO EL HU).
+Phrase lists cover the 16 drafting languages (EN DE FR ES IT NL PT PL SV DA FI NO CS RO EL HU;
+Norwegian is detected as "nb" or "no").
 They are applied together, because language detection on short posts is unreliable. A post in
 any other language is never rejected on its wording; the LLM decides.
 """
@@ -12,7 +13,25 @@ from dataclasses import dataclass
 from datetime import datetime
 
 DRAFTING_LANGUAGES = frozenset(
-    {"en", "de", "fr", "es", "it", "nl", "pt", "pl", "sv", "da", "fi", "no", "cs", "ro", "el", "hu"}
+    {
+        "en",
+        "de",
+        "fr",
+        "es",
+        "it",
+        "nl",
+        "pt",
+        "pl",
+        "sv",
+        "da",
+        "fi",
+        "no",
+        "nb",
+        "cs",
+        "ro",
+        "el",
+        "hu",
+    }
 )
 
 

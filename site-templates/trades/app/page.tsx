@@ -1,7 +1,7 @@
-import { SiteBody } from "@/components/site";
+import { Site } from "@/components/site";
 import { homePage } from "@/lib/content";
 import { sample } from "@/lib/sample";
 
 export default function Home() {
-  return <SiteBody c={sample} page={homePage(sample)} />;
+  return <Site c={sample} page={homePage(sample)} v={sample.variant} />;
 }

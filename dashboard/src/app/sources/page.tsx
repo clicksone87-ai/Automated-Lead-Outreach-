@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { CardsSkeleton, EmptyState, ErrorState } from "@/components/common/states";
 import { StatusPill } from "@/components/common/status-pill";
 import { FreeTierPanel } from "@/components/sources/free-tier-panel";
+import { PlatformReport } from "@/components/sources/platform-report";
 import { SourceCard } from "@/components/sources/source-card";
 import { useSources } from "@/lib/queries";
 
@@ -31,6 +32,7 @@ export default function SourcesPage() {
           )
         }
       />
+      <PlatformReport />
       <FreeTierPanel />
       {isError ? (
         <ErrorState error={error} onRetry={() => refetch()} />

@@ -20,6 +20,7 @@ export const qk = {
   freeTier: ["free-tier"] as const,
   gallery: ["gallery"] as const,
   timings: (days: number) => ["timings", days] as const,
+  platforms: (days: number) => ["platforms", days] as const,
 };
 
 export interface LeadFilters {
@@ -178,13 +179,16 @@ export function usePatchSettings() {
   });
 }
 
+/** Heavy lane on demand: logo concepts, a website preview and the full audit for one lead. */
 export function useGenerateAssets() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       unwrap(api.POST("/api/leads/{lead_id}/assets", { params: { path: { lead_id: id } } })),
-    onSuccess: (_d, id) => {
-      toast.success("Generating assets", { description: "Logo concepts, a website preview and the full audit are on their way." });
+    onSuccess: (d, id) => {
+      const res = d as { queued?: boolean; already_running?: boolean } | undefined;
+      if (res?.already_running) toast.info("Assets are already being made for this lead");
+      else toast.success("Generating assets", { description: "Logo concepts, a website preview and the full audit appear in Drafts when ready." });
       qc.invalidateQueries({ queryKey: qk.lead(id) });
     },
     onError: errorToast("Assets not started"),
@@ -201,5 +205,14 @@ export function useRerunLead() {
       qc.invalidateQueries({ queryKey: qk.lead(id) });
     },
     onError: errorToast("Could not queue re-run"),
+  });
+}
+
+/** Leads per social platform (X, Reddit, Instagram, Facebook) over the last `days`. */
+export function usePlatformReport(days = 7) {
+  return useQuery({
+    queryKey: qk.platforms(days),
+    queryFn: () => unwrap(api.GET("/api/reports/platforms", { params: { query: { days } } })),
+    ...LIVE,
   });
 }

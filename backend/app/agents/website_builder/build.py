@@ -383,13 +383,19 @@ async def run_preview_tests(
     )
 
     fixtures = site_fixtures(site)
-    async with browser_factory(fulfill=fixtures) as browser:
+    designs = sorted(p.parent.name for p in (site / "design").glob("*/index.html"))
+    check("designs", len(designs) == 3, f"{len(designs)} designs: {', '.join(designs)}")
+    async with browser_factory(fulfill=fixtures, reduced_motion=True) as browser:
         cap = await browser.capture(f"{PREVIEW_ORIGIN}/", timeout_ms=30_000)
         files["desktop.png"] = cap.desktop_png
         files["mobile.png"] = cap.mobile_png
         check("renders", cap.status == 200, f"HTTP {cap.status}")
         external = [u for u in cap.blocked_requests if not u.startswith(PREVIEW_ORIGIN)]
         check("no_external_requests", not external, f"{len(external)} blocked: {external[:3]}")
+        for d in designs:
+            files[f"design-{d}.png"] = await browser.screenshot(
+                f"{PREVIEW_ORIGIN}/design/{d}/", timeout_ms=30_000
+            )
     files["preview.pdf"] = screenshots_pdf([files["desktop.png"], files["mobile.png"]])
     scores: dict[str, float] = {}
     if run_lighthouse:

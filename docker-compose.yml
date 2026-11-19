@@ -78,8 +78,20 @@ services:
         limits: { memory: 512m }
 
   worker:
+    # Fast lane and discovery: LLM calls and page fetches, no browser or builds.
     <<: *backend
-    command: ["python", "-m", "app.orchestrator.worker"]  # fast + heavy queues
+    command: ["python", "-m", "app.orchestrator.worker"]  # fast + discovery queues
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits: { memory: 1g }
+
+  worker-heavy:
+    # Heavy lane: Playwright audits, logo concepts and website builds for top leads only.
+    <<: *backend
+    command: ["arq", "app.orchestrator.worker.HeavyWorkerSettings"]
     depends_on:
       api:
         condition: service_healthy

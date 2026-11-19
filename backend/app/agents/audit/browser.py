@@ -84,8 +84,11 @@ class GuardedBrowser:
         fulfill: Fixtures | None = None,
         resolver: Resolver = system_resolver,
         user_agent: str | None = None,
+        reduced_motion: bool = False,
     ) -> None:
         self._fulfill = fulfill
+        #: our own previews: capture the finished layout, not an entrance animation mid-way
+        self._reduced_motion = reduced_motion
         self._resolver = resolver
         self._ua = user_agent
         self._pw: Playwright | None = None
@@ -153,6 +156,22 @@ class GuardedBrowser:
             return await self._isolated(self._capture, url, timeout_ms)
         return await self._capture(url, timeout_ms)
 
+    async def screenshot(self, url: str, *, timeout_ms: int = 30_000) -> bytes:
+        """Desktop viewport screenshot only (no axe, no mobile pass)."""
+        if self._threaded:
+            return await self._isolated(self._screenshot, url, timeout_ms)
+        return await self._screenshot(url, timeout_ms)
+
+    async def _screenshot(self, url: str, timeout_ms: int) -> bytes:
+        desktop, _ = await self._context(mobile=False)
+        try:
+            page = await desktop.new_page()
+            await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            await _settle(page)
+            return await page.screenshot(full_page=False, type="png")
+        finally:
+            await desktop.close()
+
     async def pdf(self, html: str) -> bytes:
         if self._threaded:
             return await self._isolated(self._pdf, html)
@@ -202,6 +221,7 @@ class GuardedBrowser:
             java_script_enabled=True,
             accept_downloads=False,
             service_workers="block",
+            reduced_motion="reduce" if self._reduced_motion else "no-preference",
         )
         blocked: list[str] = []
 

@@ -57,15 +57,18 @@ def test_normalize_phone() -> None:
 def test_country_signals() -> None:
     assert country_from_domain("https://plumber.co.uk") == "GB"
     assert country_from_domain("https://elektro.de") == "DE"
+    assert country_from_domain("https://rorlegger.no") == "NO"
     assert country_from_domain("https://plumber.com") is None
     assert country_from_phone("+1 415 555 0100") == "US"
     assert country_from_phone("+353 1 234 5678") == "IE"
+    assert country_from_phone("+47 22 12 34 56") == "NO"
     assert country_from_text("Unit 4, Leeds LS1 4AP")[0] == "GB"
     assert country_from_text("123 Main St, Austin TX 78701")[0] == "US"
 
 
 def test_timezones() -> None:
     assert timezone_for("GB") == "Europe/London"
+    assert timezone_for("NO") == "Europe/Oslo"
     assert timezone_for("US", "Austin, TX 78701") == "America/Chicago"
     assert timezone_for("US", "Portland, Oregon") == "America/Los_Angeles"
     assert timezone_for("US", "somewhere") is None
@@ -80,6 +83,9 @@ def test_language_detection() -> None:
         == "fr"
     )
     assert detect_language("Necesitamos una página web nueva para nuestro negocio.")[0] == "es"
+    assert (
+        detect_language("Vi trenger en ny nettside for vår rørleggerbedrift i Drammen.")[0] == "nb"
+    )
     assert detect_language("short")[0] is None
 
 

@@ -519,6 +519,7 @@ async def lead_detail(session: AsyncSession, lead_id: uuid.UUID) -> LeadDetail |
                 "language",
                 "similarity",
                 "attempts",
+                "assets",
             )
             for lg in logos
         ],
@@ -558,6 +559,8 @@ async def lead_detail(session: AsyncSession, lead_id: uuid.UUID) -> LeadDetail |
                 "approved_at",
                 "rejection_reason",
                 "created_at",
+                "to_email",
+                "draft",
             )
             for p in proposals
         ],
@@ -985,6 +988,7 @@ async def gallery(session: AsyncSession, limit: int = 60) -> list[GalleryItem]:
                         "style": (lg.typography or {}).get("style"),
                         "qa_status": lg.qa_status,
                         "similarity": lg.similarity,
+                        "assets": lg.assets or {},
                     }
                     for lg in logos
                 ],
