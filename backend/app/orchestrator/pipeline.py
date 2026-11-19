@@ -1,32 +1,55 @@
-"""Per-lead LangGraph workflow.
+"""Per-lead LangGraph workflow over an ordered list of steps.
 
-Completed steps are skipped on re-entry, so re-invoking the graph resumes at the first
-unfinished step. `lane` picks the steps (see `lanes`): the worker runs the fast lane for every
-lead and the heavy lane on its own queue; the CLI runs everything in one go.
+Completed steps are skipped on re-entry, so re-invoking a graph resumes at the first unfinished
+step. A step can be a group of agents that run side by side (each in its own session), every
+step can have a time limit, and a hook can force a completed step to run again. `lane` picks
+the steps (see `steps`): the worker runs the fast lane for every lead and the heavy lane on its
+own queue; the CLI runs everything in one go.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from datetime import UTC, datetime
 from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.registry import Adapters, get_adapters
 from app.config import Settings, get_settings
+from app.db.models import AgentRun, RunStatus
 from app.db.session import session_scope
-from app.orchestrator import lanes, runs
-from app.orchestrator.agents import PIPELINE_ORDER, AgentContext, LeadAgent, load_agents
-
-LANES: dict[str, tuple[str, ...]] = {
-    "full": lanes.FULL,
-    "fast": lanes.FAST_LANE,
-    "heavy": lanes.HEAVY_LANE,
-}
+from app.orchestrator import runs
+from app.orchestrator.agents import (
+    PIPELINE_ORDER,
+    AgentContext,
+    AgentOutcome,
+    LeadAgent,
+    load_agents,
+)
+from app.orchestrator.errors import TransientAgentError
+from app.orchestrator.steps import (
+    FAST_LANE,
+    FAST_TIMEOUTS,
+    FULL,
+    HEAVY_GRAPH,
+    HEAVY_TIMEOUTS,
+)
 
 logger = logging.getLogger(__name__)
+
+Step = str | tuple[str, ...]  # a tuple runs its agents in parallel
+LANES: dict[str, tuple[Step, ...]] = {"full": FULL, "fast": FAST_LANE, "heavy": HEAVY_GRAPH}
+LANE_TIMEOUTS: dict[str, dict[str, float]] = {
+    "full": {**FAST_TIMEOUTS, **HEAVY_TIMEOUTS},
+    "fast": FAST_TIMEOUTS,
+    "heavy": HEAVY_TIMEOUTS,
+}
+ForceHook = Callable[[AsyncSession, uuid.UUID], Awaitable[bool]]
 
 
 class PipelineState(TypedDict, total=False):
@@ -36,23 +59,67 @@ class PipelineState(TypedDict, total=False):
     reason: str
 
 
+class StepTimeoutError(TransientAgentError):
+    """A step ran past its time limit; recorded as retrying and picked up again later."""
+
+
 NodeFn = Callable[[PipelineState], Awaitable[dict[str, Any]]]
 
 
+async def execute_step(
+    agent: LeadAgent,
+    lead_id: uuid.UUID,
+    adapters: Adapters,
+    settings: Settings,
+    *,
+    timeout_s: float | None = None,
+    force_hook: ForceHook | None = None,
+) -> AgentOutcome:
+    """One agent for one lead in its own transaction, within an optional time limit."""
+    started = datetime.now(UTC)
+    try:
+        async with session_scope() as session:
+            ctx = AgentContext(session=session, adapters=adapters, settings=settings)
+            force = bool(force_hook and await force_hook(session, lead_id))
+            work = runs.execute(ctx, agent, lead_id, force=force)
+            return await (asyncio.wait_for(work, timeout_s) if timeout_s else work)
+    except TimeoutError as exc:
+        reason = f"{agent.name} timed out after {timeout_s:.0f}s"
+        async with session_scope() as session:
+            session.add(
+                AgentRun(agent=agent.name, lead_id=lead_id, status=RunStatus.RETRYING,
+                         attempts=1, error=reason, started_at=started,
+                         finished_at=datetime.now(UTC))
+            )  # fmt: skip
+        raise StepTimeoutError(reason) from exc
+
+
 def _node(
-    agent: LeadAgent, adapters: Adapters, settings: Settings, *, redraft: bool = False
+    agents: Sequence[LeadAgent],
+    adapters: Adapters,
+    settings: Settings,
+    timeouts: Mapping[str, float],
+    force_hooks: Mapping[str, ForceHook],
 ) -> NodeFn:
     async def run_node(state: PipelineState) -> dict[str, Any]:
         lead_id = uuid.UUID(state["lead_id"])
-        async with session_scope() as session:
-            ctx = AgentContext(session=session, adapters=adapters, settings=settings)
-            # Heavy lane: replace a still-pending fast-lane draft with one that has assets.
-            force = redraft and await lanes.supersede_pending_proposal(session, lead_id)
-            outcome = await runs.execute(ctx, agent, lead_id, force=force)
-        completed = [*state.get("completed", []), agent.name]
-        if outcome.proceed:
-            return {"completed": completed}
-        return {"completed": completed, "stopped_at": agent.name, "reason": outcome.reason}
+        results = await asyncio.gather(
+            *(
+                execute_step(a, lead_id, adapters, settings, timeout_s=timeouts.get(a.name),
+                             force_hook=force_hooks.get(a.name))
+                for a in agents
+            ),
+            return_exceptions=True,
+        )  # fmt: skip
+        for result in results:  # let the whole group finish, then surface the first failure
+            if isinstance(result, BaseException):
+                raise result
+        completed = [*state.get("completed", []), *(a.name for a in agents)]
+        for agent, outcome in zip(agents, results, strict=True):
+            assert isinstance(outcome, AgentOutcome)
+            if not outcome.proceed:
+                return {"completed": completed, "stopped_at": agent.name, "reason": outcome.reason}
+        return {"completed": completed}
 
     return run_node
 
@@ -62,22 +129,39 @@ def build_graph(
     adapters: Adapters,
     settings: Settings | None = None,
     *,
-    lane: str = "full",
+    steps: Sequence[Step] | None = None,
+    timeouts: Mapping[str, float] | None = None,
+    force_hooks: Mapping[str, ForceHook] | None = None,
+    lane: str | None = None,
 ) -> Any:
+    """Compile a graph over `steps`, or over a named `lane` (default: every registered agent in
+    pipeline order). Steps whose agents are not registered are left out. The heavy lane
+    redrafts a still-pending fast-lane proposal so it carries the assets."""
     settings = settings or get_settings()
-    wanted = LANES[lane]
-    steps = [name for name in PIPELINE_ORDER if name in agents and name in wanted]
+    if lane is not None and steps is None:
+        steps = LANES[lane]
+        if lane == "heavy" and force_hooks is None:
+            from app.orchestrator.lanes import HEAVY_FORCE  # noqa: PLC0415 - lanes imports us
+
+            force_hooks = HEAVY_FORCE
+    wanted: Sequence[Step] = steps if steps is not None else PIPELINE_ORDER
+    groups: list[tuple[str, list[LeadAgent]]] = []
+    for step in wanted:
+        names = step if isinstance(step, tuple) else (step,)
+        present = [agents[n] for n in names if n in agents]
+        if present:
+            groups.append(("+".join(a.name for a in present), present))
     graph: Any = StateGraph(PipelineState)
-    if not steps:
+    if not groups:
         graph.add_node("noop", _noop)
         graph.add_edge(START, "noop")
         graph.add_edge("noop", END)
         return graph.compile()
-    for name in steps:
-        redraft = lane == "heavy" and name == "proposal"
-        graph.add_node(name, _node(agents[name], adapters, settings, redraft=redraft))
-    graph.add_edge(START, steps[0])
-    for current, nxt in zip(steps, [*steps[1:], None], strict=True):
+    for name, members in groups:
+        graph.add_node(name, _node(members, adapters, settings, timeouts or {}, force_hooks or {}))
+    order = [name for name, _ in groups]
+    graph.add_edge(START, order[0])
+    for current, nxt in zip(order, [*order[1:], None], strict=True):
         graph.add_conditional_edges(
             current,
             _router(nxt),
@@ -99,18 +183,38 @@ def _router(nxt: str | None) -> Callable[[PipelineState], str]:
     return route
 
 
-async def run_lead(
-    lead_id: uuid.UUID, adapters: Adapters | None = None, *, lane: str = "full"
+async def run_steps(
+    lead_id: uuid.UUID,
+    steps: Sequence[Step],
+    adapters: Adapters | None = None,
+    *,
+    timeouts: Mapping[str, float] | None = None,
+    force_hooks: Mapping[str, ForceHook] | None = None,
 ) -> PipelineState:
-    graph = build_graph(load_agents(), adapters or get_adapters(), lane=lane)
+    graph = build_graph(
+        load_agents(), adapters or get_adapters(), steps=steps,
+        timeouts=timeouts, force_hooks=force_hooks,
+    )  # fmt: skip
     result: PipelineState = await graph.ainvoke(
         {"lead_id": str(lead_id), "completed": [], "stopped_at": None, "reason": ""}
     )
     logger.info(
-        "%s lane for %s: completed=%s stopped_at=%s",
-        lane,
+        "lead %s: completed=%s stopped_at=%s",
         lead_id,
         result.get("completed"),
         result.get("stopped_at"),
     )
     return result
+
+
+async def run_lead(
+    lead_id: uuid.UUID, adapters: Adapters | None = None, *, lane: str = "full"
+) -> PipelineState:
+    """Run one lead through a lane in one go ("full" = every step; the CLI uses it). The worker
+    resumes leads with `lanes.continue_lead` instead, which keeps heavy work on its queue."""
+    if lane == "heavy":
+        from app.orchestrator.lanes import HEAVY_FORCE  # noqa: PLC0415 - lanes imports us
+
+        return await run_steps(lead_id, LANES[lane], adapters, timeouts=LANE_TIMEOUTS[lane],
+                               force_hooks=HEAVY_FORCE)  # fmt: skip
+    return await run_steps(lead_id, LANES[lane], adapters, timeouts=LANE_TIMEOUTS[lane])

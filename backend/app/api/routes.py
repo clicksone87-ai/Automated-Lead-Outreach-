@@ -15,12 +15,13 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 from sse_starlette.sse import EventSourceResponse
 
+from app.agents.discovery.sources import SOURCES
 from app.api.deps import AdaptersDep, SessionDep, SettingsDep
 from app.config import integration_status
 from app.db.models import Lead
 from app.db.session import session_scope
 from app.orchestrator import lanes
-from app.orchestrator.queue import enqueue_heavy, enqueue_pipeline, enqueue_source
+from app.orchestrator.queue import enqueue_pipeline, enqueue_source
 from app.schemas import (
     ActivityOut,
     AuditDetail,
@@ -39,8 +40,9 @@ from app.schemas import (
     SettingsPatch,
     SourceOut,
     SourcePatch,
+    TimingsOut,
 )
-from app.services import admin, platforms, queries, runtime_settings
+from app.services import admin, manual_runs, platforms, queries, runtime_settings, timings
 
 router = APIRouter(prefix="/api")
 public = APIRouter(prefix="/api")
@@ -76,6 +78,13 @@ async def health(session: SessionDep, settings: SettingsDep) -> HealthOut:
 @router.get("/overview", response_model=OverviewOut)
 async def overview(session: SessionDep) -> OverviewOut:
     return await queries.overview(session)
+
+
+@router.get("/timings", response_model=TimingsOut)
+async def lead_timings(
+    session: SessionDep, days: Annotated[int, Query(ge=1, le=90)] = 7
+) -> TimingsOut:
+    return await timings.timings(session, days=days)
 
 
 @router.get("/leads", response_model=LeadPage)
@@ -132,20 +141,25 @@ async def rerun_lead(lead_id: uuid.UUID, session: SessionDep) -> dict[str, bool]
     return {"queued": await enqueue_pipeline(lead_id)}
 
 
+@router.post("/leads/{lead_id}/assets", status_code=status.HTTP_202_ACCEPTED)
 @router.post("/leads/{lead_id}/generate-preview", status_code=status.HTTP_202_ACCEPTED)
-async def generate_preview(lead_id: uuid.UUID, session: SessionDep) -> dict[str, bool]:
-    """Heavy lane on demand: audit (if they have a site), logo concepts and a website preview."""
+async def generate_assets(lead_id: uuid.UUID, session: SessionDep) -> dict[str, bool]:
+    """Heavy lane on demand: logo concepts, a website preview and the full audit (if they have
+    a site). Both paths are kept: the dashboard has used each name."""
     lead = await session.get(Lead, lead_id)
     if lead is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "lead not found")
-    if lanes.is_active(lead):
+    if lanes.heavy_in_progress((lead.lane_timings or {}).get("heavy") or {}) or lanes.is_active(
+        lead
+    ):
         return {"queued": False, "already_running": True}
     try:
-        await lanes.request(session, lead_id)
-    except LookupError as exc:
+        await lanes.request_assets(session, lead_id)
+    except lanes.AssetsRequestError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     await session.commit()  # the heavy worker must see the updated brief
-    return {"queued": await enqueue_heavy(lead_id), "already_running": False}
+    queued = await lanes.send_to_heavy([lead_id], requested_by="dashboard") == 1
+    return {"queued": queued, "already_running": False}
 
 
 @router.get("/reports/platforms", response_model=PlatformReport)
@@ -177,9 +191,17 @@ async def patch_source(
 
 
 @router.post("/sources/{key}/run", status_code=status.HTTP_202_ACCEPTED)
-async def run_source_now(key: str) -> dict[str, bool]:
+async def run_source_now(
+    key: str, session: SessionDep, settings: SettingsDep, adapters: AdaptersDep
+) -> dict[str, bool]:
     from datetime import UTC, datetime  # noqa: PLC0415
 
+    if key not in SOURCES:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown source")
+    verdict = await manual_runs.authorize(session, settings, adapters, key)
+    if not verdict.allowed:
+        await session.commit()  # keep the refusal in the decision log
+        raise HTTPException(verdict.status_code, verdict.reason)
     return {
         "queued": await enqueue_source(key, datetime.now(UTC).strftime("%Y%m%d%H%M%S"), force=True)
     }

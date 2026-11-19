@@ -9,8 +9,10 @@ x-backend: &backend
     DATABASE_URL: postgresql+psycopg://leads:leads@postgres:5432/leads
     REDIS_URL: redis://redis:6379/0
     DATA_DIR: /data
+    SITE_BUILDER_DIR: /cache/site-builder
   volumes:
     - ./data:/data
+    - sitebuilder:/cache/site-builder
     - ./backups:/backups
     - ./site-templates:/site-templates:ro
     - ./email-templates:/email-templates:ro
@@ -76,15 +78,15 @@ services:
         limits: { memory: 512m }
 
   worker:
+    # Fast lane and discovery: LLM calls and page fetches, no browser or builds.
     <<: *backend
-    command: ["arq", "app.orchestrator.worker.WorkerSettings"]
+    command: ["python", "-m", "app.orchestrator.worker"]  # fast + discovery queues
     depends_on:
       api:
         condition: service_healthy
-    shm_size: 512m  # Chromium needs shared memory
     deploy:
       resources:
-        limits: { memory: 2g }
+        limits: { memory: 1g }
 
   worker-heavy:
     # Heavy lane: Playwright audits, logo concepts and website builds for top leads only.
@@ -174,3 +176,4 @@ volumes:
   pgdata:
   redisdata:
   mailpitdata:
+  sitebuilder:

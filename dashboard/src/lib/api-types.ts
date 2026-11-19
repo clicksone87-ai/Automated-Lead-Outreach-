@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/timings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lead Timings */
+        get: operations["lead_timings_api_timings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/leads": {
         parameters: {
             query?: never;
@@ -99,10 +116,32 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Generate Preview
-         * @description Heavy lane on demand: audit (if they have a site), logo concepts and a website preview.
+         * Generate Assets
+         * @description Heavy lane on demand: logo concepts, a website preview and the full audit (if they have
+         *     a site). Both paths are kept: the dashboard has used each name.
          */
-        post: operations["generate_preview_api_leads__lead_id__generate_preview_post"];
+        post: operations["generate_assets_api_leads__lead_id__generate_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/leads/{lead_id}/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Assets
+         * @description Heavy lane on demand: logo concepts, a website preview and the full audit (if they have
+         *     a site). Both paths are kept: the dashboard has used each name.
+         */
+        post: operations["generate_assets_api_leads__lead_id__assets_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1025,6 +1064,21 @@ export interface components {
              */
             mock_in_use: boolean;
         };
+        /** LaneTiming */
+        LaneTiming: {
+            /** Lane */
+            lane: string;
+            /** Leads */
+            leads: number;
+            /** P50 S */
+            p50_s: number | null;
+            /** P90 S */
+            p90_s: number | null;
+            /** Target S */
+            target_s: number;
+            /** Within Target */
+            within_target: boolean;
+        };
         /** LeadDetail */
         LeadDetail: {
             lead: components["schemas"]["LeadRow"];
@@ -1125,6 +1179,18 @@ export interface components {
              * @default false
              */
             is_demo: boolean;
+            /** Posted At */
+            posted_at?: string | null;
+            /** Source Family */
+            source_family?: string | null;
+            /** Lane */
+            lane?: string | null;
+            /** Prefilter Reason */
+            prefilter_reason?: string | null;
+            /** Lane Timings */
+            lane_timings?: {
+                [key: string]: unknown;
+            };
             /**
              * Created At
              * Format: date-time
@@ -1135,6 +1201,22 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * ManualRunOut
+         * @description Whether "Run now" is allowed for a source that spends a limited free tier.
+         */
+        ManualRunOut: {
+            /** Limited */
+            limited: boolean;
+            /** Allowed */
+            allowed: boolean;
+            /** Reason */
+            reason?: string | null;
+            /** Next Allowed At */
+            next_allowed_at?: string | null;
+            /** Usage */
+            usage?: string[];
         };
         /** OverviewOut */
         OverviewOut: {
@@ -1326,6 +1408,7 @@ export interface components {
             runs: {
                 [key: string]: unknown;
             }[];
+            manual_run: components["schemas"]["ManualRunOut"];
         };
         /** SourcePatch */
         SourcePatch: {
@@ -1356,6 +1439,21 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /** StepTiming */
+        StepTiming: {
+            /** Agent */
+            agent: string;
+            /** Runs */
+            runs: number;
+            /** P50 S */
+            p50_s: number;
+            /** P90 S */
+            p90_s: number;
+            /** Avg S */
+            avg_s: number;
+            /** Max S */
+            max_s: number;
+        };
         /** SuppressionIn */
         SuppressionIn: {
             /** Email */
@@ -1367,6 +1465,24 @@ export interface components {
              * @default manual
              */
             reason: string;
+        };
+        /**
+         * TimingsOut
+         * @description How long leads take, per step (agent_runs) and per lane, over the last `window_days`.
+         */
+        TimingsOut: {
+            /** Window Days */
+            window_days: number;
+            /** Steps */
+            steps: components["schemas"]["StepTiming"][];
+            /** Lanes */
+            lanes: components["schemas"]["LaneTiming"][];
+            /** To Proposal Leads */
+            to_proposal_leads: number;
+            /** To Proposal P50 S */
+            to_proposal_p50_s: number | null;
+            /** To Proposal P90 S */
+            to_proposal_p90_s: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1428,6 +1544,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OverviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lead_timings_api_timings_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimingsOut"];
                 };
             };
             /** @description Validation Error */
@@ -1555,7 +1704,42 @@ export interface operations {
             };
         };
     };
-    generate_preview_api_leads__lead_id__generate_preview_post: {
+    generate_assets_api_leads__lead_id__generate_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                lead_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_assets_api_leads__lead_id__assets_post: {
         parameters: {
             query?: never;
             header?: {

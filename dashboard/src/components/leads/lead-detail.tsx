@@ -12,8 +12,8 @@ import {
   MessageSquare,
   Palette,
   RotateCw,
-  Sparkles,
   Shield,
+  Sparkles,
   ShieldAlert,
   XCircle,
 } from "lucide-react";
@@ -25,7 +25,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fileUrl, type LeadDetail } from "@/lib/api";
 import { ago, countryName, dateTime, languageName, titleCase } from "@/lib/format";
-import { useGeneratePreview, useLead, useRerunLead } from "@/lib/queries";
+import { duration } from "@/components/overview/lane-speed";
+import { useGenerateAssets, useLead, useRerunLead } from "@/lib/queries";
 import { AGENT_LABELS, TRIGGERS } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { AuditSummaryCard, BriefView } from "./brief-view";
@@ -105,6 +106,51 @@ function Timeline({ detail }: { detail: LeadDetail }) {
   );
 }
 
+type LaneEntry = { queued?: string; started?: string; finished?: string | null; seconds?: number | null; deferred?: string | null; stopped_at?: string | null };
+
+function laneEntry(timings: Record<string, unknown> | undefined, lane: string): LaneEntry | undefined {
+  const value = timings?.[lane];
+  return value && typeof value === "object" ? (value as LaneEntry) : undefined;
+}
+
+function heavyRunning(timings: Record<string, unknown> | undefined): boolean {
+  const heavy = laneEntry(timings, "heavy");
+  return Boolean(heavy?.queued && !heavy.finished && !heavy.deferred);
+}
+
+/** One line: which lane the lead is in and how long each lane took. */
+function LaneLine({ lead }: { lead: LeadDetail["lead"] }) {
+  const fast = laneEntry(lead.lane_timings, "fast");
+  const heavy = laneEntry(lead.lane_timings, "heavy");
+  if (!fast && !heavy && !lead.prefilter_reason) return null;
+  const part = (label: string, e: LaneEntry | undefined) => {
+    if (!e) return null;
+    const state = e.deferred
+      ? `waiting: ${e.deferred}`
+      : e.seconds !== null && e.seconds !== undefined
+        ? duration(e.seconds)
+        : e.started
+          ? "running"
+          : "queued";
+    return (
+      <span>
+        <span className="font-medium text-foreground">{label}</span> {state}
+      </span>
+    );
+  };
+  return (
+    <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      {part("Fast lane", fast)}
+      {part("Heavy lane", heavy)}
+      {lead.prefilter_reason && (
+        <span>
+          <span className="font-medium text-foreground">Prefilter</span> {lead.prefilter_reason}
+        </span>
+      )}
+    </p>
+  );
+}
+
 /** Heavy-lane marker written by the backend (`lanes.STATE_KEY`). */
 function heavyLane(state: LeadDetail["pipeline_state"]): { status: string } | null {
   const h = (state as Record<string, unknown> | undefined)?.heavy;
@@ -120,14 +166,14 @@ function NotYet({ icon, title, description }: { icon: typeof Bot; title: string;
 export function LeadDetailView({ id, compact = false }: { id: string; compact?: boolean }) {
   const { data, isLoading, isError, error, refetch } = useLead(id);
   const rerun = useRerunLead();
-  const preview = useGeneratePreview();
+  const assets = useGenerateAssets();
 
   if (isLoading) return <RowsSkeleton rows={8} />;
   if (isError || !data) return <ErrorState error={error} onRetry={() => refetch()} />;
   const { lead, business } = data;
   const trackB = latestTrackB(data.proposals);
   const heavy = heavyLane(data.pipeline_state);
-  const heavyBusy = heavy?.status === "queued" || heavy?.status === "running";
+  const heavyBusy = heavy?.status === "queued" || heavy?.status === "running" || heavyRunning(lead.lane_timings);
 
   return (
     <div className="space-y-5">
@@ -151,12 +197,12 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
             <Button
               variant="outline"
               size="sm"
-              onClick={() => preview.mutate(lead.id)}
-              disabled={preview.isPending || heavyBusy || !data.brief}
-              title={!data.brief ? "Available once the Requirements agent has written a brief" : "Run the audit, logo concepts and website preview for this lead"}
+              onClick={() => assets.mutate(lead.id)}
+              disabled={assets.isPending || heavyBusy || !data.brief}
+              title={!data.brief ? "Available once the Requirements agent has written a brief" : "Logo concepts, a website preview and the full audit (heavy lane)"}
             >
-              <Sparkles className={cn("size-3.5", (preview.isPending || heavyBusy) && "animate-pulse")} />
-              {heavyBusy ? "Making previews…" : "Generate preview"}
+              <Sparkles className={cn("size-3.5", (assets.isPending || heavyBusy) && "animate-pulse")} />
+              {heavyBusy ? "Generating assets…" : "Generate assets"}
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={() => rerun.mutate(lead.id)} disabled={rerun.isPending}>
@@ -164,6 +210,8 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
           </Button>
         </div>
       </div>
+
+      <LaneLine lead={lead} />
 
       <dl className="grid grid-cols-2 gap-4 rounded-xl border bg-surface-sunken/50 p-4 sm:grid-cols-4">
         <Fact label="Country">{countryName(lead.country)}</Fact>

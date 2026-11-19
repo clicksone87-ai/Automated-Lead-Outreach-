@@ -1,5 +1,7 @@
-"""Arq workers: the fast worker runs discovery and every lead's fast lane; the heavy worker
-runs audits, logos and website builds for top leads (see `lanes`).
+"""Arq workers. The `worker` container runs the fast queue (fast-lane batches, resumes) and the
+discovery queue (source runs) in one process; the `worker-heavy` container runs the heavy queue
+(audits, logos and website previews for top leads, one at a time), so a heavy job that runs out
+of memory never takes the fast lane down with it.
 
 Retries: transient failures are retried with exponential backoff up to MAX_JOB_ATTEMPTS.
 Expected stops (budget cap, missing API key, policy) are recorded and not retried.
@@ -7,27 +9,23 @@ Expected stops (budget cap, missing API key, policy) are recorded and not retrie
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
+import signal
 import uuid
 from typing import Any, ClassVar
 
 import httpx
-from arq import Retry, cron
+from arq import Retry, Worker, cron
 
 from app.adapters.registry import get_adapters
 from app.agents.discovery.runner import run_source
 from app.config import get_settings, log_missing_integrations
-from app.db.models import Brief, Lead
 from app.db.session import session_scope
 from app.logging_setup import configure_logging
-from app.orchestrator import lanes, pipeline
-from app.orchestrator.queue import (
-    DEFAULT_QUEUE,
-    HEAVY_QUEUE,
-    enqueue_heavy,
-    enqueue_pipeline,
-    redis_settings,
-)
+from app.orchestrator import lanes
+from app.orchestrator.queue import DEFAULT_QUEUE, DISCOVERY_QUEUE, HEAVY_QUEUE, redis_settings
 from app.orchestrator.runs import TransientAgentError
 
 logger = logging.getLogger(__name__)
@@ -35,8 +33,8 @@ logger = logging.getLogger(__name__)
 TRANSIENT = (TransientAgentError, httpx.TransportError, httpx.TimeoutException)
 
 
-def backoff_seconds(job_try: int, base: int = 15, cap: int = 1800) -> int:
-    """15s, 30s, 60s, 120s … capped at 30 min."""
+def backoff_seconds(job_try: int, base: int = 15, cap: int = 600) -> int:
+    """15s, 30s, 60s, 120s … capped at 10 min (longer waits belong to the sweep)."""
     return int(min(cap, base * 2 ** max(0, job_try - 1)))
 
 
@@ -49,65 +47,39 @@ def _is_transient(exc: BaseException) -> bool:
 
 
 async def run_pipeline(ctx: dict[str, Any], lead_id: str) -> dict[str, Any]:
-    """Fast lane, then hand top leads to the heavy worker."""
-    lid = uuid.UUID(lead_id)
+    """Resume one lead (e.g. after a human approval): its fast steps; heavy work is re-queued."""
     try:
-        state = await pipeline.run_lead(lid, get_adapters(), lane="fast")
+        state = await lanes.continue_lead(uuid.UUID(lead_id), get_adapters())
     except Exception as exc:
         if _is_transient(exc) and ctx["job_try"] < get_settings().max_job_attempts:
             raise Retry(defer=backoff_seconds(ctx["job_try"])) from exc
         raise
-    heavy = await maybe_queue_heavy(lid)
-    return {
-        "completed": state.get("completed"),
-        "stopped_at": state.get("stopped_at"),
-        "heavy_queued": heavy,
-    }
+    return {"completed": state.get("completed"), "stopped_at": state.get("stopped_at")}
 
 
-async def maybe_queue_heavy(lead_id: uuid.UUID) -> bool:
-    """Queue the heavy lane when the lead qualifies and it is not already queued/done."""
-    async with session_scope() as session:
-        lead = await session.get(Lead, lead_id)
-        brief = await session.get(Brief, lead_id)
-        if lead is None or brief is None or not lanes.qualifies(lead, brief.data):
-            return False
-        if lanes.is_active(lead) or not await lanes.outstanding(session, lead, brief.data):
-            return False
-        lanes.set_state(lead, "queued", f"intent {lead.intent_score}")
-    return await enqueue_heavy(lead_id)
+async def run_fast_batch_job(ctx: dict[str, Any], lead_ids: list[str]) -> dict[str, Any]:
+    return await lanes.run_fast_batch([uuid.UUID(x) for x in lead_ids], get_adapters())
+
+
+async def run_heavy_job(ctx: dict[str, Any], lead_id: str) -> dict[str, Any]:
+    try:
+        state = await lanes.run_heavy(uuid.UUID(lead_id), get_adapters())
+    except Exception as exc:
+        if _is_transient(exc) and ctx["job_try"] < get_settings().max_job_attempts:
+            raise Retry(defer=backoff_seconds(ctx["job_try"])) from exc
+        raise
+    return {"completed": state.get("completed"), "stopped_at": state.get("stopped_at")}
 
 
 async def run_heavy(ctx: dict[str, Any], lead_id: str) -> dict[str, Any]:
-    lid = uuid.UUID(lead_id)
-    async with session_scope() as session:
-        lead = await session.get(Lead, lid)
-        if lead is None:
-            return {"skipped": "lead not found"}
-        lanes.set_state(lead, "running")
-    try:
-        state = await pipeline.run_lead(lid, get_adapters(), lane="heavy")
-    except Exception as exc:
-        if _is_transient(exc) and ctx["job_try"] < get_settings().max_job_attempts:
-            raise Retry(defer=backoff_seconds(ctx["job_try"])) from exc
-        async with session_scope() as session:
-            if (lead := await session.get(Lead, lid)) is not None:
-                lanes.set_state(lead, "failed", str(exc)[:300])
-        raise
-    async with session_scope() as session:
-        if (lead := await session.get(Lead, lid)) is not None:
-            stopped = state.get("stopped_at")
-            # Stopping at the proposal/outreach (approval wait) means the heavy work is done.
-            done = stopped in (None, "proposal", "outreach")
-            lanes.set_state(lead, "done" if done else "stopped", state.get("reason", ""))
-    return {"completed": state.get("completed"), "stopped_at": state.get("stopped_at")}
+    """Same job under its earlier name, so jobs queued with either name still run."""
+    return await run_heavy_job(ctx, lead_id)
 
 
 async def run_source_job(ctx: dict[str, Any], key: str, force: bool = False) -> dict[str, Any]:
     async with session_scope() as session:
         result = await run_source(session, get_adapters(), get_settings(), key, force=force)
-    for lead_id in result.lead_ids or []:
-        await enqueue_pipeline(lead_id)
+    await lanes.enqueue_fast(result.lead_ids or [])
     return {
         "source": key,
         "status": result.status,
@@ -140,20 +112,38 @@ async def shutdown(ctx: dict[str, Any]) -> None:
 
 
 class WorkerSettings:
-    functions: ClassVar[list[Any]] = [run_pipeline, run_source_job]
+    """Fast queue: fast-lane batches and resumes. Network-bound work, so several jobs run side
+    by side."""
+
+    functions: ClassVar[list[Any]] = [run_pipeline, run_fast_batch_job]
     cron_jobs: ClassVar[list[Any]] = [cron(heartbeat, minute=set(range(60)), run_at_startup=True)]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = redis_settings()
     queue_name = DEFAULT_QUEUE
-    max_jobs = 4  # fast lane only: LLM calls and page fetches, no builds
-    job_timeout = 600
+    max_jobs = 4
+    job_timeout = 1800
     max_tries = get_settings().max_job_attempts
     keep_result = 3600
 
 
+class DiscoveryWorkerSettings:
+    """Discovery queue: source runs (crawls with polite per-site delays can take minutes)."""
+
+    functions: ClassVar[list[Any]] = [run_source_job]
+    redis_settings = redis_settings()
+    queue_name = DISCOVERY_QUEUE
+    max_jobs = 3
+    job_timeout = 1800
+    max_tries = 1
+    keep_result = 3600
+
+
 class HeavyWorkerSettings:
-    functions: ClassVar[list[Any]] = [run_heavy]
+    """Heavy queue (`worker-heavy` container): Chromium, Lighthouse and logo rendering are
+    memory-heavy, one job at a time."""
+
+    functions: ClassVar[list[Any]] = [run_heavy_job, run_heavy]
     cron_jobs: ClassVar[list[Any]] = [
         cron(heavy_heartbeat, minute=set(range(60)), run_at_startup=True)
     ]
@@ -161,8 +151,38 @@ class HeavyWorkerSettings:
     on_shutdown = shutdown
     redis_settings = redis_settings()
     queue_name = HEAVY_QUEUE
-    max_jobs = 1  # Chromium, Lighthouse and next build are memory-heavy
-    # One heavy job can include an audit, three logo concepts and a website build.
-    job_timeout = 3600
-    max_tries = get_settings().max_job_attempts
+    max_jobs = 1
+    job_timeout = 1800
+    max_tries = 2
     keep_result = 3600
+
+
+def _worker(settings: type, **overrides: Any) -> Worker:
+    names = ("functions", "cron_jobs", "on_startup", "on_shutdown", "redis_settings",
+             "queue_name", "max_jobs", "job_timeout", "max_tries", "keep_result")  # fmt: skip
+    kwargs = {n: getattr(settings, n) for n in names if hasattr(settings, n)}
+    return Worker(**{**kwargs, **overrides, "handle_signals": False})
+
+
+async def run_workers() -> None:
+    """The fast and discovery queues in one process (one interpreter's memory, not two)."""
+    workers = [_worker(WorkerSettings), _worker(DiscoveryWorkerSettings)]
+    loop = asyncio.get_running_loop()
+
+    def stop(sig: signal.Signals) -> None:
+        for w in workers:
+            w.handle_sig(sig)
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        with contextlib.suppress(NotImplementedError):  # Windows dev hosts
+            loop.add_signal_handler(sig, stop, sig)
+    try:
+        await asyncio.gather(*(w.async_run() for w in workers))
+    except asyncio.CancelledError:
+        logger.info("worker stopped")
+    finally:
+        await asyncio.gather(*(w.close() for w in workers), return_exceptions=True)
+
+
+if __name__ == "__main__":
+    asyncio.run(run_workers())

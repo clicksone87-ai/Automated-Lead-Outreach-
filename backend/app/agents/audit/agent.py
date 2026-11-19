@@ -242,6 +242,7 @@ class AuditAgent:
             "competitor_comparison": [c.model_dump() for c in competitors],
             "before_after_summary": summary,
             "report_pdf_path": report_path,
+            "depth": "full",
         }
         if audit is None:
             s.add(Audit(lead_id=lead.id, **values))
@@ -307,6 +308,7 @@ class AuditAgent:
             "before_after_summary": "Today: the website could not be reached. After the work: "
             "a fast, reliable, mobile-first site.",
             "report_pdf_path": None,
+            "depth": "full",
         }
         audit = (
             await ctx.session.execute(select(Audit).where(Audit.lead_id == lead.id))

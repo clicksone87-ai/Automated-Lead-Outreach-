@@ -20,6 +20,7 @@ from app.db.models import Source
 from app.db.session import session_scope
 from app.learning.report import run_weekly
 from app.logging_setup import configure_logging
+from app.orchestrator import lanes
 from app.orchestrator.queue import SCHEDULER_QUEUE, enqueue_source, redis_settings
 from app.services import backup, cache, outreach_jobs
 
@@ -44,6 +45,28 @@ async def tick_sources(ctx: dict[str, Any]) -> int:
             if await enqueue_source(row.key, slot):
                 queued += 1
     return queued
+
+
+async def fast_sweep(ctx: dict[str, Any]) -> int:
+    """Queue leads the fast lane has not finished: never queued, stuck, deferred or paused."""
+    async with session_scope() as session:
+        due = await lanes.due_for_fast_lane(session)
+    return await lanes.enqueue_fast(due)
+
+
+async def heavy_picker(ctx: dict[str, Any]) -> int:
+    """Send today's best fast-lane leads to the heavy lane, within the daily limit and the
+    Gemini quota left."""
+    from app.orchestrator import quota  # noqa: PLC0415
+
+    async with session_scope() as session:
+        picked = await lanes.pick_for_heavy(session)
+        if not picked:
+            return 0
+        report = {r["scope"]: r for r in await quota.report(session)}
+    left = min(float(str(report[s]["remaining"])) for s in ("gemini", "gemini:heavy"))
+    affordable = int(left // lanes.GEMINI_PER_HEAVY_LEAD)
+    return await lanes.send_to_heavy(picked[:affordable], requested_by="daily_pick")
 
 
 async def reddit_deletion_sync(ctx: dict[str, Any]) -> int:
@@ -124,6 +147,8 @@ class SchedulerSettings:
     functions: ClassVar[list[Any]] = []
     cron_jobs: ClassVar[list[Any]] = [
         cron(tick_sources, minute=set(range(60)), run_at_startup=True),
+        cron(fast_sweep, minute=set(range(1, 60, 5))),
+        cron(heavy_picker, minute={4, 19, 34, 49}),
         cron(reddit_deletion_sync, hour={4}, minute={7}),
         cron(daily_backup, hour={3}, minute={15}),
         cron(send_due, minute=set(range(0, 60, 5))),

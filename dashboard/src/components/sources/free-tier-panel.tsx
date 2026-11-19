@@ -19,6 +19,11 @@ const LABELS: Record<string, string> = {
   "apify:social_facebook": "Facebook (Apify share)",
   "apify:social_x": "X (Apify share)",
   "apify:social_instagram": "Instagram (Apify share)",
+  "serper:daily": "Serper credits today (daily ceiling)",
+  "gemini:scoring": "Gemini today: batch scoring",
+  "gemini:fast": "Gemini today: fast-lane drafts",
+  "gemini:heavy": "Gemini today: heavy lane (logos, previews)",
+  "gemini:other": "Gemini today: replies and other",
 };
 
 function fmt(q: Quota, v: number) {
@@ -44,6 +49,7 @@ function QuotaTile({ q, live }: { q: Quota; live?: string | null }) {
 export function FreeTierPanel() {
   const { data, isLoading } = useFreeTier();
   const main = data?.quotas.filter((q) => !q.scope.includes(":")) ?? [];
+  const daily = data?.quotas.filter((q) => q.scope === "serper:daily" || q.scope.startsWith("gemini:")) ?? [];
   const shares = data?.quotas.filter((q) => q.scope.startsWith("apify:")) ?? [];
   const liveFor = (scope: string): string | null => {
     if (!data) return null;
@@ -88,6 +94,13 @@ export function FreeTierPanel() {
                 <QuotaTile key={q.scope} q={q} live={liveFor(q.scope)} />
               ))}
             </div>
+            {daily.length > 0 && (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                {daily.map((q) => (
+                  <QuotaTile key={q.scope} q={q} />
+                ))}
+              </div>
+            )}
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {shares.map((q) => (
                 <QuotaTile key={q.scope} q={q} />

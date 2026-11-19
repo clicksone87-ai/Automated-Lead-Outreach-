@@ -73,6 +73,8 @@ class Settings(BaseSettings):
     # Serper (Google results via API: web + local) and Exa (fallback search)
     serper_api_key: SecretStr | None = None
     serper_free_credits: int = Field(default=2500, ge=0)
+    # The free credits are one-time, so a daily ceiling spreads them over weeks.
+    serper_daily_credit_cap: int = Field(default=60, ge=0)
     exa_api_key: SecretStr | None = None
     exa_free_credit_usd: float = Field(default=10.0, ge=0)
 
@@ -104,6 +106,9 @@ class Settings(BaseSettings):
     # Website templates (mounted read-only at /site-templates in the containers)
     site_templates_dir: Path = Path("/site-templates")
     email_templates_dir: Path = Path("/email-templates")
+    # Template dependencies and compiled bundles. Empty = DATA_DIR/site-builder. Compose puts
+    # it on a Docker volume: thousands of small files are slow on a Windows bind mount.
+    site_builder_dir: Path | None = None
     # Signs unsubscribe links (and other tokens). Set a long random value on a server.
     app_secret: SecretStr | None = None
     dashboard_origin: str = "http://localhost:3000"
@@ -194,6 +199,10 @@ class Settings(BaseSettings):
     @property
     def alerts_address(self) -> str:
         return f"alerts@{self.sender_domain}"
+
+    @property
+    def site_builder_root(self) -> Path:
+        return self.site_builder_dir or self.data_dir / "site-builder"
 
     @property
     def gemini_fallbacks(self) -> list[str]:

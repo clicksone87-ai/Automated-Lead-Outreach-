@@ -11,7 +11,7 @@ import uuid
 from typing import Any, ClassVar, Self
 
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.adapters.llm import LLMOutputError, LLMRequest
 from app.db.models import (
@@ -109,6 +109,20 @@ SYSTEM = (
 )
 
 
+ASSET_NAMES = {"logo": "logo concepts", "preview": "a website preview", "audit": "a website audit"}
+
+
+def _assets_line(attached: list[str]) -> str:
+    """What the email may say about drafts: only what is really attached."""
+    names = [ASSET_NAMES[k] for k in ("logo", "preview", "audit") if k in attached]
+    if names:
+        return f"We already prepared free drafts for them, attached to this email: {', '.join(names)}.\n"
+    return (
+        "Nothing is attached. Offer to prepare free drafts (logo concepts or a website preview) "
+        "if they are interested; never say anything is attached or already made.\n"
+    )
+
+
 class ProposalAgent:
     name: ClassVar[str] = "proposal"
     expensive: ClassVar[bool] = True
@@ -176,8 +190,10 @@ class ProposalAgent:
                             problem=problem,
                             request=request,
                             has_assets=bool(attachments),
+                            attached=sorted({a["kind"].split("_")[0] for a in attachments}),
                         ),
                         lead_id=lead.id,
+                        lane="heavy" if lead.lane == "heavy" else "fast",
                         max_output_tokens=2000,
                         mock_context={
                             "name": business.name,
@@ -283,6 +299,14 @@ class ProposalAgent:
             }
             | ({"track_b": track_b} if track_b else {}),
         )
+        await s.execute(
+            update(Proposal)
+            .where(
+                Proposal.lead_id == lead.id,
+                Proposal.approval_status.in_([ApprovalStatus.PENDING, ApprovalStatus.DRAFT]),
+            )
+            .values(approval_status=ApprovalStatus.SUPERSEDED)
+        )
         s.add(proposal)
         await s.flush()
         if email is None:
@@ -328,7 +352,7 @@ class ProposalAgent:
     @staticmethod
     def _task(*, business: Business, brief: dict[str, Any], facts: list[dict[str, Any]], language: str,
               attempt: int, problem: str, request: str | None = None,
-              has_assets: bool = True) -> str:  # fmt: skip
+              has_assets: bool = True, attached: list[str] | None = None) -> str:  # fmt: skip
         lines = [
             f"- evidence_id={f['evidence_id']} [{f['severity']}] {f['title']}: {f['detail']}"
             for f in facts
@@ -344,7 +368,9 @@ class ProposalAgent:
             f"{', ' + str(brief.get('location')) if brief.get('location') else ''}) in language '{language}'.\n"
             f"We can help with: {services}. "
             + (
-                "We already prepared free drafts for them (logo concepts and/or a website "
+                _assets_line(attached)  # names exactly what is attached
+                if attached is not None
+                else "We already prepared free drafts for them (logo concepts and/or a website "
                 "preview, and an audit) which are attached.\n"
                 if has_assets
                 else "Offer to prepare free logo concepts and a website preview if they are "

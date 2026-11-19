@@ -19,6 +19,7 @@ export const qk = {
   audit: (leadId: string) => ["audit", leadId] as const,
   freeTier: ["free-tier"] as const,
   gallery: ["gallery"] as const,
+  timings: (days: number) => ["timings", days] as const,
   platforms: (days: number) => ["platforms", days] as const,
 };
 
@@ -52,6 +53,14 @@ export function useHealth() {
 
 export function useOverview() {
   return useQuery({ queryKey: qk.overview, queryFn: () => unwrap(api.GET("/api/overview")), ...LIVE });
+}
+
+export function useTimings(days = 7) {
+  return useQuery({
+    queryKey: qk.timings(days),
+    queryFn: () => unwrap(api.GET("/api/timings", { params: { query: { days } } })),
+    refetchInterval: 60_000,
+  });
 }
 
 export function useLeads(filters: LeadFilters) {
@@ -147,11 +156,13 @@ export function usePatchSource() {
 }
 
 export function useRunSource() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (key: string) =>
       unwrap(api.POST("/api/sources/{key}/run", { params: { path: { key } } })),
     onSuccess: (_d, key) => toast.success("Run queued", { description: `Source "${key}" will run shortly.` }),
-    onError: errorToast("Could not queue run"),
+    onError: errorToast("Run not started"),
+    onSettled: () => qc.invalidateQueries({ queryKey: qk.sources }),
   });
 }
 
@@ -168,6 +179,22 @@ export function usePatchSettings() {
   });
 }
 
+/** Heavy lane on demand: logo concepts, a website preview and the full audit for one lead. */
+export function useGenerateAssets() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.POST("/api/leads/{lead_id}/assets", { params: { path: { lead_id: id } } })),
+    onSuccess: (d, id) => {
+      const res = d as { queued?: boolean; already_running?: boolean } | undefined;
+      if (res?.already_running) toast.info("Assets are already being made for this lead");
+      else toast.success("Generating assets", { description: "Logo concepts, a website preview and the full audit appear in Drafts when ready." });
+      qc.invalidateQueries({ queryKey: qk.lead(id) });
+    },
+    onError: errorToast("Assets not started"),
+  });
+}
+
 export function useRerunLead() {
   const qc = useQueryClient();
   return useMutation({
@@ -178,22 +205,6 @@ export function useRerunLead() {
       qc.invalidateQueries({ queryKey: qk.lead(id) });
     },
     onError: errorToast("Could not queue re-run"),
-  });
-}
-
-/** Heavy lane on demand: audit, logo concepts and a website preview for one lead. */
-export function useGeneratePreview() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      unwrap(api.POST("/api/leads/{lead_id}/generate-preview", { params: { path: { lead_id: id } } })),
-    onSuccess: (d, id) => {
-      const res = d as { queued?: boolean; already_running?: boolean } | undefined;
-      if (res?.already_running) toast.info("Previews are already being made for this lead");
-      else toast.success("Preview generation queued — logos and website appear in Drafts when ready");
-      qc.invalidateQueries({ queryKey: qk.lead(id) });
-    },
-    onError: errorToast("Could not queue preview generation"),
   });
 }
 

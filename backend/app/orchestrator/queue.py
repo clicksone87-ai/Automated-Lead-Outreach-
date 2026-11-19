@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from datetime import UTC, datetime
 
@@ -10,7 +11,9 @@ from arq.connections import RedisSettings
 
 from app.config import get_settings
 
-DEFAULT_QUEUE = "arq:queue"
+DEFAULT_QUEUE = "arq:queue"  # fast lane, discovery sources, resumes
+HEAVY_QUEUE = "arq:heavy"  # logos, previews, full audits: one at a time
+DISCOVERY_QUEUE = "arq:discovery"  # source runs: slow crawls must never hold up the fast lane
 SCHEDULER_QUEUE = "arq:scheduler"
 HEAVY_QUEUE = "arq:heavy"  # audit, logos, website builds: own worker, never blocks fast lane
 
@@ -40,21 +43,30 @@ async def enqueue_pipeline(lead_id: uuid.UUID) -> bool:
     return job is not None
 
 
-async def enqueue_source(key: str, slot: str, *, force: bool = False) -> bool:
+async def enqueue_fast_batch(lead_ids: list[uuid.UUID]) -> bool:
+    """One fast-lane batch. The job id is derived from the leads, so a batch is queued once."""
     pool = await get_pool()
-    job = await pool.enqueue_job("run_source_job", key, force, _job_id=f"source:{key}:{slot}")
+    digest = hashlib.sha256("".join(sorted(str(x) for x in lead_ids)).encode()).hexdigest()[:20]
+    job = await pool.enqueue_job(
+        "run_fast_batch_job", [str(x) for x in lead_ids], _job_id=f"fast:{digest}"
+    )
     return job is not None
 
 
 async def enqueue_heavy(lead_id: uuid.UUID) -> bool:
-    """Queue the heavy lane on its own queue.
-
-    Callers guard against duplicates with the lead's heavy-lane state; the job id carries a
-    timestamp so a finished job's kept result never blocks a later request.
-    """
+    """Callers guard against duplicates (lanes.heavy_in_progress); the time slot in the job id
+    keeps a finished job's stored result from blocking a later request for the same lead."""
     pool = await get_pool()
     slot = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     job = await pool.enqueue_job(
-        "run_heavy", str(lead_id), _job_id=f"heavy:{lead_id}:{slot}", _queue_name=HEAVY_QUEUE
+        "run_heavy_job", str(lead_id), _job_id=f"heavy:{lead_id}:{slot}", _queue_name=HEAVY_QUEUE
+    )
+    return job is not None
+
+
+async def enqueue_source(key: str, slot: str, *, force: bool = False) -> bool:
+    pool = await get_pool()
+    job = await pool.enqueue_job(
+        "run_source_job", key, force, _job_id=f"source:{key}:{slot}", _queue_name=DISCOVERY_QUEUE
     )
     return job is not None

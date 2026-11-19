@@ -173,6 +173,10 @@ class RequirementsAgent:
                 "pre-filter: no request for a logo, website, redesign or SEO found; LLM not called"
             )
             return out
+        stored = (lead.pipeline_state.get("classification") or {}).get("llm")
+        if stored:
+            # Classified in a fast-lane batch (or from the text cache): no LLM call here.
+            return self._apply(out, RequirementsLLM.model_validate(stored), text)
         llm = await ctx.adapters.llm.structured(
             ctx.session,
             LLMRequest(
@@ -192,6 +196,11 @@ class RequirementsAgent:
                 **lead.pipeline_state,
                 "mock_adapters_used": sorted(used | {"openai"}),
             }
+        return self._apply(out, llm, text)
+
+    @staticmethod
+    def _apply(out: _Classification, llm: RequirementsLLM, text: str) -> _Classification:
+        """Keep only what the source text supports; cap scores without verifiable quotes."""
         out.llm = llm
         out.quotes = verified_quotes(llm.evidence_quotes, text)
         dropped = len(llm.evidence_quotes) - len(out.quotes)

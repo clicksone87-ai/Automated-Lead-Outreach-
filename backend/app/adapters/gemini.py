@@ -31,6 +31,8 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 BASE = "https://generativelanguage.googleapis.com/v1beta"
 MAX_RETRY_WAIT_S = 65.0
+REQUEST_DEADLINE_S = 90.0
+LOGO_DEADLINE_S = 240.0  # an SVG logo concept takes the larger model one to two minutes
 
 
 class GeminiUnavailableError(TransientAgentError):
@@ -189,15 +191,27 @@ class GeminiLLM:
                 session,
                 "gemini",
                 agent=request.agent,
+                scope=quota.gemini_scope(request.agent, request.lane),
                 lead_id=request.lead_id,
                 description=f"{model} {request.kind}",
             )
             await self._limiter.wait()
-            resp = await self._client.post(
-                f"{BASE}/models/{model}:generateContent",
-                headers={"x-goog-api-key": self._key},
-                json=body,
-            )
+            # httpx limits each phase (connect, each read), not the whole call: a response
+            # that trickles in or a stalled connection could otherwise hold a lead forever.
+            deadline = LOGO_DEADLINE_S if request.kind == "logo" else REQUEST_DEADLINE_S
+            try:
+                resp = await asyncio.wait_for(
+                    self._client.post(
+                        f"{BASE}/models/{model}:generateContent",
+                        headers={"x-goog-api-key": self._key},
+                        json=body,
+                    ),
+                    timeout=deadline,
+                )
+            except TimeoutError as exc:
+                raise GeminiUnavailableError(
+                    f"{model}: no response within {deadline:.0f}s"
+                ) from exc
             if resp.status_code == 200:
                 data: dict[str, Any] = resp.json()
                 return data

@@ -141,6 +141,7 @@ class ApprovalStatus(StrEnum):
     APPROVED = "approved"
     REJECTED = "rejected"
     AUTO_APPROVED = "auto_approved"
+    SUPERSEDED = "superseded"  # replaced by a newer draft (e.g. one with the heavy-lane assets)
 
 
 class DeliveryStatus(StrEnum):
@@ -237,6 +238,18 @@ class Lead(Base):
     language: Mapped[str | None] = mapped_column(String(8), index=True)
     timezone: Mapped[str | None] = mapped_column(String(64))
     pipeline_state: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    # The post's own timestamp (social posts, forum threads); None for proactive triggers.
+    posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    # social | google | registry | other (services.families)
+    source_family: Mapped[str | None] = mapped_column(String(20), index=True)
+    # fast: every lead; heavy: picked for logos, preview and the full audit
+    lane: Mapped[str | None] = mapped_column(String(10), index=True)
+    # why the rule-based prefilter rejected the lead (None = passed or not checked)
+    prefilter_reason: Mapped[str | None] = mapped_column(Text)
+    # {"fast": {"queued", "started", "finished", "seconds", "stopped_at"}, "heavy": {...}}
+    lane_timings: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, server_default=text("'{}'::jsonb")
+    )
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _updated()
 
@@ -327,6 +340,8 @@ class Audit(Base):
     competitor_comparison: Mapped[list[Any]] = mapped_column(JSONB, default=list)
     before_after_summary: Mapped[str | None] = mapped_column(Text)
     report_pdf_path: Mapped[str | None] = mapped_column(Text)
+    # light: static checks + PageSpeed (fast lane); full: adds browser, vision, competitors, PDF
+    depth: Mapped[str] = mapped_column(String(10), default="full", server_default="full")
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _updated()
 

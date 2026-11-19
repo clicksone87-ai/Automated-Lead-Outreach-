@@ -39,7 +39,13 @@ def test_shipped_country_rules() -> None:
     assert us and gb and de and ie and no
     assert us.can_draft and gb.can_draft and de.can_draft and ie.can_draft and no.can_draft
     # Nothing can be sent until the legal review flips legal_reviewed.
-    assert not us.can_send and not gb.can_send and not de.can_send and not ie.can_send and not no.can_send
+    assert (
+        not us.can_send
+        and not gb.can_send
+        and not de.can_send
+        and not ie.can_send
+        and not no.can_send
+    )
     assert rules.get("BR") is None  # unlisted => blocked
     assert rules.get(None) is None
 

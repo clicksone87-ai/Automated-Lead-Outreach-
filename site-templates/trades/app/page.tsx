@@ -1,6 +1,7 @@
 import { Site } from "@/components/site";
-import { content, homePage } from "@/lib/content";
+import { homePage } from "@/lib/content";
+import { sample } from "@/lib/sample";
 
 export default function Home() {
-  return <Site page={homePage()} v={content.variant} />;
+  return <Site c={sample} page={homePage(sample)} v={sample.variant} />;
 }

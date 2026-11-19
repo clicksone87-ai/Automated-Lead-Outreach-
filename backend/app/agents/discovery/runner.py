@@ -27,6 +27,7 @@ from app.db.models import Lead, LeadStatus, RunStatus, Source, SourceRun
 from app.orchestrator.budget import BudgetExceededError
 from app.services import activity, evidence, runtime_settings
 from app.services.dedup import BusinessCandidate, resolve_business
+from app.services.families import family_for
 from app.services.locale import guess_locale
 
 logger = logging.getLogger(__name__)
@@ -213,6 +214,9 @@ async def ingest(
         language=item.language_hint or locale.language,
         timezone=locale.timezone,
         pipeline_state=pipeline_state,
+        posted_at=item.posted_at,
+        source_family=family_for(source.key),
+        lane="fast",
     )
     session.add(lead)
     await session.flush()

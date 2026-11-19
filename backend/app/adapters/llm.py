@@ -48,6 +48,8 @@ class LLMRequest:
     lead_id: uuid.UUID | None = None
     max_output_tokens: int = 1500
     mock_context: dict[str, Any] = field(default_factory=dict)
+    # fast | heavy | scoring | other: whose daily Gemini share this call uses (default by agent)
+    lane: str | None = None
 
 
 class LLMAdapter(Protocol):

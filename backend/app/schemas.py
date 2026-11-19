@@ -91,6 +91,11 @@ class LeadRow(ORM):
     language: str | None
     timezone: str | None
     is_demo: bool = False
+    posted_at: datetime | None = None
+    source_family: str | None = None
+    lane: str | None = None
+    prefilter_reason: str | None = None
+    lane_timings: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
@@ -222,6 +227,46 @@ class OverviewOut(BaseModel):
     inbox_count: int
 
 
+class StepTiming(BaseModel):
+    agent: str
+    runs: int
+    p50_s: float
+    p90_s: float
+    avg_s: float
+    max_s: float
+
+
+class LaneTiming(BaseModel):
+    lane: str  # fast | heavy
+    leads: int
+    p50_s: float | None
+    p90_s: float | None
+    target_s: int
+    within_target: bool
+
+
+class TimingsOut(BaseModel):
+    """How long leads take, per step (agent_runs) and per lane, over the last `window_days`."""
+
+    window_days: int
+    steps: list[StepTiming]
+    lanes: list[LaneTiming]
+    #: first pipeline step → proposal drafted
+    to_proposal_leads: int
+    to_proposal_p50_s: float | None
+    to_proposal_p90_s: float | None
+
+
+class ManualRunOut(BaseModel):
+    """Whether "Run now" is allowed for a source that spends a limited free tier."""
+
+    limited: bool
+    allowed: bool
+    reason: str | None = None
+    next_allowed_at: datetime | None = None
+    usage: list[str] = Field(default_factory=list)
+
+
 class SourceOut(BaseModel):
     key: str
     label: str
@@ -237,6 +282,7 @@ class SourceOut(BaseModel):
     leads_found_total: int
     leads_7d: int
     runs: list[dict[str, Any]]
+    manual_run: ManualRunOut
 
 
 class SourcePatch(BaseModel):

@@ -96,3 +96,24 @@ def test_similarity_flags_near_copies_only() -> None:
     sims = compare(circle, {"same": circle, "different": _png("bars")})
     assert sims[0].against == "same" and sims[0].too_similar
     assert not next(s for s in sims if s.against == "different").too_similar
+
+
+async def test_within_budget_keeps_finished_results_and_drops_late_ones() -> None:
+    import asyncio  # noqa: PLC0415
+
+    from app.agents.branding.agent import within_budget  # noqa: PLC0415
+
+    async def fast() -> str:
+        return "ok"
+
+    async def slow() -> str:
+        await asyncio.sleep(5)
+        return "late"
+
+    async def broken() -> str:
+        raise ValueError("bad svg")
+
+    out = await within_budget([fast(), slow(), broken()], 0.2)
+    assert out[0] == "ok"
+    assert isinstance(out[1], TimeoutError)
+    assert isinstance(out[2], ValueError)

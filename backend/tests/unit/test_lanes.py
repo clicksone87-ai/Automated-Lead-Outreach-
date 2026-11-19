@@ -26,7 +26,14 @@ def _lead(score: int | None, state: dict | None = None) -> Lead:
 
 
 def test_lanes_split_the_pipeline() -> None:
-    assert lanes.FAST_LANE == ("requirements", "contact_enrichment", "proposal", "outreach")
+    assert lanes.FAST_LANE == (
+        "prefilter",
+        "requirements",
+        "contact_enrichment",
+        "audit_light",
+        "proposal",
+        "outreach",
+    )
     assert lanes.HEAVY_LANE[:4] == lanes.HEAVY_STEPS
     assert set(lanes.FAST_LANE) | set(lanes.HEAVY_STEPS) == set(lanes.FULL)
 

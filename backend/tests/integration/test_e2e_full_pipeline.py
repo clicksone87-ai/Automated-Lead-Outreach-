@@ -82,7 +82,12 @@ class FakeRender:
 
 
 async def fake_build(
-    *, template_dir: Path, data_dir: Path, preview_id: str, content: dict[str, Any]
+    *,
+    template_dir: Path,
+    data_dir: Path,
+    preview_id: str,
+    content: dict[str, Any],
+    cache_dir: Path | None = None,
 ) -> BuildResult:
     site = data_dir / "previews" / preview_id / "site"
     site.mkdir(parents=True, exist_ok=True)
@@ -260,9 +265,8 @@ async def test_fast_lane_drafts_then_heavy_lane_redrafts_with_assets(tmp_path: P
             .all()
         )
     assert [p.version for p in rows] == [1, 2]
-    assert rows[0].approval_status == "rejected" and "superseded" in (
-        rows[0].rejection_reason or ""
-    )
+    # replaced by the draft with assets: superseded, not a human rejection
+    assert rows[0].approval_status == "superseded"
     assert rows[1].approval_status == "pending" and rows[1].attachments and rows[1].claims
 
     again = await build_graph(agents, adapters, settings, lane="heavy").ainvoke(start)
