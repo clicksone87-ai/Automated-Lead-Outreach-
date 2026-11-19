@@ -57,18 +57,24 @@ weekly report and backups on its own.
 
 Every lead goes through the **fast lane**: a rule-based prefilter (no LLM), batch scoring
 (up to 20 leads per Gemini call), contact finding, a light audit (static checks and cached
-PageSpeed, no browser) and a text-only draft. Leads that hit a free-tier cap or a transient
-error wait for the sweep (every 5 minutes) instead of retrying in place.
+PageSpeed, no browser) and a text-only draft: an email for a verified address, otherwise
+**Track B** manual drafts (a public reply, a DM and a contact-form message that a person
+posts by hand; nothing is ever posted automatically). Leads that hit a free-tier cap or a
+transient error wait for the sweep (every 5 minutes) instead of retrying in place.
 
-The **heavy lane** adds logo concepts, a website preview and the full audit (screenshots,
-vision review, competitors, PDF), then redrafts the proposal with those attachments. The
-scheduler picks the day's best leads every 15 minutes (`heavy_lane_daily_limit`, default 10;
-verified email first, then intent); **Generate assets** on a lead sends it there directly.
+The **heavy lane** adds logo sets (wordmark, mark, reversed, mono, animated), a website preview
+in three designs and the full audit (screenshots, vision review, competitors, PDF), then
+redrafts the proposal with those attachments. High-intent leads (75+) go there as soon as their
+fast lane ends, and their fast draft waits for a person instead of auto-sending; the scheduler
+fills the rest of the day's slots every 15 minutes (`heavy_lane_daily_limit`, default 10;
+verified email first, then intent). **Generate assets** on a lead sends it there directly. No
+picks are made while Gemini's own daily limit is used up (it resets at midnight Pacific).
 
-The worker runs both queues in one process: the fast queue (`arq:queue`, several jobs side by
-side) and the heavy queue (`arq:heavy`, one job at a time, because Chromium and Lighthouse are
-memory-heavy). Gemini's daily cap is split per lane (scoring, fast, heavy, other) so logos can
-never starve scoring. The Overview's **Speed** panel shows median and p90 time per lane and
+The `worker` container runs the fast queue (`arq:queue`, several jobs side by side) and the
+discovery queue (`arq:discovery`, source runs) in one process; the `worker-heavy` container runs
+the heavy queue (`arq:heavy`, one job at a time), so a heavy job that runs out of memory never
+stops the fast lane. Gemini's daily cap is split per lane (scoring, fast, heavy, other) so logos
+can never starve scoring. The Overview's **Speed** panel shows median and p90 time per lane and
 per step against the targets (fast < 3 min, heavy < 10 min).
 
 Manual **Run now** on a source that spends a limited free tier (Apify, Serper) asks for
