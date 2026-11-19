@@ -79,3 +79,17 @@ def test_template_change_gets_a_new_bundle(tmp_path: Path) -> None:
     before = build.source_digest(copy)
     (copy / "components" / "site.tsx").write_text("// changed\n", encoding="utf-8")
     assert build.source_digest(copy) != before
+
+
+async def test_network_failure_during_install_is_transient(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def flaky(
+        cmd: list[str], cwd: Path, *, limit_s: float, env: dict[str, str] | None = None
+    ) -> tuple[int, str]:
+        return 1, "npm error code ECONNRESET\nnpm error network aborted"
+
+    monkeypatch.setattr(build, "_run", flaky)
+    with pytest.raises(build.BuildError) as exc:
+        await build.ensure_deps(TEMPLATE, tmp_path)
+    assert exc.value.timed_out  # retried later, not sent to human review
