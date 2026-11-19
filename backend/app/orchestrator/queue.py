@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from datetime import UTC, datetime
 
 from arq import ArqRedis, create_pool
 from arq.connections import RedisSettings
@@ -52,9 +53,12 @@ async def enqueue_fast_batch(lead_ids: list[uuid.UUID]) -> bool:
 
 
 async def enqueue_heavy(lead_id: uuid.UUID) -> bool:
+    """Callers guard against duplicates (lanes.heavy_in_progress); the time slot in the job id
+    keeps a finished job's stored result from blocking a later request for the same lead."""
     pool = await get_pool()
+    slot = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     job = await pool.enqueue_job(
-        "run_heavy_job", str(lead_id), _job_id=f"heavy:{lead_id}", _queue_name=HEAVY_QUEUE
+        "run_heavy_job", str(lead_id), _job_id=f"heavy:{lead_id}:{slot}", _queue_name=HEAVY_QUEUE
     )
     return job is not None
 
