@@ -1,4 +1,7 @@
-"""Arq worker: fast, discovery and heavy queues in one process.
+"""Arq workers. The `worker` container runs the fast queue (fast-lane batches, resumes) and the
+discovery queue (source runs) in one process; the `worker-heavy` container runs the heavy queue
+(audits, logos and website previews for top leads, one at a time), so a heavy job that runs out
+of memory never takes the fast lane down with it.
 
 Retries: transient failures are retried with exponential backoff up to MAX_JOB_ATTEMPTS.
 Expected stops (budget cap, missing API key, policy) are recorded and not retried.
@@ -21,7 +24,7 @@ from app.agents.discovery.runner import run_source
 from app.config import get_settings, log_missing_integrations
 from app.db.session import session_scope
 from app.logging_setup import configure_logging
-from app.orchestrator import lanes, pipeline
+from app.orchestrator import lanes
 from app.orchestrator.queue import DEFAULT_QUEUE, DISCOVERY_QUEUE, HEAVY_QUEUE, redis_settings
 from app.orchestrator.runs import TransientAgentError
 
@@ -44,8 +47,9 @@ def _is_transient(exc: BaseException) -> bool:
 
 
 async def run_pipeline(ctx: dict[str, Any], lead_id: str) -> dict[str, Any]:
+    """Resume one lead (e.g. after a human approval): its fast steps; heavy work is re-queued."""
     try:
-        state = await pipeline.run_lead(uuid.UUID(lead_id), get_adapters())
+        state = await lanes.continue_lead(uuid.UUID(lead_id), get_adapters())
     except Exception as exc:
         if _is_transient(exc) and ctx["job_try"] < get_settings().max_job_attempts:
             raise Retry(defer=backoff_seconds(ctx["job_try"])) from exc
@@ -58,8 +62,18 @@ async def run_fast_batch_job(ctx: dict[str, Any], lead_ids: list[str]) -> dict[s
 
 
 async def run_heavy_job(ctx: dict[str, Any], lead_id: str) -> dict[str, Any]:
-    state = await lanes.run_heavy(uuid.UUID(lead_id), get_adapters())
+    try:
+        state = await lanes.run_heavy(uuid.UUID(lead_id), get_adapters())
+    except Exception as exc:
+        if _is_transient(exc) and ctx["job_try"] < get_settings().max_job_attempts:
+            raise Retry(defer=backoff_seconds(ctx["job_try"])) from exc
+        raise
     return {"completed": state.get("completed"), "stopped_at": state.get("stopped_at")}
+
+
+async def run_heavy(ctx: dict[str, Any], lead_id: str) -> dict[str, Any]:
+    """Same job under its earlier name, so jobs queued with either name still run."""
+    return await run_heavy_job(ctx, lead_id)
 
 
 async def run_source_job(ctx: dict[str, Any], key: str, force: bool = False) -> dict[str, Any]:
@@ -84,6 +98,13 @@ async def heartbeat(ctx: dict[str, Any]) -> None:
     from datetime import UTC, datetime  # noqa: PLC0415
 
     await ctx["redis"].set("heartbeat:worker", datetime.now(UTC).isoformat(), ex=600)
+
+
+async def heavy_heartbeat(ctx: dict[str, Any]) -> None:
+    """Own function name: arq cron job ids are global, so sharing `heartbeat` would collide."""
+    from datetime import UTC, datetime  # noqa: PLC0415
+
+    await ctx["redis"].set("heartbeat:worker-heavy", datetime.now(UTC).isoformat(), ex=600)
 
 
 async def shutdown(ctx: dict[str, Any]) -> None:
@@ -119,9 +140,15 @@ class DiscoveryWorkerSettings:
 
 
 class HeavyWorkerSettings:
-    """Heavy queue: Chromium, Lighthouse and logo rendering are memory-heavy, one job at a time."""
+    """Heavy queue (`worker-heavy` container): Chromium, Lighthouse and logo rendering are
+    memory-heavy, one job at a time."""
 
-    functions: ClassVar[list[Any]] = [run_heavy_job]
+    functions: ClassVar[list[Any]] = [run_heavy_job, run_heavy]
+    cron_jobs: ClassVar[list[Any]] = [
+        cron(heavy_heartbeat, minute=set(range(60)), run_at_startup=True)
+    ]
+    on_startup = startup
+    on_shutdown = shutdown
     redis_settings = redis_settings()
     queue_name = HEAVY_QUEUE
     max_jobs = 1
@@ -138,12 +165,8 @@ def _worker(settings: type, **overrides: Any) -> Worker:
 
 
 async def run_workers() -> None:
-    """All queues in one process (one Python interpreter's memory, not three)."""
-    workers = [
-        _worker(WorkerSettings),
-        _worker(DiscoveryWorkerSettings),
-        _worker(HeavyWorkerSettings),
-    ]
+    """The fast and discovery queues in one process (one interpreter's memory, not two)."""
+    workers = [_worker(WorkerSettings), _worker(DiscoveryWorkerSettings)]
     loop = asyncio.get_running_loop()
 
     def stop(sig: signal.Signals) -> None:

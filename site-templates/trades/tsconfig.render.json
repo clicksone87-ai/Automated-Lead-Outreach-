@@ -13,6 +13,6 @@
     "rootDir": ".",
     "types": ["node"]
   },
-  "include": ["render/render.tsx", "components/**/*.tsx", "lib/**/*.ts"],
+  "include": ["render/render.tsx", "components/**/*.tsx", "lib/**/*.ts", "lib/**/*.tsx"],
   "exclude": ["node_modules", "out", "dist-render", "lib/sample.ts"]
 }

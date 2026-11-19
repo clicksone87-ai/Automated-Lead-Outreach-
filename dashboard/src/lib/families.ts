@@ -46,7 +46,7 @@ export const FAMILIES: Record<Family, string> = {
 };
 
 const FAMILY_SOURCES: Record<Family, string[]> = {
-  social: ["social_reddit", "social_x", "social_instagram", "social_facebook", "reddit", "x", "meta"],
+  social: ["social_reddit", "social_x", "social_instagram", "social_facebook", "reddit", "x", "meta", "scout_profiles"],
   google: ["search_api", "local_sites", "site_health"],
   registry: ["companies_house", "opencorporates"],
   other: ["freelancer", "alert_emails", "rss", "web_directory", "no_website_check"],

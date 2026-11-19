@@ -372,3 +372,28 @@ class GalleryItem(BaseModel):
     language: str | None
     logos: list[dict[str, Any]]
     preview: dict[str, Any] | None
+
+
+class PlatformStat(BaseModel):
+    """Leads per social platform (V2 Social sources: leads-per-platform reporting)."""
+
+    platform: str
+    label: str
+    sources: list[str]
+    enabled: bool
+    leads: int  # created in the window
+    leads_24h: int
+    qualified: int  # intent 60+
+    high: int  # intent 75+
+    sellers_filtered: int  # seller posts scored down instead of treated as buyers
+    items_seen: int  # posts the source looked at in the window
+    runs: int
+    failed_runs: int
+    last_run_at: datetime | None
+    last_status: str | None
+    daily: list[int]  # leads per day, oldest first, one entry per day in the window
+
+
+class PlatformReport(BaseModel):
+    days: int
+    platforms: list[PlatformStat]

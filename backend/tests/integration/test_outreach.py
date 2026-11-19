@@ -160,6 +160,55 @@ async def test_proposal_claims_map_to_evidence_and_wait_for_approval(tmp_path: P
     }
     assert "Test Agency" in p.body_text and "1 Test Street" in p.body_text and "/u/" in p.body_text
     assert p.draft["intro"] and p.draft["unsubscribe_url"].startswith("http")
+    assert "track_b" not in p.draft  # email route: no manual drafts
+
+
+async def test_proposal_track_b_manual_drafts(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    async with session_scope() as s:
+        biz = Business(name="Social Lead Co", normalized_name="social lead co", country="US")
+        s.add(biz)
+        await s.flush()
+        contact = Contact(
+            business_id=biz.id,
+            type="platform_reply",
+            value="https://x.com/post/1",
+            source_url="https://x.com/post/1",
+            verification_status="not_applicable",
+        )
+        s.add(contact)
+        await s.flush()
+        lead = Lead(
+            business_id=biz.id,
+            source="social_x",
+            source_url="https://x.com/post/1",
+            source_item_id=uuid.uuid4().hex,
+            trigger_type="explicit_request",
+            country="US",
+            language="en",
+            status="contact_found",
+            pipeline_state={"contact_id": str(contact.id), "contact_channel": "platform_reply"},
+        )
+        s.add(lead)
+        await s.flush()
+        s.add(
+            Brief(
+                lead_id=lead.id,
+                data={"agents_to_run": ["proposal", "outreach"], "services": ["website"]},
+            )
+        )
+        await s.flush()
+        lead_id = lead.id
+
+    outcome = await _propose(settings, lead_id)
+    assert outcome.status == LeadStatus.AWAITING_APPROVAL and "manual route" in outcome.reason
+    async with session_scope() as s:
+        p = (await s.execute(select(Proposal).where(Proposal.lead_id == lead_id))).scalar_one()
+    assert p.to_email is None
+    tb = p.draft["track_b"]
+    assert tb["channel"] == "platform_reply" and tb["route"] == "https://x.com/post/1"
+    assert tb["comment"] and tb["dm"] and tb["contact_form"]
+    assert len(tb["comment"]) <= 280
 
 
 class InventingLLM:

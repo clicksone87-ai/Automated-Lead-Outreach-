@@ -2,7 +2,9 @@
 
 Completed steps are skipped on re-entry, so re-invoking a graph resumes at the first unfinished
 step. A step can be a group of agents that run side by side (each in its own session), every
-step can have a time limit, and a hook can force a completed step to run again.
+step can have a time limit, and a hook can force a completed step to run again. `lane` picks
+the steps (see `steps`): the worker runs the fast lane for every lead and the heavy lane on its
+own queue; the CLI runs everything in one go.
 """
 
 from __future__ import annotations
@@ -30,10 +32,23 @@ from app.orchestrator.agents import (
     load_agents,
 )
 from app.orchestrator.errors import TransientAgentError
+from app.orchestrator.steps import (
+    FAST_LANE,
+    FAST_TIMEOUTS,
+    FULL,
+    HEAVY_GRAPH,
+    HEAVY_TIMEOUTS,
+)
 
 logger = logging.getLogger(__name__)
 
 Step = str | tuple[str, ...]  # a tuple runs its agents in parallel
+LANES: dict[str, tuple[Step, ...]] = {"full": FULL, "fast": FAST_LANE, "heavy": HEAVY_GRAPH}
+LANE_TIMEOUTS: dict[str, dict[str, float]] = {
+    "full": {**FAST_TIMEOUTS, **HEAVY_TIMEOUTS},
+    "fast": FAST_TIMEOUTS,
+    "heavy": HEAVY_TIMEOUTS,
+}
 ForceHook = Callable[[AsyncSession, uuid.UUID], Awaitable[bool]]
 
 
@@ -117,10 +132,18 @@ def build_graph(
     steps: Sequence[Step] | None = None,
     timeouts: Mapping[str, float] | None = None,
     force_hooks: Mapping[str, ForceHook] | None = None,
+    lane: str | None = None,
 ) -> Any:
-    """Compile a graph over `steps` (default: every registered agent in pipeline order).
-    Steps whose agents are not registered are left out."""
+    """Compile a graph over `steps`, or over a named `lane` (default: every registered agent in
+    pipeline order). Steps whose agents are not registered are left out. The heavy lane
+    redrafts a still-pending fast-lane proposal so it carries the assets."""
     settings = settings or get_settings()
+    if lane is not None and steps is None:
+        steps = LANES[lane]
+        if lane == "heavy" and force_hooks is None:
+            from app.orchestrator.lanes import HEAVY_FORCE  # noqa: PLC0415 - lanes imports us
+
+            force_hooks = HEAVY_FORCE
     wanted: Sequence[Step] = steps if steps is not None else PIPELINE_ORDER
     groups: list[tuple[str, list[LeadAgent]]] = []
     for step in wanted:
@@ -184,8 +207,14 @@ async def run_steps(
     return result
 
 
-async def run_lead(lead_id: uuid.UUID, adapters: Adapters | None = None) -> PipelineState:
-    """Run or resume one lead in its lane(s)."""
-    from app.orchestrator import lanes  # noqa: PLC0415 - lanes builds on this module
+async def run_lead(
+    lead_id: uuid.UUID, adapters: Adapters | None = None, *, lane: str = "full"
+) -> PipelineState:
+    """Run one lead through a lane in one go ("full" = every step; the CLI uses it). The worker
+    resumes leads with `lanes.continue_lead` instead, which keeps heavy work on its queue."""
+    if lane == "heavy":
+        from app.orchestrator.lanes import HEAVY_FORCE  # noqa: PLC0415 - lanes imports us
 
-    return await lanes.continue_lead(lead_id, adapters)
+        return await run_steps(lead_id, LANES[lane], adapters, timeouts=LANE_TIMEOUTS[lane],
+                               force_hooks=HEAVY_FORCE)  # fmt: skip
+    return await run_steps(lead_id, LANES[lane], adapters, timeouts=LANE_TIMEOUTS[lane])

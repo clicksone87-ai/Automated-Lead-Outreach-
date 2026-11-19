@@ -17,18 +17,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { LeadRow } from "@/lib/api";
 import { ALL_FAMILIES, FAMILY_INFO, familySources, GOOD_LEADS, TIERS, type Family, type Tier } from "@/lib/families";
-import { ago, titleCase } from "@/lib/format";
+import { ago, titleCase, countryName, languageName } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { useLeads, useSources, type LeadFilters } from "@/lib/queries";
+import { useLeads, useSources, useSettings, type LeadFilters } from "@/lib/queries";
 import { SERVICES, TRIGGERS } from "@/lib/status";
+import { LANGUAGES } from "@/lib/markets";
 
 const STAGES: Record<string, string> = {
   discovery: "Discovery", requirements: "Requirements", contact: "Contact", audit: "Audit",
   branding: "Branding", builder: "Builder", qa: "QA", proposal: "Proposal", outreach: "Outreach",
   stopped: "Stopped",
 };
-const COUNTRIES = ["US", "GB", "IE", "DE", "FR", "ES"];
-const LANGUAGES = ["en", "de", "fr", "es"];
+//const COUNTRIES = ["US", "GB", "IE", "DE", "FR", "ES"];
+//const LANGUAGES = ["en", "de", "fr", "es"];
 const ALL = "__all";
 
 // "Reddit (via Apify)" -> "Reddit": the part in brackets is technical detail.
@@ -111,7 +112,8 @@ function LeadsView() {
   const pathname = usePathname();
   const params = useSearchParams();
   const { data: sources } = useSources();
-
+  const { data: settings } = useSettings();
+  const countryCodes = Object.keys(settings?.country_rules ?? {});
   const get = (k: string) => params.get(k) ?? undefined;
 
   // Source-family tab and intent-tier tab live in the URL like every other filter.
@@ -231,8 +233,8 @@ function LeadsView() {
       {showMore && (
         <div id="more-filters" className="mb-3 flex flex-wrap gap-3 rounded-lg border bg-surface-raised/50 p-3">
           <FilterSelect label="What they need" allLabel="Anything" value={filters.service?.[0]} options={SERVICES} onChange={(v) => setParam({ service: v })} />
-          <FilterSelect label="Country" allLabel="All countries" value={filters.country?.[0]} options={Object.fromEntries(COUNTRIES.map((c) => [c, c]))} onChange={(v) => setParam({ country: v })} />
-          <FilterSelect label="Language" allLabel="All languages" value={filters.language?.[0]} options={Object.fromEntries(LANGUAGES.map((l) => [l, l.toUpperCase()]))} onChange={(v) => setParam({ language: v })} />
+          <FilterSelect label="Country" allLabel="All countries" value={filters.country?.[0]} options={Object.fromEntries(countryCodes.map((c) => [c, countryName(c)]))} onChange={(v) => setParam({ country: v })} />
+          <FilterSelect label="Language" allLabel="All languages" value={filters.language?.[0]} options={Object.fromEntries(LANGUAGES.map((l) => [l, languageName(l)]))} onChange={(v) => setParam({ language: v })} />
           <FilterSelect label="Found on" allLabel="Any site or list" value={get("source")} options={sourceOptions} onChange={(v) => setParam({ source: v })} />
           <FilterSelect label="Why we picked them" allLabel="Any reason" value={filters.trigger?.[0]} options={TRIGGERS} onChange={(v) => setParam({ trigger: v })} />
           <FilterSelect label="Progress" allLabel="Any step" value={filters.stage} options={STAGES} onChange={(v) => setParam({ stage: v, status: undefined })} />

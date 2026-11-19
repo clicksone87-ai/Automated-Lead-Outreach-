@@ -21,6 +21,7 @@ from app.agents.discovery.sources._html import main_text
 from app.agents.website_builder.build import BuildError, build_site, run_preview_tests
 from app.agents.website_builder.content import (
     COPY_SYSTEM,
+    VARIANTS,
     SiteCopy,
     SiteFacts,
     build_content,
@@ -106,10 +107,11 @@ class WebsiteBuilderAgent:
             SiteCopy,
         )
         logo = await self._best_logo(ctx, lead)
-        logo_svg = (
-            ctx.adapters.storage.read_bytes(logo.svg_path).decode("utf-8")
-            if logo and logo.svg_path
-            else ""
+        logo_svg = self._read_svg(ctx, logo.svg_path if logo else None)
+        assets = (logo.assets or {}) if logo else {}
+        logo_animated = self._read_svg(ctx, assets.get("animated"))
+        logo_reversed = self._read_svg(
+            ctx, (assets.get("set") or {}).get("reversed", {}).get("svg")
         )
         colours = [
             c["hex"] for c in (profile.colors if profile else []) if c.get("role") != "neutral"
@@ -125,6 +127,8 @@ class WebsiteBuilderAgent:
             colours=colours,
             fonts=fonts,
             logo_svg=logo_svg,
+            logo_svg_animated=logo_animated,
+            logo_svg_reversed=logo_reversed,
             agency=ctx.settings.sender_business_name,
         )
         preview_id = lead.id.hex
@@ -176,6 +180,12 @@ class WebsiteBuilderAgent:
                 "screenshots": {
                     "desktop": stored.get("desktop.png"),
                     "mobile": stored.get("mobile.png"),
+                    # all three designs (V2), each at desktop size
+                    "designs": {
+                        d: stored[f"design-{d}.png"]
+                        for d in VARIANTS
+                        if f"design-{d}.png" in stored
+                    },
                 },
                 "test_results": {
                     "passed": tests.passed,
@@ -278,6 +288,16 @@ class WebsiteBuilderAgent:
             ),
             str(page.id) if page else None,
         )
+
+    @staticmethod
+    def _read_svg(ctx: AgentContext, path: str | None) -> str:
+        """A stored logo SVG (written by the Branding agent from sanitised output), or ""."""
+        if not path:
+            return ""
+        try:
+            return ctx.adapters.storage.read_bytes(path).decode("utf-8")
+        except (OSError, ValueError):
+            return ""
 
     @staticmethod
     async def _best_logo(ctx: AgentContext, lead: Lead) -> LogoConcept | None:

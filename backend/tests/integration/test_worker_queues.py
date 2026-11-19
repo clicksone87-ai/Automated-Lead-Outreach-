@@ -54,7 +54,8 @@ def test_fast_and_heavy_workers_use_their_own_queues() -> None:
     heavy = worker._worker(worker.HeavyWorkerSettings)
     assert fast.queue_name == "arq:queue" and heavy.queue_name == "arq:heavy"
     assert heavy.max_jobs == 1 and fast.max_jobs > 1
-    assert set(heavy.functions) == {"run_heavy_job"}
+    jobs = {name for name in heavy.functions if not name.startswith("cron:")}
+    assert jobs == {"run_heavy_job", "run_heavy"}  # earlier job name kept
     assert "run_heavy_job" not in fast.functions
 
 

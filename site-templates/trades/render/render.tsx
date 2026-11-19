@@ -3,8 +3,8 @@
  * and run for every preview: content in, finished HTML pages out. No Next.js build per lead.
  */
 import { renderToStaticMarkup } from "react-dom/server";
-import { SiteBody } from "../components/site";
-import { brandVars, homePage, type Page, type SiteContent } from "../lib/content";
+import { Site } from "../components/site";
+import { brandVars, DESIGNS, homePage, type Page, type SiteContent } from "../lib/content";
 
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -33,13 +33,18 @@ function document(c: SiteContent, page: Page, body: string): string {
     .join("\n");
 }
 
-/** Every page of the site: path (relative to the site root) → HTML. */
+/** Every page of the site: path (relative to the site root) → HTML. "/" and the extra pages
+ * use the chosen design; /design/<v>/ shows the home page in each of the three designs. */
 export function renderSite(c: SiteContent): Record<string, string> {
-  const pages = [homePage(c), ...c.pages.filter((p) => p.slug)];
   const out: Record<string, string> = {};
-  for (const page of pages) {
-    const body = renderToStaticMarkup(<SiteBody c={c} page={page} />);
+  const home = homePage(c);
+  for (const page of [home, ...c.pages.filter((p) => p.slug && p.slug !== "design")]) {
+    const body = renderToStaticMarkup(<Site c={c} page={page} v={c.variant} />);
     out[page.slug ? `${page.slug}/index.html` : "index.html"] = document(c, page, body);
+  }
+  for (const v of DESIGNS) {
+    const body = renderToStaticMarkup(<Site c={c} page={home} v={v} />);
+    out[`design/${v}/index.html`] = document(c, home, body);
   }
   return out;
 }

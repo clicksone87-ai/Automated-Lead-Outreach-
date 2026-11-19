@@ -18,7 +18,7 @@ from app.agents.requirements.batch import BatchClassification
 from app.config import get_settings
 from app.db.models import AgentRun, Lead, LeadStatus, RunStatus, Source
 from app.db.session import session_scope
-from app.orchestrator import lanes, pipeline
+from app.orchestrator import lanes
 from app.orchestrator.agents import AgentContext, AgentOutcome
 from app.orchestrator.pipeline import StepTimeoutError, build_graph, execute_step
 from app.orchestrator.quota import FreeQuotaExceededError
@@ -191,7 +191,7 @@ async def test_continue_lead_after_approval_runs_outreach() -> None:
             pytest.skip("demo data produced no email lead")
         proposal.approval_status, proposal.approved_by = "approved", "test"
         lead_id = proposal.lead_id
-    state = await pipeline.run_lead(lead_id)
+    state = await lanes.continue_lead(lead_id)
     # Approval lets the lead continue to Outreach, where the policy gate decides: the test email
     # adapter is not the Mailpit sandbox, so unreviewed country rules block the real send.
     assert state["completed"][-1] == "outreach"

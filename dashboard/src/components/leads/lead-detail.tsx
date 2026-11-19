@@ -30,6 +30,7 @@ import { useGenerateAssets, useLead, useRerunLead } from "@/lib/queries";
 import { AGENT_LABELS, TRIGGERS } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { AuditSummaryCard, BriefView } from "./brief-view";
+import { latestTrackB, ManualDrafts } from "./manual-drafts";
 import { DemoBadge, IntentBar, LeadStatusPill, ServiceChips } from "./lead-bits";
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
@@ -150,6 +151,14 @@ function LaneLine({ lead }: { lead: LeadDetail["lead"] }) {
   );
 }
 
+/** Heavy-lane marker written by the backend (`lanes.STATE_KEY`). */
+function heavyLane(state: LeadDetail["pipeline_state"]): { status: string } | null {
+  const h = (state as Record<string, unknown> | undefined)?.heavy;
+  if (!h || typeof h !== "object") return null;
+  const status = (h as Record<string, unknown>).status;
+  return typeof status === "string" ? { status } : null;
+}
+
 function NotYet({ icon, title, description }: { icon: typeof Bot; title: string; description: string }) {
   return <EmptyState icon={icon} title={title} description={description} className="py-10" />;
 }
@@ -162,6 +171,9 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
   if (isLoading) return <RowsSkeleton rows={8} />;
   if (isError || !data) return <ErrorState error={error} onRetry={() => refetch()} />;
   const { lead, business } = data;
+  const trackB = latestTrackB(data.proposals);
+  const heavy = heavyLane(data.pipeline_state);
+  const heavyBusy = heavy?.status === "queued" || heavy?.status === "running" || heavyRunning(lead.lane_timings);
 
   return (
     <div className="space-y-5">
@@ -180,17 +192,19 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
             <p className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{lead.status_reason}</p>
           )}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => assets.mutate(lead.id)}
-            disabled={assets.isPending || heavyRunning(lead.lane_timings)}
-            title="Logo concepts, a website preview and the full audit (heavy lane)"
-          >
-            <Sparkles className={cn("size-3.5", assets.isPending && "animate-pulse")} />
-            {heavyRunning(lead.lane_timings) ? "Generating assets…" : "Generate assets"}
-          </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {!data.preview && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => assets.mutate(lead.id)}
+              disabled={assets.isPending || heavyBusy || !data.brief}
+              title={!data.brief ? "Available once the Requirements agent has written a brief" : "Logo concepts, a website preview and the full audit (heavy lane)"}
+            >
+              <Sparkles className={cn("size-3.5", (assets.isPending || heavyBusy) && "animate-pulse")} />
+              {heavyBusy ? "Generating assets…" : "Generate assets"}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => rerun.mutate(lead.id)} disabled={rerun.isPending}>
             <RotateCw className={cn("size-3.5", rerun.isPending && "animate-spin")} /> Re-run pipeline
           </Button>
@@ -216,6 +230,7 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
         <Fact label="Source">
           <SafeLink href={lead.source_url}>{titleCase(lead.source)}</SafeLink>
         </Fact>
+        <Fact label="Lane">{heavy ? `Heavy · ${titleCase(heavy.status)}` : "Fast"}</Fact>
       </dl>
 
       <Tabs defaultValue="timeline">
@@ -224,7 +239,7 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
           <TabsTrigger value="evidence">Evidence ({data.evidence.length})</TabsTrigger>
           <TabsTrigger value="brief">Brief</TabsTrigger>
           <TabsTrigger value="contact">Contact ({data.contacts.length})</TabsTrigger>
-          <TabsTrigger value="drafts">Drafts</TabsTrigger>
+          <TabsTrigger value="drafts">Drafts{trackB ? " · manual" : ""}</TabsTrigger>
           <TabsTrigger value="emails">Emails ({data.messages.length})</TabsTrigger>
         </TabsList>
 
@@ -286,6 +301,7 @@ export function LeadDetailView({ id, compact = false }: { id: string; compact?: 
         </TabsContent>
 
         <TabsContent value="drafts" className="grid gap-4 pt-4">
+          {trackB && <ManualDrafts trackB={trackB} />}
           <Panel as="div">
             <PanelHeader title="Audit" />
             {data.audit ? (

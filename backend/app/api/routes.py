@@ -18,6 +18,7 @@ from sse_starlette.sse import EventSourceResponse
 from app.agents.discovery.sources import SOURCES
 from app.api.deps import AdaptersDep, SessionDep, SettingsDep
 from app.config import integration_status
+from app.db.models import Lead
 from app.db.session import session_scope
 from app.orchestrator import lanes
 from app.orchestrator.queue import enqueue_pipeline, enqueue_source
@@ -33,6 +34,7 @@ from app.schemas import (
     LeadDetail,
     LeadPage,
     OverviewOut,
+    PlatformReport,
     SearchHit,
     SettingsOut,
     SettingsPatch,
@@ -40,7 +42,7 @@ from app.schemas import (
     SourcePatch,
     TimingsOut,
 )
-from app.services import admin, manual_runs, queries, runtime_settings, timings
+from app.services import admin, manual_runs, platforms, queries, runtime_settings, timings
 
 router = APIRouter(prefix="/api")
 public = APIRouter(prefix="/api")
@@ -140,16 +142,32 @@ async def rerun_lead(lead_id: uuid.UUID, session: SessionDep) -> dict[str, bool]
 
 
 @router.post("/leads/{lead_id}/assets", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/leads/{lead_id}/generate-preview", status_code=status.HTTP_202_ACCEPTED)
 async def generate_assets(lead_id: uuid.UUID, session: SessionDep) -> dict[str, bool]:
-    """Send one lead to the heavy lane: logos, website preview and the full audit."""
+    """Heavy lane on demand: logo concepts, a website preview and the full audit (if they have
+    a site). Both paths are kept: the dashboard has used each name."""
+    lead = await session.get(Lead, lead_id)
+    if lead is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "lead not found")
+    if lanes.heavy_in_progress((lead.lane_timings or {}).get("heavy") or {}) or lanes.is_active(
+        lead
+    ):
+        return {"queued": False, "already_running": True}
     try:
         await lanes.request_assets(session, lead_id)
-    except KeyError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "lead not found") from exc
     except lanes.AssetsRequestError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-    await session.commit()
-    return {"queued": await lanes.send_to_heavy([lead_id], requested_by="dashboard") == 1}
+    await session.commit()  # the heavy worker must see the updated brief
+    queued = await lanes.send_to_heavy([lead_id], requested_by="dashboard") == 1
+    return {"queued": queued, "already_running": False}
+
+
+@router.get("/reports/platforms", response_model=PlatformReport)
+async def platform_report(
+    session: SessionDep, days: Annotated[int, Query(ge=1, le=90)] = 7
+) -> PlatformReport:
+    """Leads per social platform: X, Reddit, Instagram and Facebook side by side."""
+    return await platforms.platform_report(session, days)
 
 
 @router.get("/sources", response_model=list[SourceOut])

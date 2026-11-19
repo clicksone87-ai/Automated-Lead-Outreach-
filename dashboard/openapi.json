@@ -521,10 +521,71 @@
     }
    }
   },
+  "/api/leads/{lead_id}/generate-preview": {
+   "post": {
+    "summary": "Generate Assets",
+    "description": "Heavy lane on demand: logo concepts, a website preview and the full audit (if they have\na site). Both paths are kept: the dashboard has used each name.",
+    "operationId": "generate_assets_api_leads__lead_id__generate_preview_post",
+    "parameters": [
+     {
+      "name": "lead_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Lead Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "202": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "boolean"
+         },
+         "title": "Response Generate Assets Api Leads  Lead Id  Generate Preview Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/leads/{lead_id}/assets": {
    "post": {
     "summary": "Generate Assets",
-    "description": "Send one lead to the heavy lane: logos, website preview and the full audit.",
+    "description": "Heavy lane on demand: logo concepts, a website preview and the full audit (if they have\na site). Both paths are kept: the dashboard has used each name.",
     "operationId": "generate_assets_api_leads__lead_id__assets_post",
     "parameters": [
      {
@@ -565,6 +626,65 @@
           "type": "boolean"
          },
          "title": "Response Generate Assets Api Leads  Lead Id  Assets Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/reports/platforms": {
+   "get": {
+    "summary": "Platform Report",
+    "description": "Leads per social platform: X, Reddit, Instagram and Facebook side by side.",
+    "operationId": "platform_report_api_reports_platforms_get",
+    "parameters": [
+     {
+      "name": "days",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 90,
+       "minimum": 1,
+       "default": 7,
+       "title": "Days"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PlatformReport"
         }
        }
       }
@@ -4159,6 +4279,132 @@
      "inbox_count"
     ],
     "title": "OverviewOut"
+   },
+   "PlatformReport": {
+    "properties": {
+     "days": {
+      "type": "integer",
+      "title": "Days"
+     },
+     "platforms": {
+      "items": {
+       "$ref": "#/components/schemas/PlatformStat"
+      },
+      "type": "array",
+      "title": "Platforms"
+     }
+    },
+    "type": "object",
+    "required": [
+     "days",
+     "platforms"
+    ],
+    "title": "PlatformReport"
+   },
+   "PlatformStat": {
+    "properties": {
+     "platform": {
+      "type": "string",
+      "title": "Platform"
+     },
+     "label": {
+      "type": "string",
+      "title": "Label"
+     },
+     "sources": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Sources"
+     },
+     "enabled": {
+      "type": "boolean",
+      "title": "Enabled"
+     },
+     "leads": {
+      "type": "integer",
+      "title": "Leads"
+     },
+     "leads_24h": {
+      "type": "integer",
+      "title": "Leads 24H"
+     },
+     "qualified": {
+      "type": "integer",
+      "title": "Qualified"
+     },
+     "high": {
+      "type": "integer",
+      "title": "High"
+     },
+     "sellers_filtered": {
+      "type": "integer",
+      "title": "Sellers Filtered"
+     },
+     "items_seen": {
+      "type": "integer",
+      "title": "Items Seen"
+     },
+     "runs": {
+      "type": "integer",
+      "title": "Runs"
+     },
+     "failed_runs": {
+      "type": "integer",
+      "title": "Failed Runs"
+     },
+     "last_run_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Run At"
+     },
+     "last_status": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Status"
+     },
+     "daily": {
+      "items": {
+       "type": "integer"
+      },
+      "type": "array",
+      "title": "Daily"
+     }
+    },
+    "type": "object",
+    "required": [
+     "platform",
+     "label",
+     "sources",
+     "enabled",
+     "leads",
+     "leads_24h",
+     "qualified",
+     "high",
+     "sellers_filtered",
+     "items_seen",
+     "runs",
+     "failed_runs",
+     "last_run_at",
+     "last_status",
+     "daily"
+    ],
+    "title": "PlatformStat",
+    "description": "Leads per social platform (V2 Social sources: leads-per-platform reporting)."
    },
    "PolicyDecisionOut": {
     "properties": {

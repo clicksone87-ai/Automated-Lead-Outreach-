@@ -33,14 +33,22 @@ ALLOWED_ATTRS = {
 _URL_REF = re.compile(r"url\(\s*['\"]?\s*#[\w-]+\s*['\"]?\s*\)")
 _ANY_URL = re.compile(r"url\(", re.I)
 
+#: The three sets every lead gets (V2: wordmark, monogram and icon sets).
 STYLES: list[tuple[str, str]] = [
     ("wordmark", "a confident wordmark: the business name set in distinctive custom-feeling "
      "lettering, optionally with one small graphic accent"),
-    ("icon_wordmark", "a simple geometric icon that hints at the trade (no clip-art, no "
-     "stock symbols) placed beside or above the business name"),
-    ("emblem", "a compact badge/emblem (circle, shield or rounded square) containing an "
-     "initial or monogram, with the business name beneath"),
+    ("monogram", "a monogram: the business initials (one to three letters) interlocked or "
+     "set inside a simple shape (circle, shield or rounded square), with the full business "
+     "name beside or beneath it"),
+    ("icon", "an icon lockup: a simple geometric symbol that hints at the trade (no clip-art, "
+     "no stock symbols) placed beside or above the business name"),
 ]  # fmt: skip
+#: What the square mark is for each style (the app icon / favicon of the set).
+MARK_DESC = {
+    "wordmark": "the first letter of the name in the same lettering, inside a simple shape",
+    "monogram": "the monogram badge alone, without the full name",
+    "icon": "the symbol alone, without any wording",
+}
 
 
 class SvgRejectedError(ValueError):
@@ -57,6 +65,10 @@ class LogoSpec(BaseModel):
     font_weight: int = Field(ge=100, le=900, default=700)
     text_in_logo: str = Field(description="The exact wording drawn in the logo.")
     rationale: str = Field(max_length=400)
+    mark_svg: str | None = Field(
+        default=None,
+        description="Square mark (viewBox 0 0 160 160): the symbol/initials alone, same colours.",
+    )
 
     @classmethod
     def mock(cls, context: dict[str, Any]) -> Self:
@@ -75,6 +87,12 @@ class LogoSpec(BaseModel):
             font_family="Arial, sans-serif",
             text_in_logo=name,
             rationale="Fixture concept for tests.",
+            mark_svg=(
+                f'<svg xmlns="{SVG_NS}" viewBox="0 0 160 160">'
+                f'<rect x="10" y="10" width="140" height="140" rx="32" fill="{colour}"/>'
+                f'<text x="80" y="104" text-anchor="middle" font-family="Arial, sans-serif" '
+                f'font-size="72" font-weight="700" fill="#ffffff">{name[:1]}</text></svg>'
+            ),
         )
 
 
@@ -210,5 +228,8 @@ class LogoPrompt:
             f"Existing fonts on their website: {', '.join(fonts) or 'unknown'}.\n"
             f"Avoid looking like competitors whose main colours are: {avoid}.\n"
             "Canvas: viewBox 0 0 400 160 (wide). Keep it simple enough to work at 64px wide, "
-            "with strong contrast on a white background. Return the SVG and the metadata."
+            "with strong contrast on a white background.\n"
+            f"Also return mark_svg: a square version (viewBox 0 0 160 160) that is "
+            f"{MARK_DESC.get(style, 'the symbol alone')}; it must read clearly at 32px as an "
+            "app icon or favicon. Return both SVGs and the metadata."
         )

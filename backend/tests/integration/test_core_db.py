@@ -141,7 +141,24 @@ async def test_runtime_settings_log_changes_and_protect_autonomy() -> None:
     async with session_scope() as s:
         rs = await runtime_settings.load(s)
         assert rs.sending_languages == ["en"]
-        assert set(rs.enabled_languages) == {"en", "de", "fr", "es"}
+        assert set(rs.enabled_languages) == {
+            "en",
+            "de",
+            "fr",
+            "es",
+            "it",
+            "nl",
+            "pt",
+            "pl",
+            "sv",
+            "da",
+            "nb",
+            "fi",
+            "cs",
+            "ro",
+            "el",
+            "hu",
+        }
         assert rs.target_countries == ["US", "GB"]
         await runtime_settings.update(
             s, {"min_intent_score": 70}, changed_by="test", reason="tighten"

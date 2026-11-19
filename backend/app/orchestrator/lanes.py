@@ -1,12 +1,15 @@
 """Fast and heavy lanes.
 
 Fast lane, every lead (target < 3 min): prefilter → batch LLM scoring → requirements →
-contact → light audit → draft. Leads are processed in batches; independent leads run side by
-side, every step has a time limit, and a lead that hits a free-tier cap or a transient error is
-deferred to the sweep instead of blocking the batch.
+contact → light audit → draft (an email, or Track B manual drafts). Leads are processed in
+batches; independent leads run side by side, every step has a time limit, and a lead that hits
+a free-tier cap or a transient error is deferred to the sweep instead of blocking the batch.
 
 Heavy lane, top leads per day or on request (target < 10 min): full audit and branding side by
-side → website preview → quality check → proposal redrafted with the assets.
+side → website preview → quality check → proposal redrafted with the assets, unless a human
+already approved or sent the fast-lane draft. High-intent leads are offered to it as soon as
+their fast lane ends, and their fast draft waits for a human instead of auto-sending. Heavy
+work runs on its own queue and worker, so it never delays fast-lane leads.
 """
 
 from __future__ import annotations
@@ -24,53 +27,49 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters.registry import Adapters, get_adapters
 from app.agents.requirements.batch import classify_batch
 from app.config import Settings, get_settings
-from app.db.models import ApprovalStatus, Brief, Lead, LeadStatus, Proposal, TriggerType
+from app.db.models import (
+    ApprovalStatus,
+    Brief,
+    Business,
+    Lead,
+    LeadStatus,
+    Message,
+    Proposal,
+    TriggerType,
+)
 from app.db.session import session_scope
 from app.orchestrator import pipeline
-from app.orchestrator.agents import load_agents
+from app.orchestrator.agents import PIPELINE_ORDER, load_agents
 from app.orchestrator.budget import BudgetExceededError
 from app.orchestrator.errors import TransientAgentError
-from app.orchestrator.pipeline import PipelineState, Step
+from app.orchestrator.pipeline import PipelineState
+from app.orchestrator.runs import last_success
+from app.orchestrator.steps import (
+    FAST_LANE,
+    FAST_TIMEOUTS,
+    FULL,
+    HEAVY_GRAPH,
+    HEAVY_LANE,
+    HEAVY_STEPS,
+    HEAVY_TIMEOUTS,
+)
 from app.services import runtime_settings
+
+__all__ = ["FAST_LANE", "FULL", "HEAVY_GRAPH", "HEAVY_LANE", "HEAVY_STEPS"]
 
 logger = logging.getLogger(__name__)
 
-FAST_STEPS: tuple[Step, ...] = (
-    "prefilter",
-    "requirements",
-    "contact_enrichment",
-    "audit_light",
-    "proposal",
-    "outreach",
-)
-HEAVY_STEPS: tuple[Step, ...] = (
-    ("audit", "branding"),
-    "website_builder",
-    "quality_check",
-    "proposal",
-    "outreach",
-)
-FAST_TIMEOUTS = {
-    "prefilter": 30,
-    "requirements": 120,
-    "contact_enrichment": 90,
-    "audit_light": 120,
-    "proposal": 180,
-    "outreach": 60,
-}
-HEAVY_TIMEOUTS = {
-    "audit": 420,
-    "branding": 480,
-    "website_builder": 600,
-    "quality_check": 180,
-    "proposal": 180,
-    "outreach": 60,
-}
+FAST_STEPS = FAST_LANE
 RETRY_AFTER = timedelta(minutes=10)
 SCORING_TIMEOUT_S = 300  # one batch call, including a split retry and model fallbacks
 PAUSED_RETRY = timedelta(hours=1)
 STUCK_AFTER = timedelta(minutes=30)
 HEAVY_STALE = timedelta(hours=2)  # a heavy job older than this died with its worker
+STALE_AFTER = HEAVY_STALE
+#: "High intent" tier on the dashboard (families.ts): these leads go to the heavy lane first.
+HEAVY_MIN_SCORE = 75
+STATE_KEY = "heavy"  # lead.pipeline_state["heavy"] = {"status", "reason", "at", "requested"}
+ACTIVE = ("queued", "running")
 
 
 def chunks(items: Sequence[uuid.UUID], size: int) -> Iterable[list[uuid.UUID]]:
@@ -79,7 +78,9 @@ def chunks(items: Sequence[uuid.UUID], size: int) -> Iterable[list[uuid.UUID]]:
 
 
 async def _proposal_needs_assets(session: AsyncSession, lead_id: uuid.UUID) -> bool:
-    """Heavy lane: a proposal still waiting for a human is redrafted so it carries the assets."""
+    """Heavy lane: redraft the proposal so it carries the assets, but only a fast-lane draft
+    that is still waiting for a human (not approved, not sent, no assets yet). The Proposal
+    agent marks the replaced draft as superseded."""
     latest = (
         await session.execute(
             select(Proposal)
@@ -88,13 +89,92 @@ async def _proposal_needs_assets(session: AsyncSession, lead_id: uuid.UUID) -> b
             .limit(1)
         )
     ).scalar_one_or_none()
-    return latest is not None and latest.approval_status in (
-        ApprovalStatus.PENDING,
-        ApprovalStatus.DRAFT,
-    )
+    if (
+        latest is None
+        or latest.attachments
+        or latest.approval_status not in (ApprovalStatus.PENDING, ApprovalStatus.DRAFT)
+    ):
+        return False
+    sent = (
+        await session.execute(
+            select(func.count()).select_from(Message).where(Message.proposal_id == latest.id)
+        )
+    ).scalar_one()
+    return not sent
 
 
 HEAVY_FORCE = {"proposal": _proposal_needs_assets}
+
+
+# ── heavy-lane state on the lead (read by the dashboard) ────────────────────
+
+
+def heavy_steps_in(brief: dict[str, Any] | None) -> list[str]:
+    return [s for s in HEAVY_STEPS if s in (brief or {}).get("agents_to_run", [])]
+
+
+def state(lead: Lead) -> dict[str, Any]:
+    value = (lead.pipeline_state or {}).get(STATE_KEY)
+    return value if isinstance(value, dict) else {}
+
+
+def set_state(lead: Lead, status: str, reason: str = "", **extra: Any) -> None:
+    lead.pipeline_state = {  # new dict: JSONB change tracking
+        **(lead.pipeline_state or {}),
+        STATE_KEY: {
+            **state(lead),
+            **extra,
+            "status": status,
+            "reason": reason,
+            "at": datetime.now(UTC).isoformat(),
+        },
+    }
+
+
+def is_active(lead: Lead, now: datetime | None = None) -> bool:
+    st = state(lead)
+    if st.get("status") not in ACTIVE:
+        return False
+    try:
+        at = datetime.fromisoformat(str(st.get("at")))
+    except ValueError:
+        return False
+    return (now or datetime.now(UTC)) - at < STALE_AFTER
+
+
+def qualifies(lead: Lead, brief: dict[str, Any] | None) -> bool:
+    """High-intent leads whose brief needs heavy work, or a human asked for it."""
+    if not heavy_steps_in(brief):
+        return False
+    return bool(state(lead).get("requested")) or (lead.intent_score or 0) >= HEAVY_MIN_SCORE
+
+
+async def outstanding(session: AsyncSession, lead: Lead, brief: dict[str, Any] | None) -> bool:
+    """True while heavy work this lead is due (high intent, picked or requested) has not
+    finished. The Proposal agent then holds the fast-lane draft for a human instead of
+    auto-approving it, so a top lead's email waits for its previews."""
+    if not heavy_steps_in(brief):
+        return False
+    picked = lead.lane == "heavy" and heavy_unfinished(lead.lane_timings)
+    if not (picked or qualifies(lead, brief)):
+        return False
+    for step in heavy_steps_in(brief):
+        if await last_success(session, step, lead.id) is None:
+            return True
+    return False
+
+
+def _heavy_status(entry: dict[str, Any]) -> tuple[str, str]:
+    if entry.get("finished"):
+        stop = entry.get("stopped_at")
+        if stop == "error":
+            return "failed", str(entry.get("error") or "")
+        return ("done", "") if stop in (None, "proposal", "outreach") else ("stopped", str(stop))
+    if entry.get("deferred"):
+        return "queued", str(entry["deferred"])
+    if entry.get("started"):
+        return "running", ""
+    return "queued", str(entry.get("requested_by") or "")
 
 
 # ── timing marks on the lead ────────────────────────────────────────────────
@@ -126,6 +206,10 @@ async def mark(lead_ids: Iterable[uuid.UUID], lane: str, **values: Any) -> None:
                     1,
                 )
             lead.lane_timings = {**timings, lane: entry}
+            if lane == "heavy":
+                status, reason = _heavy_status(entry)
+                requested = entry.get("requested_by") == "dashboard" or state(lead).get("requested")
+                set_state(lead, status, reason, requested=bool(requested))
 
 
 def _now() -> str:
@@ -181,14 +265,14 @@ async def run_fast_batch(
     survivors: list[uuid.UUID] = []
     for lead_id in ids:
         try:
-            state = await pipeline.run_steps(
+            result = await pipeline.run_steps(
                 lead_id, FAST_STEPS[:1], adapters, timeouts=FAST_TIMEOUTS
             )
         except TransientAgentError as exc:
             await _defer([lead_id], "fast", str(exc))
             continue
-        if state.get("stopped_at"):
-            await _finish(lead_id, "fast", state)
+        if result.get("stopped_at"):
+            await _finish(lead_id, "fast", result)
         else:
             survivors.append(lead_id)
 
@@ -203,7 +287,7 @@ async def run_fast_batch(
     async def one(lead_id: uuid.UUID) -> None:
         async with sem:
             try:
-                state = await pipeline.run_steps(
+                result = await pipeline.run_steps(
                     lead_id, FAST_STEPS[1:], adapters, timeouts=FAST_TIMEOUTS
                 )
             except TransientAgentError as exc:
@@ -215,11 +299,12 @@ async def run_fast_batch(
                 await mark([lead_id], "fast", finished=_now(), stopped_at="error")
                 results["failed"] += 1
                 return
-            await _finish(lead_id, "fast", state)
+            await _finish(lead_id, "fast", result)
             results["finished"] += 1
 
     await asyncio.gather(*(one(lead_id) for lead_id in survivors))
-    return {"leads": len(ids), "past_prefilter": len(survivors), **results}
+    promoted = await promote_high_intent(survivors)
+    return {"leads": len(ids), "past_prefilter": len(survivors), "heavy": promoted, **results}
 
 
 async def _score(lead_ids: list[uuid.UUID], adapters: Adapters, batch_size: int) -> list[uuid.UUID]:
@@ -276,8 +361,8 @@ async def run_heavy(lead_id: uuid.UUID, adapters: Adapters | None = None) -> Pip
     """Logos, website preview and the full audit for one lead, then a proposal with them."""
     await mark([lead_id], "heavy", started=_now(), deferred=None, retry_after=None)
     try:
-        state = await pipeline.run_steps(
-            lead_id, HEAVY_STEPS, adapters, timeouts=HEAVY_TIMEOUTS, force_hooks=HEAVY_FORCE
+        result = await pipeline.run_steps(
+            lead_id, HEAVY_GRAPH, adapters, timeouts=HEAVY_TIMEOUTS, force_hooks=HEAVY_FORCE
         )
     except TransientAgentError as exc:
         await _defer([lead_id], "heavy", str(exc))
@@ -286,11 +371,12 @@ async def run_heavy(lead_id: uuid.UUID, adapters: Adapters | None = None) -> Pip
         # Recorded as finished-with-error so the lead is never stuck as "being generated".
         await mark([lead_id], "heavy", finished=_now(), stopped_at="error", error=str(exc)[:300])
         raise
-    await _finish(lead_id, "heavy", state)
-    return state
+    await _finish(lead_id, "heavy", result)
+    return result
 
 
 HEAVY_AGENTS = {"audit", "branding", "website_builder"}
+EXTRA_ON_REQUEST = ("branding", "website_builder", "quality_check")
 HEAVY_READY = (LeadStatus.AWAITING_APPROVAL, LeadStatus.APPROVED)
 GEMINI_PER_HEAVY_LEAD = 8  # logos (3 + repairs), site copy, vision review, proposal
 
@@ -348,6 +434,35 @@ async def pick_for_heavy(session: AsyncSession, *, now: datetime | None = None) 
     return [lead.id for lead in candidates[:slots]]
 
 
+async def promote_high_intent(lead_ids: Sequence[uuid.UUID]) -> int:
+    """Right after their fast lane: high-intent leads still due heavy work go to the heavy
+    lane at once, within today's heavy-lane limit (the 15-minute pick fills the rest)."""
+    if not lead_ids:
+        return 0
+    async with session_scope() as s:
+        rs = await runtime_settings.load(s)
+        slots = await heavy_slots_left(s, rs.heavy_lane_daily_limit)
+        if slots <= 0:
+            return 0
+        rows = (
+            await s.execute(
+                select(Lead, Brief.data)
+                .join(Brief, Brief.lead_id == Lead.id)
+                .where(
+                    Lead.id.in_(list(lead_ids)),
+                    or_(Lead.lane.is_(None), Lead.lane == "fast"),
+                    Lead.status.in_([str(x) for x in HEAVY_READY]),
+                )
+            )
+        ).all()
+        due = [
+            lead.id
+            for lead, brief in rows
+            if qualifies(lead, brief) and await outstanding(s, lead, brief)
+        ]
+    return await send_to_heavy(due[:slots], requested_by="high_intent") if due else 0
+
+
 async def send_to_heavy(lead_ids: Sequence[uuid.UUID], *, requested_by: str) -> int:
     from app.orchestrator.queue import enqueue_heavy  # noqa: PLC0415
 
@@ -365,9 +480,10 @@ async def send_to_heavy(lead_ids: Sequence[uuid.UUID], *, requested_by: str) -> 
     return queued
 
 
-async def request_assets(session: AsyncSession, lead_id: uuid.UUID) -> None:
-    """Checks for the dashboard's "Generate assets" button. A person chose this lead, so the
-    daily heavy-lane limit does not apply; free-tier caps still do."""
+async def request_assets(session: AsyncSession, lead_id: uuid.UUID) -> Lead:
+    """The dashboard's "Generate assets" button. A person chose this lead, so the daily
+    heavy-lane limit does not apply (free-tier caps still do), and a lead whose brief needs no
+    logo or preview (e.g. SEO only) gets them added: logo, website, and an audit if it has a site."""
     lead = await session.get(Lead, lead_id)
     if lead is None:
         raise KeyError(lead_id)
@@ -378,10 +494,18 @@ async def request_assets(session: AsyncSession, lead_id: uuid.UUID) -> None:
         raise AssetsRequestError("no contact route: assets are only made for reachable leads")
     if lead.status in (LeadStatus.SUPPRESSED, LeadStatus.SENT, LeadStatus.REPLIED):
         raise AssetsRequestError(f"lead is {lead.status}")
-    if not _heavy_work(brief.data):
-        raise AssetsRequestError("this lead needs no logo, preview or audit (SEO only, no site)")
     if heavy_in_progress((lead.lane_timings or {}).get("heavy") or {}):
         raise AssetsRequestError("assets are already being generated")
+    business = await session.get(Business, lead.business_id) if lead.business_id else None
+    wanted = list(EXTRA_ON_REQUEST)
+    if business is not None and (business.domain or business.has_website):
+        wanted.insert(0, "audit")
+    agents = list(brief.data.get("agents_to_run", []))
+    agents += [step for step in wanted if step not in agents]
+    brief.data = {**brief.data, "agents_to_run": [s for s in PIPELINE_ORDER if s in agents]}
+    set_state(lead, "queued", "requested from the dashboard", requested=True)
+    await session.flush()
+    return lead
 
 
 def heavy_in_progress(heavy: dict[str, Any], now: datetime | None = None) -> bool:
@@ -402,13 +526,13 @@ async def continue_lead(lead_id: uuid.UUID, adapters: Adapters | None = None) ->
         lead = await s.get(Lead, lead_id)
         lane = lead.lane if lead else None
         timings = dict(lead.lane_timings or {}) if lead else {}
-    state = await pipeline.run_steps(lead_id, FAST_STEPS, adapters, timeouts=FAST_TIMEOUTS)
+    result = await pipeline.run_steps(lead_id, FAST_STEPS, adapters, timeouts=FAST_TIMEOUTS)
     if lane == "heavy" and heavy_unfinished(timings):
         # Heavy work belongs on the heavy queue (one job at a time), never inline here.
         from app.orchestrator.queue import enqueue_heavy  # noqa: PLC0415
 
         await enqueue_heavy(lead_id)
-    return state
+    return result
 
 
 def heavy_unfinished(timings: dict[str, Any] | None) -> bool:

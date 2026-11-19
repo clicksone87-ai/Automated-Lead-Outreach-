@@ -390,6 +390,8 @@ class LogoConcept(Base):
     prompt: Mapped[str | None] = mapped_column(Text)
     raster_path: Mapped[str | None] = mapped_column(Text)  # original image from the image API
     similarity: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    #: the logo set: colour / reversed / mono versions, square mark sizes, animated SVG
+    assets: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
     attempts: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _updated()

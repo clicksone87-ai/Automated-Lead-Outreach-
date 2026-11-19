@@ -15,6 +15,7 @@ DEFAULT_QUEUE = "arq:queue"  # fast lane, discovery sources, resumes
 HEAVY_QUEUE = "arq:heavy"  # logos, previews, full audits: one at a time
 DISCOVERY_QUEUE = "arq:discovery"  # source runs: slow crawls must never hold up the fast lane
 SCHEDULER_QUEUE = "arq:scheduler"
+HEAVY_QUEUE = "arq:heavy"  # audit, logos, website builds: own worker, never blocks fast lane
 
 _pool: ArqRedis | None = None
 

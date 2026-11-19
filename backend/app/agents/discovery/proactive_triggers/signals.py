@@ -18,6 +18,8 @@ _OLD_GENERATORS = re.compile(
     re.I,
 )
 
+# Plausible domain endings per target country (used only to CHECK whether a site exists).
+# A country missing here falls back to (".com",), which misses local domains.
 TLDS_BY_COUNTRY = {
     "GB": ("co.uk", "uk", "com"),
     "IE": ("ie", "com"),
@@ -25,6 +27,32 @@ TLDS_BY_COUNTRY = {
     "DE": ("de", "com"),
     "FR": ("fr", "com"),
     "ES": ("es", "com"),
+    "AT": ("at", "com"),
+    "BE": ("be", "com"),
+    "IT": ("it", "com"),
+    "NL": ("nl", "com"),
+    "PT": ("pt", "com"),
+    "SE": ("se", "com"),
+    "DK": ("dk", "com"),
+    "NO": ("no", "com"),
+    "FI": ("fi", "com"),
+    "PL": ("pl", "com"),
+    "LU": ("lu", "com"),
+    "CH": ("ch", "com"),
+    "CZ": ("cz", "com"),
+    "RO": ("ro", "com"),
+    "GR": ("gr", "com"),
+    "HU": ("hu", "com"),
+    "BG": ("bg", "com"),
+    "HR": ("hr", "com"),
+    "SK": ("sk", "com"),
+    "SI": ("si", "com"),
+    "EE": ("ee", "com"),
+    "LV": ("lv", "com"),
+    "LT": ("lt", "com"),
+    "MT": ("mt", "com"),
+    "CY": ("cy", "com"),
+    "IS": ("is", "com"),
 }
 
 
