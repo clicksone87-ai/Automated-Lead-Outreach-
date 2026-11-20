@@ -79,10 +79,27 @@ def quotas(s: Settings) -> dict[str, Quota]:
     q = [
         Quota("gemini", "gemini", "day", "units", s.gemini_daily_request_cap, "requests/day"),
         Quota("serper", "serper", "lifetime", "units", s.serper_free_credits, "credits"),
-        Quota("serper", "serper:daily", "day", "units", s.serper_daily_credit_cap, "credits/day"),
+        Quota("serper", "serper:daily", "day", "units", s.serper_daily_cap, "credits/day"),
         Quota("exa", "exa", "lifetime", "credit_usd", s.exa_free_credit_usd, "USD credit"),
         Quota("apify", "apify", "month", "credit_usd", s.apify_monthly_cap_usd, "USD/month"),
         Quota("pagespeed", "pagespeed", "day", "units", s.pagespeed_daily_cap, "requests/day"),
+        Quota("exa", "exa:monthly", "month", "units", s.exa_monthly_cap, "requests/month"),
+        Quota("serpapi", "serpapi", "month", "units", s.serpapi_monthly_cap, "searches/month"),
+        Quota(
+            "scrapingdog",
+            "scrapingdog",
+            "month",
+            "units",
+            s.scrapingdog_monthly_cap,
+            "requests/month",
+        ),
+        Quota("searlo", "searlo", "month", "units", s.searlo_monthly_cap, "searches/month"),
+        Quota("tavily", "tavily", "month", "units", s.tavily_monthly_cap, "searches/month"),
+        Quota("groq", "groq", "day", "units", s.groq_daily_request_cap, "requests/day"),
+        Quota(
+            "zerobounce", "zerobounce", "month", "units", s.zerobounce_monthly_cap, "checks/month"
+        ),
+        Quota("gmail", "gmail", "day", "units", s.gmail_daily_send_cap, "emails/day"),
     ]
     q += [
         Quota(
@@ -113,7 +130,7 @@ def quotas(s: Settings) -> dict[str, Quota]:
 
 def applicable(table: dict[str, Quota], provider: str, scope: str | None) -> list[Quota]:
     """Every cap a call to `provider` (optionally under `scope`) must fit inside."""
-    keys = [provider, f"{provider}:daily", scope or ""]
+    keys = [provider, f"{provider}:daily", f"{provider}:monthly", scope or ""]
     seen: set[str] = set()
     out = []
     for k in keys:
@@ -247,6 +264,14 @@ async def _insert(own: AsyncSession, row: Cost | PolicyDecision) -> None:
         row.lead_id = None
         own.add(row)
         await own.flush()
+
+
+async def record_provider_error(provider: str, error: str) -> None:
+    """Remember a provider failure (quota, auth, HTTP) for the Sources page; own transaction so
+    it survives the caller rolling back."""
+    async with _own_transaction() as own:
+        own.add(PolicyDecision(check="provider_error", action=provider[:50], allowed=False,
+                               reason=error[:500], details={}))  # fmt: skip
 
 
 async def report(

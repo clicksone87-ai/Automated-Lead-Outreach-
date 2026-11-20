@@ -73,8 +73,6 @@ class Settings(BaseSettings):
     # Serper (Google results via API: web + local) and Exa (fallback search)
     serper_api_key: SecretStr | None = None
     serper_free_credits: int = Field(default=2500, ge=0)
-    # The free credits are one-time, so a daily ceiling spreads them over weeks.
-    serper_daily_credit_cap: int = Field(default=60, ge=0)
     exa_api_key: SecretStr | None = None
     exa_free_credit_usd: float = Field(default=10.0, ge=0)
 
@@ -114,6 +112,71 @@ class Settings(BaseSettings):
     dashboard_origin: str = "http://localhost:3000"
     # Optional bearer token for the API (recommended when moving to a server). Empty = off.
     api_token: SecretStr | None = None
+
+    # Markets: every country is a target except these (ISO 3166-1 alpha-2, comma separated)
+    excluded_countries: str = "PK,IN,BD"
+    all_countries_outreach_enabled: bool = True
+    # Social posts older than this (or without a timestamp) are dropped
+    social_max_post_age_hours: int = Field(default=8, ge=1, le=168)
+
+    # LLM fallback when Gemini's daily cap is used up (scoring and drafting only)
+    llm_fallback_provider: str = "groq"  # groq | "" (off)
+    groq_api_key: SecretStr | None = None
+    groq_model: str = ""  # empty = DEFAULT_GROQ_MODEL
+    groq_daily_request_cap: int = Field(default=900, ge=0)
+
+    # Search router: tried in this order, each within its own cap
+    search_provider_order: str = "serper,serpapi,scrapingdog,searlo,tavily,exa"
+    serper_api_key_fallback: SecretStr | None = None
+    # The free credits are one-time, so a daily ceiling spreads them over weeks.
+    serper_daily_cap: int = Field(default=60, ge=0)
+    serpapi_api_key: SecretStr | None = None
+    serpapi_monthly_cap: int = Field(default=90, ge=0)
+    scrapingdog_api_key: SecretStr | None = None
+    scrapingdog_monthly_cap: int = Field(default=900, ge=0)
+    searlo_api_key: SecretStr | None = None
+    searlo_monthly_cap: int = Field(default=100, ge=0)
+    tavily_api_key: SecretStr | None = None
+    tavily_monthly_cap: int = Field(default=900, ge=0)
+    exa_monthly_cap: int = Field(default=500, ge=0)
+
+    # Open data and registries (no keys)
+    overpass_api_url: str = "https://overpass-api.de/api/interpreter"
+    overpass_fallback_urls: str = ""
+    overpass_max_requests_per_minute: int = Field(default=2, ge=1)
+    geofabrik_base_url: str = "https://download.geofabrik.de"
+    geofabrik_enabled: bool = False
+    fr_recherche_entreprises_url: str = "https://recherche-entreprises.api.gouv.fr"
+    fr_recherche_max_rps: int = Field(default=5, ge=1, le=7)
+    no_brreg_api_url: str = "https://data.brreg.no/enhetsregisteret/api"
+    osm_attribution: str = "© OpenStreetMap contributors (ODbL)"
+
+    # Social providers (all on; each platform falls back to the next provider)
+    social_sources_enabled: bool = True
+    social_platforms: str = "instagram,tiktok,facebook,x,reddit,youtube,linkedin,pinterest,threads,twitch,github,linktree"
+    apify_api_token_fallback: SecretStr | None = None
+    ensembledata_api_token: SecretStr | None = None
+    scrapecreators_api_key: SecretStr | None = None
+    socialcrawl_api_key: SecretStr | None = None
+    hikerapi_base_url: str = "https://api.instagrapi.com"
+    hikerapi_access_key: SecretStr | None = None
+    social_provider_daily_cap: int = Field(default=50, ge=0)
+
+    # Outreach email from the owner's Gmail (compose link, IMAP draft, or SMTP send)
+    outreach_email_mode: str = "gmail"  # gmail | provider (EMAIL_PROVIDER: Mailpit/Resend)
+    gmail_sender: str = ""
+    gmail_app_password: SecretStr | None = None
+    gmail_delivery: str = "draft"  # draft | send
+    gmail_imap_host: str = "imap.gmail.com"
+    gmail_imap_port: int = 993
+    gmail_smtp_host: str = "smtp.gmail.com"
+    gmail_smtp_port: int = 587
+    gmail_daily_send_cap: int = Field(default=400, ge=0)
+    gmail_oauth_client_id: str = ""
+    gmail_oauth_client_secret: SecretStr | None = None
+    gmail_oauth_redirect_uri: str = "http://localhost:8000/api/gmail/oauth/callback"
+    reply_to_email: str = ""
+    zerobounce_monthly_cap: int = Field(default=90, ge=0)
 
     # OpenAI
     openai_api_key: SecretStr | None = None
@@ -203,6 +266,18 @@ class Settings(BaseSettings):
     @property
     def site_builder_root(self) -> Path:
         return self.site_builder_dir or self.data_dir / "site-builder"
+
+    @property
+    def excluded_country_set(self) -> frozenset[str]:
+        return frozenset(c.strip().upper() for c in self.excluded_countries.split(",") if c.strip())
+
+    @property
+    def search_order(self) -> list[str]:
+        return [p.strip().lower() for p in self.search_provider_order.split(",") if p.strip()]
+
+    @property
+    def social_platform_list(self) -> list[str]:
+        return [p.strip().lower() for p in self.social_platforms.split(",") if p.strip()]
 
     @property
     def gemini_fallbacks(self) -> list[str]:
@@ -325,6 +400,81 @@ def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
             "https://exa.ai",
             search in ("serper", "exa"),
         ),
+        *[
+            (key, label, (env,), _has(value), False, url, True)
+            for key, label, env, value, url in (
+                (
+                    "serpapi",
+                    "SerpAPI (search router)",
+                    "SERPAPI_API_KEY",
+                    s.serpapi_api_key,
+                    "https://serpapi.com/manage-api-key",
+                ),
+                (
+                    "scrapingdog",
+                    "ScrapingDog (search router)",
+                    "SCRAPINGDOG_API_KEY",
+                    s.scrapingdog_api_key,
+                    "https://www.scrapingdog.com",
+                ),
+                (
+                    "searlo",
+                    "Searlo (search router)",
+                    "SEARLO_API_KEY",
+                    s.searlo_api_key,
+                    "https://searlo.tech",
+                ),
+                (
+                    "tavily",
+                    "Tavily (search router)",
+                    "TAVILY_API_KEY",
+                    s.tavily_api_key,
+                    "https://app.tavily.com",
+                ),
+                (
+                    "groq",
+                    "Groq (LLM fallback)",
+                    "GROQ_API_KEY",
+                    s.groq_api_key,
+                    "https://console.groq.com/keys",
+                ),
+                (
+                    "ensembledata",
+                    "EnsembleData (social)",
+                    "ENSEMBLEDATA_API_TOKEN",
+                    s.ensembledata_api_token,
+                    "https://ensembledata.com",
+                ),
+                (
+                    "scrapecreators",
+                    "ScrapeCreators (social)",
+                    "SCRAPECREATORS_API_KEY",
+                    s.scrapecreators_api_key,
+                    "https://scrapecreators.com",
+                ),
+                (
+                    "socialcrawl",
+                    "SocialCrawl (social)",
+                    "SOCIALCRAWL_API_KEY",
+                    s.socialcrawl_api_key,
+                    "https://socialcrawl.dev",
+                ),
+                (
+                    "hikerapi",
+                    "HikerAPI (Instagram)",
+                    "HIKERAPI_ACCESS_KEY",
+                    s.hikerapi_access_key,
+                    "https://hikerapi.com",
+                ),
+                (
+                    "gmail_draft",
+                    "Gmail drafts/sending (App Password)",
+                    "GMAIL_APP_PASSWORD",
+                    s.gmail_app_password,
+                    "https://myaccount.google.com/apppasswords",
+                ),
+            )
+        ],
         (
             "brave",
             "Brave Search",

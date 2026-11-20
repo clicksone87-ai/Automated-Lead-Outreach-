@@ -3782,6 +3782,14 @@
       "type": "string",
       "title": "Mailpit Url",
       "default": "http://localhost:8025"
+     },
+     "routes": {
+      "items": {
+       "$ref": "#/components/schemas/ProviderRouteOut"
+      },
+      "type": "array",
+      "title": "Routes",
+      "default": []
      }
     },
     "type": "object",
@@ -4747,6 +4755,100 @@
      "created_at"
     ],
     "title": "PolicyDecisionOut"
+   },
+   "ProviderRouteOut": {
+    "properties": {
+     "group": {
+      "type": "string",
+      "title": "Group"
+     },
+     "provider": {
+      "type": "string",
+      "title": "Provider"
+     },
+     "position": {
+      "type": "integer",
+      "title": "Position"
+     },
+     "configured": {
+      "type": "boolean",
+      "title": "Configured"
+     },
+     "active": {
+      "type": "boolean",
+      "title": "Active"
+     },
+     "exhausted": {
+      "type": "boolean",
+      "title": "Exhausted"
+     },
+     "today_used": {
+      "type": "number",
+      "title": "Today Used"
+     },
+     "today_cap": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Today Cap"
+     },
+     "month_used": {
+      "type": "number",
+      "title": "Month Used"
+     },
+     "month_cap": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Month Cap"
+     },
+     "last_error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Error"
+     },
+     "last_error_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Error At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "group",
+     "provider",
+     "position",
+     "configured",
+     "active",
+     "exhausted",
+     "today_used",
+     "month_used"
+    ],
+    "title": "ProviderRouteOut",
+    "description": "One provider in a fallback chain (search router or LLM): usage vs cap and last error."
    },
    "QuotaOut": {
     "properties": {

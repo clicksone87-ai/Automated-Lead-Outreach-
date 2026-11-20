@@ -1054,6 +1054,11 @@ export interface components {
              * @default http://localhost:8025
              */
             mailpit_url: string;
+            /**
+             * Routes
+             * @default []
+             */
+            routes: components["schemas"]["ProviderRouteOut"][];
         };
         /** GalleryItem */
         GalleryItem: {
@@ -1399,6 +1404,36 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * ProviderRouteOut
+         * @description One provider in a fallback chain (search router or LLM): usage vs cap and last error.
+         */
+        ProviderRouteOut: {
+            /** Group */
+            group: string;
+            /** Provider */
+            provider: string;
+            /** Position */
+            position: number;
+            /** Configured */
+            configured: boolean;
+            /** Active */
+            active: boolean;
+            /** Exhausted */
+            exhausted: boolean;
+            /** Today Used */
+            today_used: number;
+            /** Today Cap */
+            today_cap?: number | null;
+            /** Month Used */
+            month_used: number;
+            /** Month Cap */
+            month_cap?: number | null;
+            /** Last Error */
+            last_error?: string | null;
+            /** Last Error At */
+            last_error_at?: string | null;
         };
         /** QuotaOut */
         QuotaOut: {

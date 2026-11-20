@@ -135,6 +135,67 @@ async def check_all(  # noqa: PLR0915 - one small closure per provider
         page = await adapters.fetcher.get("https://example.com/")
         return f"safe fetcher HTTP {page.status_code}"
 
+    def secret(v: Any) -> str:
+        return v.get_secret_value() if v is not None else ""
+
+    def router_check(cls: Any, key: Any) -> Callable[[], Awaitable[str]]:
+        async def check() -> str:
+            async with session_scope() as s:
+                res = await cls(secret(key)).search(
+                    s, "looking for a web designer", agent="provider_check", country="GB", count=3
+                )
+            return f"{len(res)} results" + (f"; first: {res[0].url[:60]}" if res else "")
+
+        return check
+
+    async def serper_fallback() -> str:
+        from app.adapters.search_free import SerperSearch  # noqa: PLC0415
+
+        async with session_scope() as s:
+            res = await SerperSearch(secret(settings.serper_api_key_fallback)).search(
+                s, "need a logo designer", agent="provider_check", country="US"
+            )
+        return f"fallback key: {len(res)} results"
+
+    async def groq() -> str:
+        from app.adapters.groq import GroqLLM  # noqa: PLC0415
+
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get("https://api.groq.com/openai/v1/models",
+                            headers={"Authorization": f"Bearer {secret(settings.groq_api_key)}"})  # fmt: skip
+        r.raise_for_status()
+        models = sorted(m["id"] for m in r.json().get("data", []))
+        llm = GroqLLM(secret(settings.groq_api_key), settings.groq_model)
+        async with session_scope() as s:
+            ok = await llm.structured(
+                s,
+                LLMRequest(agent="provider_check", task="Return ok=true and word='hello'."),
+                _Ping,
+            )
+        assert ok.ok, "model answered ok=false"
+        return f"{llm.model}: structured output valid; {len(models)} models: {', '.join(models)}"
+
+    async def apify_fallback() -> str:
+        from app.adapters.apify import ApifyClient  # noqa: PLC0415
+
+        usage = await ApifyClient(secret(settings.apify_api_token_fallback)).monthly_usage()
+        assert usage is not None, "token rejected"
+        return f"fallback token ok; ${usage['used_usd']:.3f} of ${usage['limit_usd']:.0f} used"
+
+    from app.adapters.search_router import (  # noqa: PLC0415
+        ScrapingDogSearch,
+        SearloSearch,
+        SerpApiSearch,
+        TavilySearch,
+    )
+
+    extra = [
+        ("serpapi", router_check(SerpApiSearch, settings.serpapi_api_key)),
+        ("scrapingdog", router_check(ScrapingDogSearch, settings.scrapingdog_api_key)),
+        ("searlo", router_check(SearloSearch, settings.searlo_api_key)),
+        ("tavily", router_check(TavilySearch, settings.tavily_api_key)),
+        ("groq", groq),
+    ]
     checks: list[tuple[str, Callable[[], Awaitable[str]]]] = [
         ("gemini", gemini),
         ("serper", serper),
@@ -146,10 +207,24 @@ async def check_all(  # noqa: PLR0915 - one small closure per provider
         ("mailpit", mailpit),
         ("verification", verification),
         ("web", web),
+        *extra,
     ]
     for name, fn in checks:
         await run(name, fn)
-    for name in ("openai", "brave", "places", "resend", "zerobounce", "reddit", "x", "meta",
+    for name, fn, configured in (
+        ("serper_fallback", serper_fallback, settings.serper_api_key_fallback is not None),
+        ("apify_fallback", apify_fallback, settings.apify_api_token_fallback is not None),
+    ):
+        if not configured:
+            out.append(CheckResult(name, False, "needs_api_key", "not set"))
+            continue
+        t = time.monotonic()
+        try:
+            out.append(CheckResult(name, True, "ok", f"{await fn()} ({_ms(t)})"))
+        except Exception as exc:
+            msg = str(exc).replace(chr(10), " ")[:160]
+            out.append(CheckResult(name, True, "failed", f"{type(exc).__name__}: {msg}"))
+    for name in ("openai", "brave", "places", "resend", "reddit", "x", "meta",
                  "opencorporates"):  # fmt: skip
         s = st[name]
         out.append(CheckResult(name, s.has_keys, s.state, s.note or "not called"))

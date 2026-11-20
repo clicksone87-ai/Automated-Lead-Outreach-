@@ -15,6 +15,14 @@ const LABELS: Record<string, string> = {
   exa: "Exa free credit used",
   apify: "Apify this month",
   pagespeed: "PageSpeed requests today",
+  serpapi: "SerpAPI this month",
+  scrapingdog: "ScrapingDog this month",
+  searlo: "Searlo this month",
+  tavily: "Tavily this month",
+  groq: "Groq requests today",
+  zerobounce: "ZeroBounce this month",
+  gmail: "Gmail emails today",
+  "exa:monthly": "Exa requests this month",
   "apify:social_reddit": "Reddit (Apify share)",
   "apify:social_facebook": "Facebook (Apify share)",
   "apify:social_x": "X (Apify share)",
@@ -49,7 +57,7 @@ function QuotaTile({ q, live }: { q: Quota; live?: string | null }) {
 export function FreeTierPanel() {
   const { data, isLoading } = useFreeTier();
   const main = data?.quotas.filter((q) => !q.scope.includes(":")) ?? [];
-  const daily = data?.quotas.filter((q) => q.scope === "serper:daily" || q.scope.startsWith("gemini:")) ?? [];
+  const daily = data?.quotas.filter((q) => q.scope === "serper:daily" || q.scope === "exa:monthly" || q.scope.startsWith("gemini:")) ?? [];
   const shares = data?.quotas.filter((q) => q.scope.startsWith("apify:")) ?? [];
   const liveFor = (scope: string): string | null => {
     if (!data) return null;

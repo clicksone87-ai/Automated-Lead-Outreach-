@@ -30,10 +30,17 @@ from app.adapters.google import (
     PageSpeedAdapter,
     PlacesAdapter,
 )
+from app.adapters.groq import FallbackLLM, GroqLLM
 from app.adapters.llm import LLMAdapter, MockLLM, OpenAILLM
 from app.adapters.mailbox import DisabledMailbox, ImapMailbox, MailboxAdapter, MockMailbox
 from app.adapters.search import BraveSearch, DisabledSearch, MockSearch, SearchAdapter
 from app.adapters.search_free import ExaSearch, FallbackSearch, SerperPlaces, SerperSearch
+from app.adapters.search_router import (
+    ScrapingDogSearch,
+    SearloSearch,
+    SerpApiSearch,
+    TavilySearch,
+)
 from app.adapters.storage import LocalStorage, StorageAdapter
 from app.adapters.verification import (
     DisabledVerifier,
@@ -113,19 +120,33 @@ def build_adapters(s: Settings) -> Adapters:  # noqa: PLR0915 - one flat decisio
             "gemini" if s.llm_provider == "gemini" else "openai", MockLLM(), _DisabledLLM(env)
         )
 
-    # Search: Serper → Exa fallback chain (Brave only when selected and not in testing mode)
-    serper = SerperSearch(_key(s.serper_api_key)) if ready("serper") else None
+    if s.llm_fallback_provider == "groq" and ready("groq") and not getattr(llm, "is_mock", False):
+        llm = FallbackLLM(llm, GroqLLM(_key(s.groq_api_key), s.groq_model))
+
+    # Search router: SEARCH_PROVIDER_ORDER, each provider within its own cap (Brave only when
+    # selected and not in testing mode)
+    serper = (
+        SerperSearch(_key(s.serper_api_key), fallback_key=_key(s.serper_api_key_fallback))
+        if ready("serper")
+        else None
+    )
+    builders: dict[str, Any] = {
+        "serper": lambda: serper,
+        "serpapi": lambda: SerpApiSearch(_key(s.serpapi_api_key)) if ready("serpapi") else None,
+        "scrapingdog": lambda: (
+            ScrapingDogSearch(_key(s.scrapingdog_api_key)) if ready("scrapingdog") else None
+        ),
+        "searlo": lambda: SearloSearch(_key(s.searlo_api_key)) if ready("searlo") else None,
+        "tavily": lambda: TavilySearch(_key(s.tavily_api_key)) if ready("tavily") else None,
+        "exa": lambda: ExaSearch(_key(s.exa_api_key)) if ready("exa") else None,
+    }
     chain: list[SearchAdapter] = []
     if s.search_provider == "brave" and ready("brave"):
         chain.append(BraveSearch(_key(s.brave_search_api_key)))
-    if serper is not None:
-        chain.append(serper)
-    if ready("exa"):
-        exa = ExaSearch(_key(s.exa_api_key))
-        if s.search_provider == "exa":
-            chain.insert(0, exa)
-        else:
-            chain.append(exa)
+    for name in s.search_order:
+        adapter = builders.get(name, lambda: None)()
+        if adapter is not None and adapter not in chain:
+            chain.append(adapter)
     search: Any = (
         FallbackSearch(chain) if chain else fallback("serper", MockSearch(), DisabledSearch())
     )

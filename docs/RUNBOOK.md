@@ -80,7 +80,7 @@ per step against the targets (fast < 3 min, heavy < 10 min).
 Manual **Run now** on a source that spends a limited free tier (Apify, Serper) asks for
 confirmation, is limited to one run per source per hour, and is refused when the free cap
 cannot cover the run. Serper credits are one-time, so a daily ceiling
-(`SERPER_DAILY_CREDIT_CAP`, default 60) spreads them out.
+(`SERPER_DAILY_CAP`, default 60) spreads them out.
 
 Day to day, the dashboard is the main interface:
 

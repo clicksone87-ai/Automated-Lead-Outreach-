@@ -46,6 +46,23 @@ class QuotaOut(BaseModel):
     remaining: float
 
 
+class ProviderRouteOut(BaseModel):
+    """One provider in a fallback chain (search router or LLM): usage vs cap and last error."""
+
+    group: str  # search | llm
+    provider: str
+    position: int
+    configured: bool
+    active: bool
+    exhausted: bool
+    today_used: float
+    today_cap: float | None = None
+    month_used: float
+    month_cap: float | None = None
+    last_error: str | None = None
+    last_error_at: datetime | None = None
+
+
 class FreeTierOut(BaseModel):
     app_tier: str
     testing_mode: bool
@@ -57,6 +74,7 @@ class FreeTierOut(BaseModel):
     apify_cycle_end: str | None = None
     mailpit_messages: int | None = None
     mailpit_url: str = "http://localhost:8025"
+    routes: list[ProviderRouteOut] = []
 
 
 class BusinessOut(ORM):

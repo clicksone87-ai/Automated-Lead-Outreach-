@@ -38,7 +38,10 @@ class SerperSearch:
     is_mock: ClassVar[bool] = False
     BASE = "https://google.serper.dev"
 
-    def __init__(self, api_key: str, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self, api_key: str, client: httpx.AsyncClient | None = None, *, fallback_key: str = ""
+    ) -> None:
+        self._keys = [k for k in (api_key, fallback_key) if k]
         self._headers = {"X-API-KEY": api_key, "Content-Type": "application/json"}
         self._client = client or httpx.AsyncClient(timeout=30)
 
@@ -48,7 +51,14 @@ class SerperSearch:
         await quota.consume(
             session, "serper", agent=agent, units=1, description=f"{path}: {body.get('q')}"[:200]
         )
-        resp = await self._client.post(f"{self.BASE}/{path}", json=body, headers=self._headers)
+        resp: httpx.Response | None = None
+        for key in self._keys:  # the second key takes over when the first is used up
+            headers = {**self._headers, "X-API-KEY": key}
+            resp = await self._client.post(f"{self.BASE}/{path}", json=body, headers=headers)
+            if resp.status_code not in (401, 402, 403, 429):
+                break
+            logger.info("serper key rejected (%s); trying the fallback key", resp.status_code)
+        assert resp is not None
         resp.raise_for_status()
         data: dict[str, Any] = resp.json()
         return data
@@ -206,7 +216,8 @@ class ExaSearch:
 
 
 class FallbackSearch:
-    """Primary search with automatic fallback (Serper → Exa) on errors or an exhausted quota."""
+    """The search router: providers in SEARCH_PROVIDER_ORDER, the next one taking over on
+    errors (401/402/429 …) or an exhausted cap."""
 
     is_mock: ClassVar[bool] = False
 
@@ -244,6 +255,7 @@ class FallbackSearch:
                     )
             except (httpx.HTTPError, BudgetExceededError, AdapterUnavailableError) as exc:
                 logger.warning("search via %s failed (%s); falling back", adapter.name, exc)
+                await quota.record_provider_error(adapter.name, f"{type(exc).__name__}: {exc}")
                 last = exc
         assert last is not None
         raise last

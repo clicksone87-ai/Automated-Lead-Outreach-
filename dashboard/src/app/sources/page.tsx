@@ -6,6 +6,7 @@ import { CardsSkeleton, EmptyState, ErrorState } from "@/components/common/state
 import { StatusPill } from "@/components/common/status-pill";
 import { FreeTierPanel } from "@/components/sources/free-tier-panel";
 import { PlatformReport } from "@/components/sources/platform-report";
+import { ProviderRoutesPanel } from "@/components/sources/provider-routes-panel";
 import { SourceCard } from "@/components/sources/source-card";
 import { useSources } from "@/lib/queries";
 
@@ -34,6 +35,7 @@ export default function SourcesPage() {
       />
       <PlatformReport />
       <FreeTierPanel />
+      <ProviderRoutesPanel />
       {isError ? (
         <ErrorState error={error} onRetry={() => refetch()} />
       ) : isLoading || !data ? (

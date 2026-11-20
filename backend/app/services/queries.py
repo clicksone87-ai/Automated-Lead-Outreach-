@@ -66,6 +66,7 @@ from app.schemas import (
     ManualRunOut,
     OverviewOut,
     PolicyDecisionOut,
+    ProviderRouteOut,
     QuotaOut,
     SearchHit,
     SettingsOut,
@@ -422,15 +423,12 @@ def summarize_lead_family_tiers(
         else:
             counts[family]["low"] += 1
     return [
-        LeadFamilyTierCounts(family=family, **tier_counts)
-        for family, tier_counts in counts.items()
+        LeadFamilyTierCounts(family=family, **tier_counts) for family, tier_counts in counts.items()
     ]
 
 
 async def lead_family_tier_counts(session: AsyncSession) -> list[LeadFamilyTierCounts]:
-    rows = (
-        await session.execute(select(Lead.source_family, Lead.source, Lead.intent_score))
-    ).all()
+    rows = (await session.execute(select(Lead.source_family, Lead.source, Lead.intent_score))).all()
     return summarize_lead_family_tiers(list(rows))
 
 
@@ -797,7 +795,78 @@ async def free_tier(session: AsyncSession, settings: Settings, adapters: Adapter
         apify_limit_usd_live=apify_usage["limit_usd"] if apify_usage else None,
         apify_cycle_end=apify_usage["cycle_end"] if apify_usage else None,
         mailpit_messages=int(mail_info.get("Messages", 0)) if mail_info else None,
+        routes=await provider_routes(session, settings, adapters, report),
     )
+
+
+async def provider_routes(
+    session: AsyncSession, settings: Settings, adapters: Adapters, report: list[dict[str, Any]]
+) -> list[ProviderRouteOut]:
+    """Search router and LLM fallback chains in order: the active provider is the first one
+    that is configured and still inside every cap."""
+    chain = getattr(adapters.search, "adapters", None)
+    search_order = [a.name for a in chain] if chain else settings.search_order
+    for name in settings.search_order:  # show unconfigured providers too, after the live chain
+        if name not in search_order:
+            search_order.append(name)
+    llm_order = ["gemini", *(["groq"] if settings.llm_fallback_provider == "groq" else [])]
+    st = integration_status(settings)
+    now = datetime.now(UTC)
+    day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    month = day.replace(day=1)
+    names = [*search_order, *llm_order]
+
+    async def units_since(since: datetime) -> dict[str, float]:
+        rows = await session.execute(
+            select(Cost.provider, func.sum(Cost.units))
+            .where(Cost.provider.in_(names), Cost.created_at >= since)
+            .group_by(Cost.provider)
+        )
+        return {p: float(u or 0) for p, u in rows.all()}
+
+    today, this_month = await units_since(day), await units_since(month)
+    errors: dict[str, tuple[str, datetime]] = {}
+    for action, reason, at in (
+        await session.execute(
+            select(PolicyDecision.action, PolicyDecision.reason, PolicyDecision.created_at)
+            .where(PolicyDecision.check == "provider_error", PolicyDecision.action.in_(names))
+            .order_by(PolicyDecision.created_at.desc())
+            .limit(200)
+        )
+    ).all():
+        errors.setdefault(action, (reason, at))
+
+    out: list[ProviderRouteOut] = []
+    for group, order in (("search", search_order), ("llm", llm_order)):
+        found_active = False
+        for i, name in enumerate(order, start=1):
+            rows = [r for r in report
+                    if r["provider"] == name and r["scope"] in (name, f"{name}:daily", f"{name}:monthly")]  # fmt: skip
+            unit_rows = [r for r in rows if r["unit"] != "USD credit"]
+            day_caps = [float(r["cap"]) for r in unit_rows if r["period"] == "day"]
+            month_caps = [float(r["cap"]) for r in unit_rows if r["period"] == "month"]
+            exhausted = any(float(r["remaining"]) <= 0 for r in rows)
+            configured = name in st and st[name].configured
+            active = configured and not exhausted and not found_active
+            found_active = found_active or active
+            err = errors.get(name)
+            out.append(
+                ProviderRouteOut(
+                    group=group,
+                    provider=name,
+                    position=i,
+                    configured=configured,
+                    active=active,
+                    exhausted=exhausted,
+                    today_used=today.get(name, 0.0),
+                    today_cap=min(day_caps, default=None),
+                    month_used=this_month.get(name, 0.0),
+                    month_cap=min(month_caps, default=None),
+                    last_error=err[0] if err else None,
+                    last_error_at=err[1] if err else None,
+                )
+            )
+    return out
 
 
 async def costs(session: AsyncSession, days: int = 30) -> CostsOut:

@@ -68,7 +68,7 @@ async def test_one_manual_run_per_hour() -> None:
 
 
 async def test_refused_when_free_cap_cannot_cover_a_run() -> None:
-    settings = _settings(serper_daily_credit_cap=4)
+    settings = _settings(serper_daily_cap=4)
     async with session_scope() as s:
         await quota.consume(s, "serper", agent="discovery", units=2, settings=settings)
     async with session_scope() as s:
@@ -81,7 +81,7 @@ async def test_refused_when_free_cap_cannot_cover_a_run() -> None:
 
 
 async def test_serper_daily_ceiling_applies_to_every_call() -> None:
-    settings = _settings(serper_daily_credit_cap=2)
+    settings = _settings(serper_daily_cap=2)
     async with session_scope() as s:
         await quota.consume(s, "serper", agent="t", settings=settings)
         await quota.consume(s, "serper", agent="t", settings=settings)
