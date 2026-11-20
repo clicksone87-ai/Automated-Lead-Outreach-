@@ -48,6 +48,7 @@ async def test_render_once_then_seconds_per_preview(
     worker_cache = Path("/cache/site-builder")
     cache_dir = worker_cache if await asyncio.to_thread(worker_cache.is_dir) else None
     if cache_dir is None:
+
         async def local_deps(template_dir: Path, cache_root: Path) -> Path:
             return template_dir / "node_modules"
 

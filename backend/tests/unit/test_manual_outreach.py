@@ -131,9 +131,7 @@ async def test_skipped_queue_status_survives_sync(tmp_path) -> None:
         await s.flush()
         await sync_queue(s)
         item = (
-            await s.execute(
-                select(ManualOutreach).where(ManualOutreach.lead_id == lead.id)
-            )
+            await s.execute(select(ManualOutreach).where(ManualOutreach.lead_id == lead.id))
         ).scalar_one()
         assert item is not None
         await set_status(s, item.id, ManualOutreachStatus.SKIPPED, "test")

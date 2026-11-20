@@ -87,10 +87,7 @@ async def sync_queue(session: AsyncSession) -> int:
                 )
             )
             changed += 1
-        elif (
-            existing.post_link != track_b["post_link"]
-            or existing.drafts != drafts
-        ):
+        elif existing.post_link != track_b["post_link"] or existing.drafts != drafts:
             existing.post_link = track_b["post_link"]
             existing.drafts = drafts
             changed += 1
@@ -146,10 +143,15 @@ async def set_status(
         return None
     business = await session.get(Business, lead.business_id) if lead.business_id else None
     item.status = status
-    item.done_at = datetime.now(UTC) if status in (
-        ManualOutreachStatus.DONE,
-        ManualOutreachStatus.SKIPPED,
-    ) else None
+    item.done_at = (
+        datetime.now(UTC)
+        if status
+        in (
+            ManualOutreachStatus.DONE,
+            ManualOutreachStatus.SKIPPED,
+        )
+        else None
+    )
     item.done_by = done_by
     await session.flush()
     drafts = item.drafts if isinstance(item.drafts, dict) else {}

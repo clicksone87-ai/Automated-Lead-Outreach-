@@ -64,10 +64,7 @@ def test_saved_social_fixture_freshness_for_four_platforms() -> None:
         "facebook": None,
         "reddit": int((now - timedelta(hours=7)).timestamp()),
     }
-    parsed = {
-        platform: _parse_dt(value)
-        for platform, value in fixtures.items()
-    }
+    parsed = {platform: _parse_dt(value) for platform, value in fixtures.items()}
     assert _is_recent(parsed["x"])
     assert not _is_recent(parsed["instagram"])
     assert not _is_recent(parsed["facebook"])
