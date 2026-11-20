@@ -142,15 +142,22 @@ def link_dir(link: Path, target: Path) -> None:
         _winapi.CreateJunction(str(target), str(link))
 
 
+_DIGEST_SKIP = frozenset({"node_modules", "out", ".next", "dist-render"})
+
+
 def source_digest(template_dir: Path) -> str:
-    """Hash of everything that affects rendering, so a template change gets a fresh bundle."""
+    """Hash of everything that affects rendering, so a template change gets a fresh bundle.
+
+    Skipped directories are pruned during the walk, not filtered afterwards: a template folder
+    with a local node_modules (about 10,000 files) on a Windows bind mount took minutes to walk
+    on every preview, even when the compiled bundle was already cached."""
+    files: list[Path] = []
+    for root, dirs, names in os.walk(template_dir):
+        dirs[:] = [d for d in dirs if d not in _DIGEST_SKIP]
+        files += [Path(root) / n for n in names if n not in _DIGEST_SKIP and n != "styles.css"]
     h = hashlib.sha256()
-    skip = {"node_modules", "out", ".next", "dist-render"}
-    for f in sorted(template_dir.rglob("*")):
-        rel = f.relative_to(template_dir)
-        if not f.is_file() or skip & set(rel.parts) or rel.name == "styles.css":
-            continue
-        h.update(rel.as_posix().encode())
+    for f in sorted(files):  # same order and content as before, so existing caches stay valid
+        h.update(f.relative_to(template_dir).as_posix().encode())
         h.update(f.read_bytes())
     return h.hexdigest()[:16]
 
