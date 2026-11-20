@@ -108,6 +108,7 @@ STOPPED = {
     LeadStatus.FAILED,
     LeadStatus.PAUSED_BUDGET,
     LeadStatus.CLOSED,
+    LeadStatus.NOT_USEFUL,
 }
 AGENTS = ("discovery", *PIPELINE_ORDER)
 

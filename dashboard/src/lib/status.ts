@@ -28,6 +28,7 @@ export const LEAD_STATUS: Record<string, { label: string; tone: Tone }> = {
   closed: { label: "Closed", tone: "neutral" },
   failed: { label: "Failed", tone: "danger" },
   paused_budget: { label: "Paused (budget)", tone: "warning" },
+  not_useful: { label: "Not useful", tone: "neutral" },
 };
 
 export const AGENT_STATE: Record<string, { label: string; tone: Tone }> = {

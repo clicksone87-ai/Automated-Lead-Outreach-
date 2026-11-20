@@ -92,6 +92,7 @@ class LeadStatus(StrEnum):
     CLOSED = "closed"
     FAILED = "failed"
     PAUSED_BUDGET = "paused_budget"
+    NOT_USEFUL = "not_useful"  # never worked; reason in leads.not_useful_reason
 
 
 class EvidenceKind(StrEnum):
@@ -257,6 +258,8 @@ class Lead(Base):
     lane: Mapped[str | None] = mapped_column(String(10), index=True)
     # why the rule-based prefilter rejected the lead (None = passed or not checked)
     prefilter_reason: Mapped[str | None] = mapped_column(Text)
+    # services.not_useful.NotUsefulReason when status is not_useful
+    not_useful_reason: Mapped[str | None] = mapped_column(String(30), index=True)
     # {"fast": {"queued", "started", "finished", "seconds", "stopped_at"}, "heavy": {...}}
     lane_timings: Mapped[dict[str, Any]] = mapped_column(
         JSONB, default=dict, server_default=text("'{}'::jsonb")
