@@ -1,0 +1,13 @@
+#!/bin/sh
+message_file=$1
+tmp_file="${message_file}.clean"
+
+awk '
+  tolower($0) ~ /^co-authored-by:/ { next }
+  tolower($0) ~ /generated with/ { next }
+  tolower($0) ~ /claude/ { next }
+  tolower($0) ~ /copilot/ { next }
+  { print }
+' "$message_file" > "$tmp_file"
+
+mv "$tmp_file" "$message_file"

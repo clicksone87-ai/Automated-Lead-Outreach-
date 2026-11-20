@@ -41,14 +41,22 @@ CONTENT = {
 
 
 async def test_render_once_then_seconds_per_preview(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def local_deps(template_dir: Path, cache_root: Path) -> Path:
-        return template_dir / "node_modules"
+    worker_cache = Path("/cache/site-builder")
+    cache_dir = worker_cache if worker_cache.is_dir() else None
+    if cache_dir is None:
+        async def local_deps(template_dir: Path, cache_root: Path) -> Path:
+            return template_dir / "node_modules"
 
-    monkeypatch.setattr(build, "ensure_deps", local_deps)
+        monkeypatch.setattr(build, "ensure_deps", local_deps)
     first = await build_site(
-        template_dir=TEMPLATE, data_dir=tmp_path, preview_id="p1", content=CONTENT
+        template_dir=TEMPLATE,
+        data_dir=tmp_path,
+        preview_id="p1",
+        content=CONTENT,
+        cache_dir=cache_dir,
     )
     assert (first.site_dir / "index.html").exists()
     assert (first.site_dir / "leistungen" / "index.html").exists()
@@ -60,7 +68,11 @@ async def test_render_once_then_seconds_per_preview(
 
     t0 = time.monotonic()
     second = await build_site(
-        template_dir=TEMPLATE, data_dir=tmp_path, preview_id="p2", content=CONTENT
+        template_dir=TEMPLATE,
+        data_dir=tmp_path,
+        preview_id="p2",
+        content=CONTENT,
+        cache_dir=cache_dir,
     )
     assert time.monotonic() - t0 < 15  # the compiled template is reused
     assert (second.work_dir / "content.json").exists()
