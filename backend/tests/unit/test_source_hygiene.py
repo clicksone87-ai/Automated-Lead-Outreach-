@@ -40,7 +40,7 @@ def test_spanish_country_word_detected() -> None:
     assert country_from_text("Calle Mayor 1, Madrid, España")[0] == "ES"
 
 
-def test_social_posts_older_than_eight_hours_are_dropped() -> None:
+def test_social_posts_old_fresh_and_undated_are_classified() -> None:
     from datetime import UTC, datetime, timedelta  # noqa: PLC0415
 
     from app.agents.discovery.sources.social_apify import MAX_POST_AGE, _is_recent  # noqa: PLC0415
@@ -49,4 +49,26 @@ def test_social_posts_older_than_eight_hours_are_dropped() -> None:
     assert timedelta(hours=8) == MAX_POST_AGE
     assert _is_recent(now - timedelta(hours=7, minutes=59))
     assert not _is_recent(now - timedelta(hours=8, minutes=1))
-    assert _is_recent(None)  # undated items are kept
+    assert not _is_recent(None)
+
+
+def test_saved_social_fixture_freshness_for_four_platforms() -> None:
+    from datetime import UTC, datetime, timedelta  # noqa: PLC0415
+
+    from app.agents.discovery.sources.social_apify import _is_recent, _parse_dt  # noqa: PLC0415
+
+    now = datetime.now(UTC)
+    fixtures = {
+        "x": now.isoformat(),
+        "instagram": (now - timedelta(hours=9)).isoformat(),
+        "facebook": None,
+        "reddit": int((now - timedelta(hours=7)).timestamp()),
+    }
+    parsed = {
+        platform: _parse_dt(value)
+        for platform, value in fixtures.items()
+    }
+    assert _is_recent(parsed["x"])
+    assert not _is_recent(parsed["instagram"])
+    assert not _is_recent(parsed["facebook"])
+    assert _is_recent(parsed["reddit"])

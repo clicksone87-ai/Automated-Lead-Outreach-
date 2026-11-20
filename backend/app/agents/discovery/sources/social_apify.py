@@ -84,11 +84,11 @@ MAX_POST_AGE: timedelta = timedelta(hours=8)
 def _is_recent(dt: datetime | None, max_age: timedelta = MAX_POST_AGE) -> bool:
     """Strict post age cutoff: only posts from the last 8 hours (V2 Social Sources).
 
-    Undated items are kept: some Facebook results carry no time, and dropping them would
-    hide real requests. Every dated item older than the cutoff is dropped.
+    Undated items are dropped because they cannot prove that a post is fresh.
+    Every dated item older than the cutoff is dropped.
     """
     if dt is None:
-        return True
+        return False
     return dt >= datetime.now(UTC) - max_age
 
 
@@ -202,7 +202,7 @@ class ApifyXSource(_ApifySource):
             if t.get("isRetweet") or not t.get("id"):
                 continue
             posted = _parse_dt(t.get("createdAt"))
-            if posted and not _is_recent(posted):
+            if not _is_recent(posted):
                 continue
             text = str(t.get("fullText") or t.get("text") or "")
             author = t.get("author") or {}
@@ -260,7 +260,7 @@ class ApifyInstagramSource(_ApifySource):
             if not p.get("id") or not p.get("url"):
                 continue
             posted = _parse_dt(p.get("timestamp"))
-            if posted and not _is_recent(posted):
+            if not _is_recent(posted):
                 continue
             leads.append(
                 _lead(
@@ -437,7 +437,7 @@ class ApifyRedditSource(_ApifySource):
             if p.get("kind", "post") != "post" or p.get("is_deleted_or_removed"):
                 continue
             posted = _parse_dt(p.get("created_utc"))
-            if posted and not _is_recent(posted):
+            if not _is_recent(posted):
                 continue
             text = f"{p.get('title') or ''}\n\n{p.get('body') or ''}".strip()
             url = str(p.get("url") or f"https://www.reddit.com{p.get('permalink', '')}")
