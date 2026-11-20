@@ -619,6 +619,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/gmail/outbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Gmail Outbox
+         * @description Track A: proposals ready in Gmail (draft or compose link), waiting for "Mark as sent".
+         */
+        get: operations["gmail_outbox_api_gmail_outbox_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/messages/{message_id}/mark-sent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Message Mark Sent */
+        post: operations["message_mark_sent_api_messages__message_id__mark_sent_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/messages": {
         parameters: {
             query?: never;
@@ -1316,6 +1353,14 @@ export interface components {
             next_allowed_at?: string | null;
             /** Usage */
             usage?: string[];
+        };
+        /** MarkSentIn */
+        MarkSentIn: {
+            /**
+             * By
+             * @default dashboard
+             */
+            by: string;
         };
         /** OverviewOut */
         OverviewOut: {
@@ -2914,6 +2959,78 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["StageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gmail_outbox_api_gmail_outbox_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    message_mark_sent_api_messages__message_id__mark_sent_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkSentIn"];
             };
         };
         responses: {

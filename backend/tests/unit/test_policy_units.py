@@ -34,20 +34,39 @@ def test_wrap_sanitises_label() -> None:
 
 
 def test_shipped_country_rules() -> None:
-    rules = load_rules()
+    rules = load_rules(excluded=frozenset({"PK", "IN", "BD"}))
     us, gb, de, ie, no = (rules.get(c) for c in ("US", "GB", "DE", "IE", "NO"))
     assert us and gb and de and ie and no
     assert us.can_draft and gb.can_draft and de.can_draft and ie.can_draft and no.can_draft
-    # Nothing can be sent until the legal review flips legal_reviewed.
-    assert (
-        not us.can_send
-        and not gb.can_send
-        and not de.can_send
-        and not ie.can_send
-        and not no.can_send
-    )
-    assert rules.get("BR") is None  # unlisted => blocked
+    # Worldwide sending: the legal-review flag no longer gates sending.
+    assert us.can_send and gb.can_send and de.can_send and ie.can_send and no.can_send
+    br = rules.get("BR")  # unlisted => the shared default rule
+    assert br is not None and br.can_draft and br.can_send
+    for excluded in ("PK", "IN", "BD", "pk"):
+        assert rules.get(excluded) is None
+        assert rules.is_excluded(excluded)
     assert rules.get(None) is None
+
+
+def test_unlisted_countries_blocked_when_worldwide_is_off() -> None:
+    rules = load_rules(all_countries=False)
+    assert rules.get("BR") is None
+    assert rules.get("US") is not None
+
+
+def test_sending_switch_and_consent_still_block_sending(tmp_path: Path) -> None:
+    f = tmp_path / "rules.yaml"
+    f.write_text(
+        "version: 1\ncountries:\n"
+        "  US: {name: US, enabled: true, sending_enabled: false, requires_prior_consent: false}\n"
+        "  GB: {name: GB, enabled: true, requires_prior_consent: true}\n",
+        encoding="utf-8",
+    )
+    rules = load_rules(f)
+    us, gb = rules.get("US"), rules.get("GB")
+    assert us and gb and us.can_draft and gb.can_draft
+    assert not us.can_send and not gb.can_send
+    assert rules.get("FR") is None  # the file has no default entry
 
 
 def test_invalid_rules_file_blocks_everything(tmp_path: Path) -> None:

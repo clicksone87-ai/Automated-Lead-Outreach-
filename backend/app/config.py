@@ -251,12 +251,25 @@ class Settings(BaseSettings):
         return self.sending_domain or "test-agency.local"
 
     @property
+    def gmail_mode(self) -> str:
+        """draft | send (App Password set), compose (link only), or "" when Gmail is not used."""
+        if self.outreach_email_mode != "gmail" or not self.gmail_sender.strip():
+            return ""
+        if not _has(self.gmail_app_password):
+            return "compose"
+        return "send" if self.gmail_delivery == "send" else "draft"
+
+    @property
     def from_address(self) -> str:
         name = self.sender_business_name or self.sender_name or "Outreach"
+        if self.gmail_mode:
+            return f"{name} <{self.gmail_sender.strip()}>"
         return f"{name} <outreach@{self.sender_domain}>"
 
     @property
     def reply_address(self) -> str:
+        if self.gmail_mode:
+            return self.reply_to_email.strip() or self.gmail_sender.strip()
         return f"replies@{self.sender_domain}"
 
     @property
@@ -299,7 +312,6 @@ TESTING_OFF: frozenset[str] = frozenset(
         "places",
         "resend",
         "imap",
-        "zerobounce",
         "reddit",
         "x",
         "meta",
@@ -567,10 +579,10 @@ def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
         ),
         (
             "zerobounce",
-            "Email verification (ZeroBounce)",
+            "Email verification (ZeroBounce free tier, local check as fallback)",
             ("EMAIL_VERIFICATION_API_KEY",),
             _has(s.email_verification_api_key),
-            True,
+            False,
             "https://www.zerobounce.net",
             s.email_verification_provider == "zerobounce",
         ),

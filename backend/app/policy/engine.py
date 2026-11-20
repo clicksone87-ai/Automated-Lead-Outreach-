@@ -130,10 +130,12 @@ class PolicyEngine:
         recipient_type: str = "unknown",
         sandbox: bool = False,
     ) -> PolicyResult:
-        """`sandbox` (Mailpit: captured locally, never delivered) skips ONLY the legal-review
-        condition; consent and recipient-type rules always apply."""
+        """`sandbox` (Mailpit: captured locally, never delivered) skips ONLY the sending switch;
+        excluded markets, consent and recipient-type rules always apply."""
         rule = self.rules.get(lead.country)
-        if rule is None:
+        if self.rules.is_excluded(lead.country):
+            result = PolicyResult("country", False, f"{lead.country} is an excluded market")
+        elif rule is None:
             result = PolicyResult("country", False, f"no rules loaded for country {lead.country!r}")
         elif purpose == "draft":
             result = PolicyResult(
@@ -143,8 +145,8 @@ class PolicyEngine:
             )
         elif not rule.enabled:
             result = PolicyResult("country", False, "country disabled")
-        elif not rule.legal_reviewed and not sandbox:
-            result = PolicyResult("country", False, "country rules not legally reviewed yet")
+        elif not rule.sending_enabled and not sandbox:
+            result = PolicyResult("country", False, "sending is switched off for this country")
         elif rule.requires_prior_consent:
             result = PolicyResult("country", False, "country requires prior consent")
         elif recipient_type not in rule.allowed_recipient_types:
@@ -154,12 +156,12 @@ class PolicyEngine:
                 f"recipient type {recipient_type!r} not allowed in {lead.country}",
                 {"allowed": list(rule.allowed_recipient_types)},
             )
-        elif not rule.legal_reviewed:
+        elif not rule.sending_enabled:
             result = PolicyResult(
                 "country",
                 True,
-                "sandbox delivery (Mailpit) — nothing is really sent; real sending blocked: "
-                "country rules not legally reviewed yet",
+                "sandbox delivery (Mailpit) — nothing is really sent; real sending is switched "
+                "off for this country",
             )
         else:
             result = PolicyResult("country", True, f"{lead.country} rules allow sending")
@@ -343,8 +345,8 @@ class PolicyEngine:
     ) -> PolicyVerdict:
         """The full pre-send gate: all checks run and are logged, and any failure blocks.
 
-        With `sandbox` (Mailpit) only the "not legally reviewed" country result is downgraded to
-        allowed, so the flow can be tested end to end; real sending needs reviewed rules.
+        With `sandbox` (Mailpit) only a country whose sending is switched off is downgraded to
+        allowed, so the flow can be tested end to end.
         """
         rs = await runtime_settings.load(self.session)
         demo_mode = self.settings.mocks_allowed

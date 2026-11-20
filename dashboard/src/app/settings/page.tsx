@@ -285,7 +285,7 @@ function SettingsView({ data }: { data: SettingsOut }) {
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <span>
-                                  {!r.enabled ? <StatusPill tone="neutral">Blocked — no rules</StatusPill> : !r.legal_reviewed ? <StatusPill tone="warning">Awaiting legal review</StatusPill> : <StatusPill tone="success">Reviewed</StatusPill>}
+                                  {!r.enabled ? <StatusPill tone="neutral">Blocked</StatusPill> : !r.can_send ? <StatusPill tone="warning">Drafting only</StatusPill> : <StatusPill tone="success">{r.legal_reviewed ? "Sending · reviewed" : "Sending"}</StatusPill>}
                                 </span>
                               </TooltipTrigger>
                               {r.regime_note && <TooltipContent className="max-w-xs">{r.regime_note}</TooltipContent>}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -12,8 +13,11 @@ import httpx
 from pydantic import BaseModel
 
 from app.adapters.email import OutgoingEmail
+from app.adapters.email_free import LocalVerifier, SmtpEmail
+from app.adapters.gmail import GmailEmail
 from app.adapters.llm import LLMRequest
 from app.adapters.registry import Adapters
+from app.adapters.verification import FallbackVerifier, ZeroBounceVerifier
 from app.config import Settings, integration_status
 from app.db.session import session_scope
 
@@ -107,7 +111,10 @@ async def check_all(  # noqa: PLR0915 - one small closure per provider
         return "lab scores " + ", ".join(f"{k}={v:g}" for k, v in sorted(res.scores.items()))
 
     async def smtp() -> str:
-        mid = await adapters.email.send(
+        # Always the Mailpit sandbox, even when outreach goes through Gmail.
+        sandbox = SmtpEmail(settings.smtp_host, settings.smtp_port, domain=settings.sender_domain,
+                            mailpit_api_url=settings.mailpit_api_url)  # fmt: skip
+        mid = await sandbox.send(
             OutgoingEmail(
                 from_address=settings.from_address,
                 to="provider-check@test-agency.local",
@@ -117,7 +124,7 @@ async def check_all(  # noqa: PLR0915 - one small closure per provider
                 idempotency_key=f"provider-check-{uuid.uuid4()}",
             )
         )
-        ev = await adapters.email.status(mid)
+        ev = await sandbox.status(mid)
         return f"sent to Mailpit, status={ev.status}"
 
     async def mailpit() -> str:
@@ -130,6 +137,24 @@ async def check_all(  # noqa: PLR0915 - one small closure per provider
                 s, "postmaster@gmail.com", agent="provider_check"
             )
         return f"gmail.com → {r.status} ({r.provider_status}); syntax + MX only"
+
+    async def zerobounce() -> str:
+        zb = ZeroBounceVerifier(secret(settings.email_verification_api_key))
+        credits = await zb.credits()
+        async with session_scope() as s:
+            r = await FallbackVerifier(zb, LocalVerifier()).verify(
+                s, "postmaster@gmail.com", agent="provider_check"
+            )
+        return f"{credits} credits left; gmail.com postmaster → {r.status} ({r.provider_status})"
+
+    async def gmail() -> str:
+        mode = settings.gmail_mode
+        if mode == "compose":
+            return f"{settings.gmail_sender}: compose links (no App Password set; nothing called)"
+        g = adapters.email
+        assert isinstance(g, GmailEmail)
+        folder = await asyncio.to_thread(g.check_login)
+        return f"{settings.gmail_sender}: IMAP login ok, drafts folder {folder!r}; mode={mode}"
 
     async def web() -> str:
         page = await adapters.fetcher.get("https://example.com/")
@@ -195,6 +220,7 @@ async def check_all(  # noqa: PLR0915 - one small closure per provider
         ("searlo", router_check(SearloSearch, settings.searlo_api_key)),
         ("tavily", router_check(TavilySearch, settings.tavily_api_key)),
         ("groq", groq),
+        ("zerobounce", zerobounce),
     ]
     checks: list[tuple[str, Callable[[], Awaitable[str]]]] = [
         ("gemini", gemini),
@@ -212,6 +238,7 @@ async def check_all(  # noqa: PLR0915 - one small closure per provider
     for name, fn in checks:
         await run(name, fn)
     for name, fn, configured in (
+        ("gmail", gmail, bool(settings.gmail_mode)),
         ("serper_fallback", serper_fallback, settings.serper_api_key_fallback is not None),
         ("apify_fallback", apify_fallback, settings.apify_api_token_fallback is not None),
     ):

@@ -535,7 +535,12 @@ async def request_assets(session: AsyncSession, lead_id: uuid.UUID) -> Lead:
         raise AssetsRequestError("the lead has not been qualified yet")
     if not lead.pipeline_state.get("contact_id"):
         raise AssetsRequestError("no contact route: assets are only made for reachable leads")
-    if lead.status in (LeadStatus.SUPPRESSED, LeadStatus.SENT, LeadStatus.REPLIED):
+    if lead.status in (
+        LeadStatus.SUPPRESSED,
+        LeadStatus.AWAITING_SEND,
+        LeadStatus.SENT,
+        LeadStatus.REPLIED,
+    ):
         raise AssetsRequestError(f"lead is {lead.status}")
     if heavy_in_progress((lead.lane_timings or {}).get("heavy") or {}):
         raise AssetsRequestError("assets are already being generated")

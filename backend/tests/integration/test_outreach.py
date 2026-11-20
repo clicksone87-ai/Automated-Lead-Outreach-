@@ -275,14 +275,28 @@ async def test_sandbox_send_is_idempotent_with_unsubscribe_headers(tmp_path: Pat
     assert biz.cooldown_until is not None
 
 
-async def test_real_transport_blocked_until_legal_review(tmp_path: Path) -> None:
+async def test_real_transport_sends_when_the_country_allows(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     lead_id = await _lead(settings)
     await _propose(settings, lead_id)
     await _approve(lead_id)
     real = RealEmail()
     outcome = await _send(settings, lead_id, real)
-    assert not outcome.proceed and "legally reviewed" in outcome.reason and not real.sent
+    assert outcome.status == LeadStatus.SENT and len(real.sent) == 1
+
+
+async def test_real_transport_never_sends_to_an_excluded_market(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    lead_id = await _lead(settings)
+    await _propose(settings, lead_id)
+    await _approve(lead_id)
+    async with session_scope() as s:
+        lead = await s.get(Lead, lead_id)
+        assert lead is not None
+        lead.country = "PK"
+    real = RealEmail()
+    outcome = await _send(settings, lead_id, real)
+    assert not outcome.proceed and "PK is an excluded market" in outcome.reason and not real.sent
 
 
 async def test_unsubscribe_link_suppresses_permanently(tmp_path: Path) -> None:

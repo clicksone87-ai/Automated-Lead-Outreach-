@@ -192,10 +192,10 @@ async def test_continue_lead_after_approval_runs_outreach() -> None:
         proposal.approval_status, proposal.approved_by = "approved", "test"
         lead_id = proposal.lead_id
     state = await lanes.continue_lead(lead_id)
-    # Approval lets the lead continue to Outreach, where the policy gate decides: the test email
-    # adapter is not the Mailpit sandbox, so unreviewed country rules block the real send.
+    # Approval lets the lead continue to Outreach, where the policy gate decides: countries may
+    # send worldwide now, so the next check (no sender identity in the test settings) blocks it.
     assert state["completed"][-1] == "outreach"
-    assert "not legally reviewed" in state.get("reason", "")
+    assert state.get("reason", "").startswith("policy blocked sending: sender name")
     async with session_scope() as s:
         outreach_runs = (
             (

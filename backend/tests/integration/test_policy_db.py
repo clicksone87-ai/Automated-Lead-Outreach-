@@ -8,6 +8,7 @@ import pytest
 
 from app.db.models import Business, Lead, OutreachLock, Suppression, TriggerType
 from app.db.session import session_scope
+from app.policy.country_rules import load_rules
 from app.policy.engine import PolicyEngine
 
 pytestmark = [pytest.mark.db, pytest.mark.usefixtures("db")]
@@ -32,15 +33,20 @@ async def _lead(s, *, country: str = "US", language: str = "en", source: str = "
     return lead
 
 
-async def test_drafting_allowed_for_supported_countries_blocked_for_unlisted() -> None:
+async def test_drafting_allowed_worldwide_except_excluded_markets() -> None:
     async with session_scope() as s:
         engine = PolicyEngine(s)
         assert (await engine.evaluate_drafting(await _lead(s, country="US"))).allowed
         assert (await engine.evaluate_drafting(await _lead(s, country="DE", language="de"))).allowed
         assert (await engine.evaluate_drafting(await _lead(s, country="NO", language="nb"))).allowed
-        br = await engine.evaluate_drafting(await _lead(s, country="BR", language="pt"))
-        assert not br.allowed
-        assert "no rules loaded" in next(f.reason for f in br.failures if f.check == "country")
+        br = await engine.evaluate_drafting(await _lead(s, country="BR"))
+        assert br.allowed  # unlisted countries use the default rule
+        for code in ("PK", "IN", "BD"):
+            v = await engine.evaluate_drafting(await _lead(s, country=code))
+            assert not v.allowed
+            assert next(f.reason for f in v.failures if f.check == "country") == (
+                f"{code} is an excluded market"
+            )
 
 
 async def test_parked_language_blocks_drafting() -> None:
@@ -49,7 +55,7 @@ async def test_parked_language_blocks_drafting() -> None:
         assert [f.check for f in verdict.failures] == ["language"]
 
 
-async def test_outreach_blocked_until_legal_review_and_everything_logged() -> None:
+async def test_outreach_country_gate_and_everything_logged() -> None:
     async with session_scope() as s:
         lead = await _lead(s)
         verdict = await PolicyEngine(s).evaluate_outreach(
@@ -57,9 +63,31 @@ async def test_outreach_blocked_until_legal_review_and_everything_logged() -> No
         )
         assert not verdict.allowed
         reasons = {f.check: f.reason for f in verdict.failures}
-        assert reasons["country"] == "country rules not legally reviewed yet"
+        assert "country" not in reasons  # sending is on worldwide
         assert "sender_identity" in reasons
         assert len(verdict.results) == 9  # every check ran
+        pk = await PolicyEngine(s).evaluate_outreach(
+            await _lead(s, country="PK"), email="a@b.pk", recipient_type="corporate_entity"
+        )
+        assert {f.check: f.reason for f in pk.failures}["country"] == "PK is an excluded market"
+
+
+async def test_outreach_blocked_when_sending_switched_off(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    f = tmp_path / "rules.yaml"
+    f.write_text(
+        "version: 1\ncountries:\n  US: {name: US, enabled: true, sending_enabled: false,"
+        " requires_prior_consent: false, allowed_recipient_types: [corporate_entity]}\n",
+        encoding="utf-8",
+    )
+    async with session_scope() as s:
+        engine = PolicyEngine(s, rules=load_rules(f))
+        lead = await _lead(s)
+        real = await engine.check_country(action="t", lead=lead, purpose="send",
+                                          recipient_type="corporate_entity")  # fmt: skip
+        assert not real.allowed and real.reason == "sending is switched off for this country"
+        sandbox = await engine.check_country(action="t", lead=lead, purpose="send",
+                                             recipient_type="corporate_entity", sandbox=True)  # fmt: skip
+        assert sandbox.allowed and "nothing is really sent" in sandbox.reason
 
 
 async def test_suppression_cooldown_and_competing_outreach() -> None:

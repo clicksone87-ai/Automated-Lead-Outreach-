@@ -20,6 +20,7 @@ from app.adapters.email_free import LocalVerifier, MailpitMailbox, SmtpEmail
 from app.adapters.email_render import EmailRenderer, FixtureRenderer, ReactEmailRenderer
 from app.adapters.fetcher import SafeFetcher
 from app.adapters.gemini import GeminiLLM
+from app.adapters.gmail import GmailComposeLink, GmailEmail
 from app.adapters.google import (
     DisabledPageSpeed,
     DisabledPlaces,
@@ -44,6 +45,7 @@ from app.adapters.search_router import (
 from app.adapters.storage import LocalStorage, StorageAdapter
 from app.adapters.verification import (
     DisabledVerifier,
+    FallbackVerifier,
     MockVerifier,
     VerificationAdapter,
     ZeroBounceVerifier,
@@ -156,7 +158,10 @@ def build_adapters(s: Settings) -> Adapters:  # noqa: PLR0915 - one flat decisio
     if ready("verification"):
         verification = LocalVerifier()
     elif ready("zerobounce"):
-        verification = ZeroBounceVerifier(_key(s.email_verification_api_key))
+        verification = FallbackVerifier(
+            ZeroBounceVerifier(_key(s.email_verification_api_key), free_tier=s.testing_tier),
+            LocalVerifier(),
+        )
     else:
         verification = fallback("verification", MockVerifier(), DisabledVerifier())
 
@@ -175,7 +180,19 @@ def build_adapters(s: Settings) -> Adapters:  # noqa: PLR0915 - one flat decisio
         places = fallback("places", MockPlaces(), DisabledPlaces())
 
     email: Any
-    if ready("smtp"):
+    if s.gmail_mode in ("draft", "send"):
+        email = GmailEmail(
+            s.gmail_sender.strip(),
+            _key(s.gmail_app_password),
+            delivery=s.gmail_mode,
+            imap_host=s.gmail_imap_host,
+            imap_port=s.gmail_imap_port,
+            smtp_host=s.gmail_smtp_host,
+            smtp_port=s.gmail_smtp_port,
+        )
+    elif s.gmail_mode == "compose":
+        email = GmailComposeLink(s.gmail_sender.strip())
+    elif ready("smtp"):
         email = SmtpEmail(
             s.smtp_host,
             s.smtp_port,

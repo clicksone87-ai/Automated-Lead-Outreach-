@@ -70,10 +70,14 @@ def test_paid_integrations_are_off_in_testing_mode_even_with_keys() -> None:
             openai_text_model="m",
         )
     )
-    for key in ("brave", "places", "resend", "openai", "zerobounce", "reddit", "x", "meta",
+    for key in ("brave", "places", "resend", "openai", "reddit", "x", "meta",
                 "opencorporates"):  # fmt: skip
         assert st[key].state == "off_testing_mode", key
     assert not st["brave"].configured
+    # ZeroBounce runs inside its free monthly allowance, with the local check as fallback.
+    zb = integration_status(_settings(app_tier="free", email_verification_provider="zerobounce",
+                                      email_verification_api_key="k"))["zerobounce"]  # fmt: skip
+    assert zb.state == "ready" and not zb.paid
 
 
 def test_inactive_provider_is_off() -> None:

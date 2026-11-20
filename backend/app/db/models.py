@@ -83,6 +83,7 @@ class LeadStatus(StrEnum):
     NEEDS_REVIEW = "needs_review"
     AWAITING_APPROVAL = "awaiting_approval"
     APPROVED = "approved"
+    AWAITING_SEND = "awaiting_send"  # draft is in Gmail; a human presses Send
     REJECTED_BY_HUMAN = "rejected_by_human"
     SENT = "sent"
     REPLIED = "replied"
@@ -153,6 +154,7 @@ class ManualOutreachStatus(StrEnum):
 class DeliveryStatus(StrEnum):
     QUEUED = "queued"
     SCHEDULED = "scheduled"
+    DRAFTED = "drafted"  # in Gmail Drafts or a compose link; waits for "Mark as sent"
     SENT = "sent"
     DELIVERED = "delivered"
     BOUNCED = "bounced"
@@ -468,9 +470,7 @@ class ManualOutreach(Base):
     )
     channel: Mapped[str] = mapped_column(String(20), index=True)
     post_link: Mapped[str | None] = mapped_column(Text)
-    drafts: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, default=dict, server_default="{}"
-    )
+    drafts: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
     status: Mapped[str] = mapped_column(
         String(20),
         default=ManualOutreachStatus.PENDING,
@@ -532,12 +532,15 @@ class Message(Base):
     provider_id: Mapped[str | None] = mapped_column(String(200), index=True)
     scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    delivery_status: Mapped[str] = mapped_column(String(20), default=DeliveryStatus.QUEUED)
+    delivery_status: Mapped[str] = mapped_column(
+        String(20), default=DeliveryStatus.QUEUED, index=True
+    )
     bounce_type: Mapped[str | None] = mapped_column(String(50))
     complained: Mapped[bool] = mapped_column(Boolean, default=False)
     follow_up_number: Mapped[int] = mapped_column(Integer, default=0)
     subject: Mapped[str | None] = mapped_column(Text)
     message_id_header: Mapped[str | None] = mapped_column(String(300), index=True)
+    body_text: Mapped[str | None] = mapped_column(Text)  # kept for Gmail drafts / compose links
     sandbox: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = _created()

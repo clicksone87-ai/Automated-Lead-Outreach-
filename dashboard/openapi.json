@@ -2392,6 +2392,123 @@
     }
    }
   },
+  "/api/gmail/outbox": {
+   "get": {
+    "summary": "Gmail Outbox",
+    "description": "Track A: proposals ready in Gmail (draft or compose link), waiting for \"Mark as sent\".",
+    "operationId": "gmail_outbox_api_gmail_outbox_get",
+    "parameters": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Gmail Outbox Api Gmail Outbox Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/messages/{message_id}/mark-sent": {
+   "post": {
+    "summary": "Message Mark Sent",
+    "operationId": "message_mark_sent_api_messages__message_id__mark_sent_post",
+    "parameters": [
+     {
+      "name": "message_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Message Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/MarkSentIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Message Mark Sent Api Messages  Message Id  Mark Sent Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/messages": {
    "get": {
     "summary": "Messages",
@@ -4519,6 +4636,19 @@
     ],
     "title": "ManualRunOut",
     "description": "Whether \"Run now\" is allowed for a source that spends a limited free tier."
+   },
+   "MarkSentIn": {
+    "properties": {
+     "by": {
+      "type": "string",
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "By",
+      "default": "dashboard"
+     }
+    },
+    "type": "object",
+    "title": "MarkSentIn"
    },
    "OverviewOut": {
     "properties": {

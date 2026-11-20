@@ -13,7 +13,14 @@ from typing import ClassVar
 
 from sqlalchemy import select
 
-from app.db.models import ApprovalStatus, Business, Lead, LeadStatus, Proposal
+from app.db.models import (
+    ApprovalStatus,
+    Business,
+    DeliveryStatus,
+    Lead,
+    LeadStatus,
+    Proposal,
+)
 from app.orchestrator.agents import AgentContext, AgentOutcome, register
 from app.policy.engine import PolicyEngine
 from app.services import activity, runtime_settings
@@ -83,8 +90,10 @@ class OutreachAgent:
 
         rs = await runtime_settings.load(s)
         now = datetime.now(UTC)
+        # A Gmail draft or compose link waits for a human, who chooses when to press Send.
+        hands_off = bool(getattr(ctx.adapters.email, "hands_off", False))
         when = next_send_time(now, lead.timezone, lead.country, rs.sending_window)
-        if when > now and (not sandbox or rs.sandbox_respect_send_window):
+        if when > now and not hands_off and (not sandbox or rs.sandbox_respect_send_window):
             await schedule(
                 s, proposal=proposal, to=proposal.to_email, at=when, subject=proposal.subject
             )
@@ -99,6 +108,15 @@ class OutreachAgent:
             subject=proposal.subject, html=proposal.body_html, text=proposal.body_text,
             attachments=proposal.attachments,
         )  # fmt: skip
+        if msg.delivery_status == DeliveryStatus.DRAFTED:
+            where = "a Gmail compose link" if msg.provider_id and msg.provider_id.startswith(
+                "compose:") else "Gmail Drafts"  # fmt: skip
+            await activity.emit(s, "email_drafted", f"Proposal for {proposal.to_email} is ready "
+                                f"in {where}: press Send, then Mark as sent", lead_id=lead.id,
+                                agent=self.name)  # fmt: skip
+            return AgentOutcome(True, LeadStatus.AWAITING_SEND, f"ready in {where} for "
+                                f"{proposal.to_email}; waiting for Mark as sent",
+                                {"message_id": str(msg.id)})  # fmt: skip
         business = await s.get(Business, lead.business_id)
         if business is not None:
             business.cooldown_until = now + timedelta(days=rs.cooldown_days)

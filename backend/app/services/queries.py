@@ -88,7 +88,13 @@ STAGES: list[tuple[str, str, set[str]]] = [
     (
         "outreach",
         "Outreach",
-        {LeadStatus.SENT, LeadStatus.REPLIED, LeadStatus.WON, LeadStatus.LOST},
+        {
+            LeadStatus.AWAITING_SEND,
+            LeadStatus.SENT,
+            LeadStatus.REPLIED,
+            LeadStatus.WON,
+            LeadStatus.LOST,
+        },
     ),
 ]
 STOPPED = {
@@ -732,7 +738,10 @@ async def settings_view(
         integrations=integrations_out(settings, adapters),
         country_rules={
             code: r.model_dump() | {"can_draft": r.can_draft, "can_send": r.can_send}
-            for code, r in rules.countries.items()
+            for code, r in {
+                **rules.countries,
+                **({"OTHER": rules.default} if rules.default else {}),
+            }.items()
         },
         pricing=[
             _dump(

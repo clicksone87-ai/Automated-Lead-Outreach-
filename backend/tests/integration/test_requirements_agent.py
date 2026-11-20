@@ -137,19 +137,28 @@ async def test_explicit_request_qualifies_with_brief() -> None:
         assert "openai" in row.pipeline_state["mock_adapters_used"]  # type: ignore[union-attr]
 
 
-async def test_german_lead_parked_until_country_rules_exist() -> None:
+async def test_worldwide_markets_park_only_excluded_countries() -> None:
     async with session_scope() as s:
-        lead = await _lead(
+        de = await _lead(
             s,
             title="Wir suchen einen Webdesigner für unseren Malerbetrieb",
             text="Unser Malerbetrieb in Berlin braucht eine neue Webseite.",
             country="DE",
             language="de",
         )
-    outcome = await _run(lead.id)
-    assert not outcome.proceed
-    assert outcome.status == LeadStatus.PARKED_COUNTRY
-    assert "DE not a target country" in outcome.reason
+        pk = await _lead(
+            s,
+            title="Need a website for my shop",
+            text="Our shop in Lahore needs a new website, budget $300.",
+            country="PK",
+            language="en",
+        )
+    outcome = await _run(de.id)
+    assert outcome.status != LeadStatus.PARKED_COUNTRY, outcome.reason
+    parked = await _run(pk.id)
+    assert not parked.proceed
+    assert parked.status == LeadStatus.PARKED_COUNTRY
+    assert parked.reason == "PK is an excluded market"
 
 
 async def test_unsupported_language_lead_parked_by_language() -> None:

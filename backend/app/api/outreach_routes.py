@@ -15,11 +15,13 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
+from app.adapters.gmail import compose_url, draft_url
 from app.api.deps import AdaptersDep, SessionDep, SettingsDep
 from app.db.models import (
     ApprovalStatus,
     Business,
     Deal,
+    DeliveryStatus,
     Lead,
     LeadStatus,
     ManualOutreachStatus,
@@ -32,6 +34,7 @@ from app.orchestrator.queue import enqueue_pipeline
 from app.services import activity, autonomy
 from app.services.manual_outreach import list_queue, set_status, sync_queue
 from app.services.outreach_jobs import suppress
+from app.services.sending import MarkSentError, mark_sent
 from app.services.unsubscribe import read_token
 
 router = APIRouter(prefix="/api")
@@ -338,6 +341,84 @@ async def set_autonomy(body: StageIn, session: SessionDep) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     return st.as_dict()
+
+
+class MarkSentIn(BaseModel):
+    by: str = Field(default="dashboard", min_length=1, max_length=100)
+
+
+def _gmail_mode(adapters: Any) -> str:
+    """draft | send | compose, or the non-Gmail adapter's name."""
+    email = adapters.email
+    return (
+        str(getattr(email, "delivery", email.name))
+        if email.name.startswith("gmail")
+        else email.name
+    )
+
+
+def _open_url(settings: Any, m: Message) -> str | None:
+    sender = settings.gmail_sender or ""
+    if m.provider_id and m.provider_id.startswith("compose:"):
+        return compose_url(sender, m.to_email, m.subject or "", m.body_text or "")
+    if m.provider_id and m.provider_id.startswith("<") and sender:
+        return draft_url(sender, m.provider_id)
+    return None
+
+
+@router.get("/gmail/outbox")
+async def gmail_outbox(
+    session: SessionDep, settings: SettingsDep, adapters: AdaptersDep
+) -> dict[str, Any]:
+    """Track A: proposals ready in Gmail (draft or compose link), waiting for "Mark as sent"."""
+    rows = (
+        await session.execute(
+            select(Message, Proposal, Lead, Business)
+            .join(Proposal, Proposal.id == Message.proposal_id)
+            .join(Lead, Lead.id == Proposal.lead_id)
+            .outerjoin(Business, Business.id == Lead.business_id)
+            .where(Message.delivery_status == DeliveryStatus.DRAFTED)
+            .order_by(Message.created_at.desc())
+            .limit(200)
+        )
+    ).all()
+    items = [
+        {
+            "message_id": str(m.id),
+            "lead_id": str(lead.id),
+            "business_name": biz.name if biz else None,
+            "country": lead.country,
+            "to_email": m.to_email,
+            "subject": m.subject,
+            "body_text": m.body_text,
+            "follow_up_number": m.follow_up_number,
+            "created_at": m.created_at.isoformat(),
+            "kind": "compose" if (m.provider_id or "").startswith("compose:") else "draft",
+            "open_url": _open_url(settings, m),
+            "attachments": [
+                {"filename": a.get("filename"), "url": f"/api/files/{a.get('path')}"}
+                for a in (p.attachments if m.follow_up_number == 0 else [])
+                if a.get("path")
+            ],
+        }
+        for m, p, lead, biz in rows
+    ]
+    return {"mode": _gmail_mode(adapters), "sender": settings.gmail_sender, "items": items}
+
+
+@router.post("/messages/{message_id}/mark-sent")
+async def message_mark_sent(
+    message_id: uuid.UUID, body: MarkSentIn, session: SessionDep
+) -> dict[str, Any]:
+    try:
+        m = await mark_sent(session, message_id, by=body.by)
+    except KeyError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "message not found") from exc
+    except MarkSentError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await session.commit()
+    return {"id": str(m.id), "delivery_status": m.delivery_status,
+            "sent_at": m.sent_at.isoformat() if m.sent_at else None}  # fmt: skip
 
 
 @router.get("/messages")

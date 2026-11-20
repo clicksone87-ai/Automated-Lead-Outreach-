@@ -1,33 +1,35 @@
 # Country outreach rules.
 #
-# THIS FILE MUST BE COMPLETED BY THE LEGAL REVIEW. Nothing here is legal advice.
+# Nothing here is legal advice. The owner decided to send worldwide: every country is enabled
+# for discovery, drafting AND sending, except the markets in EXCLUDED_COUNTRIES (PK, IN, BD by
+# default), which are rejected outright.
 #
 # How the policy layer reads it:
-#   - A country that is not listed                    -> all outreach BLOCKED.
+#   - A country in EXCLUDED_COUNTRIES                  -> rejected (no discovery, no outreach).
+#   - A country that is not listed                    -> uses `default` below (when
+#                                                         ALL_COUNTRIES_OUTREACH_ENABLED=true),
+#                                                         otherwise all outreach BLOCKED.
 #   - enabled: false                                   -> no drafting, no outreach.
-#   - enabled: true, legal_reviewed: false             -> leads may be discovered, qualified and
-#                                                         drafted, but sending is BLOCKED.
-#   - enabled: true, legal_reviewed: true              -> sending allowed, subject to every other
-#                                                         policy check and the rules below.
+#   - sending_enabled: false                           -> drafting only; sending BLOCKED.
+#   - requires_prior_consent: true                     -> sending BLOCKED (no cold email).
+#   - legal_reviewed                                   -> informational: records whether a
+#                                                         lawyer has confirmed the entry.
 #
 # Field reference:
 #   allowed_recipient_types  which recipients may receive unsolicited B2B email; the
 #                            Requirements agent classifies each lead into one of:
 #                            corporate_entity | sole_trader | individual | unknown
-#   requires_prior_consent   true = never send without recorded consent (blocks cold outreach)
 #   requires_unsubscribe / requires_postal_address / requires_sender_identity
 #                            content requirements checked on every proposal
 #   max_follow_ups           follow-up cap for the country (min with the global setting)
-#   reviewed_by / reviewed_on  filled in by the reviewer
+#   reviewed_by / reviewed_on  filled in by a reviewer
 #
-# V2 markets: US, UK, EU-27, Norway, Switzerland, Iceland (32 countries).
-# Every new country starts from the shared `draft` template below: drafting is allowed,
-# sending stays BLOCKED until a lawyer sets `legal_reviewed: true` for that country.
-# To give one country its own rules, override the fields under that country (see DE).
+# Listed countries start from the shared template below; override fields per country (see DE).
 
 _template: &draft
   enabled: true
-  legal_reviewed: false          # set true only after legal review
+  sending_enabled: true
+  legal_reviewed: false
   regime_note: "Draft placeholder — EU ePrivacy Directive as implemented nationally, plus GDPR; B2B email rules differ by country. Confirm in legal review."
   allowed_recipient_types: [corporate_entity, sole_trader, individual, unknown]
   requires_prior_consent: false  # TO CONFIRM
@@ -39,11 +41,18 @@ _template: &draft
   reviewed_on: null
 
 version: 1
+
+# Every country that is not listed below (and not excluded).
+default:
+  <<: *draft
+  name: Other country
+
 countries:
   US:
     name: United States
     enabled: true
-    legal_reviewed: false          # set true only after legal review
+    sending_enabled: true
+    legal_reviewed: false
     regime_note: "Draft placeholder — commonly discussed framework is CAN-SPAM; confirm."
     allowed_recipient_types: [corporate_entity, sole_trader, individual, unknown]
     requires_prior_consent: false  # TO CONFIRM
@@ -57,7 +66,8 @@ countries:
   GB:
     name: United Kingdom
     enabled: true
-    legal_reviewed: false          # set true only after legal review
+    sending_enabled: true
+    legal_reviewed: false
     regime_note: >-
       Draft placeholder — commonly discussed framework is PECR + UK GDPR, which treats
       corporate subscribers differently from sole traders/partnerships; confirm.

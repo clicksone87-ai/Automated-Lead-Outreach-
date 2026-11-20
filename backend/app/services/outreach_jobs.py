@@ -153,14 +153,15 @@ async def send_due(session: AsyncSession, settings: Settings, adapters: Adapters
         if when > now:
             msg.scheduled_for = when
             continue
-        await deliver(
+        out = await deliver(
             session, settings, adapters, lead=lead, proposal=proposal, to=msg.to_email,
             subject=msg.subject or proposal.subject, html=proposal.body_html, text=proposal.body_text,
             attachments=proposal.attachments if msg.follow_up_number == 0 else [],
             follow_up_number=msg.follow_up_number,
         )  # fmt: skip
         if msg.follow_up_number == 0:
-            lead.status = LeadStatus.SENT
+            drafted = out.delivery_status == DeliveryStatus.DRAFTED
+            lead.status = LeadStatus.AWAITING_SEND if drafted else LeadStatus.SENT
         sent += 1
     await session.flush()
     return sent

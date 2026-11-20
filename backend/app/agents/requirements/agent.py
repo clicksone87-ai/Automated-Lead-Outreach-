@@ -55,6 +55,7 @@ ACTIVE_STATUSES = {
     LeadStatus.NEEDS_REVIEW,
     LeadStatus.AWAITING_APPROVAL,
     LeadStatus.APPROVED,
+    LeadStatus.AWAITING_SEND,
     LeadStatus.SENT,
     LeadStatus.REPLIED,
 }
@@ -307,16 +308,30 @@ class RequirementsAgent:
         if not language or language not in rs.enabled_languages:
             reason = f"language {language or 'unknown'} not enabled"
             return AgentOutcome(False, LeadStatus.PARKED_LANGUAGE, reason, out)
-        rule = get_rules().get(country)
-        if not country or country not in rs.target_countries or rule is None or not rule.can_draft:
+        rules = get_rules()
+        rule = rules.get(country)
+        # Worldwide (ALL_COUNTRIES_OUTREACH_ENABLED): every country except the excluded markets;
+        # otherwise only the target countries chosen in Settings.
+        targeted = ctx.settings.all_countries_outreach_enabled or country in rs.target_countries
+        if (
+            not country
+            or rules.is_excluded(country)
+            or not targeted
+            or rule is None
+            or not rule.can_draft
+        ):
             if not country:
                 if low_intent:  # nothing to wait for: an unknown-country lead with no intent
                     return AgentOutcome(False, LeadStatus.REJECTED_LOW_INTENT, intent_reason, out)
                 why = "country unknown"
-            elif country not in rs.target_countries:
+            elif rules.is_excluded(country):
+                return AgentOutcome(
+                    False, LeadStatus.PARKED_COUNTRY, f"{country} is an excluded market", out
+                )
+            elif not targeted:
                 why = f"{country} not a target country"
             else:
-                why = f"{country} has no reviewed outreach rules yet"
+                why = f"{country} has no outreach rules"
             return AgentOutcome(False, LeadStatus.PARKED_COUNTRY, why, out)
 
         verdict = await PolicyEngine(s).evaluate_drafting(lead)

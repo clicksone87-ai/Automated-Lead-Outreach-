@@ -22,7 +22,7 @@ BOUNDS = (0.5, 1.5)
 QUALIFIED = {
     LeadStatus.QUALIFIED, LeadStatus.CONTACT_FOUND, LeadStatus.AUDITED, LeadStatus.BRANDED,
     LeadStatus.BUILT, LeadStatus.QA_PASSED, LeadStatus.AWAITING_APPROVAL, LeadStatus.APPROVED,
-    LeadStatus.SENT, LeadStatus.REPLIED, LeadStatus.WON, LeadStatus.LOST,
+    LeadStatus.AWAITING_SEND, LeadStatus.SENT, LeadStatus.REPLIED, LeadStatus.WON, LeadStatus.LOST,
 }  # fmt: skip
 
 

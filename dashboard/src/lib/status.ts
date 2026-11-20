@@ -19,6 +19,7 @@ export const LEAD_STATUS: Record<string, { label: string; tone: Tone }> = {
   needs_review: { label: "Needs review", tone: "warning" },
   awaiting_approval: { label: "Awaiting approval", tone: "info" },
   approved: { label: "Approved", tone: "success" },
+  awaiting_send: { label: "Ready in Gmail", tone: "info" },
   rejected_by_human: { label: "Rejected", tone: "neutral" },
   sent: { label: "Sent", tone: "info" },
   replied: { label: "Replied", tone: "success" },

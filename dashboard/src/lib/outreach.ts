@@ -183,6 +183,47 @@ export function useManualOutreachSkip() {
   });
 }
 
+export interface GmailOutboxItem {
+  message_id: string;
+  lead_id: string;
+  business_name: string | null;
+  country: string | null;
+  to_email: string;
+  subject: string | null;
+  body_text: string | null;
+  follow_up_number: number;
+  created_at: string;
+  kind: "draft" | "compose";
+  open_url: string | null;
+  attachments: { filename: string | null; url: string }[];
+}
+
+export interface GmailOutbox {
+  mode: string;
+  sender: string;
+  items: GmailOutboxItem[];
+}
+
+export function useGmailOutbox() {
+  return useQuery({ queryKey: ["gmail-outbox"], queryFn: () => call<GmailOutbox>("/api/gmail/outbox"), ...LIVE });
+}
+
+export function useMarkSent() {
+  const done = useInvalidate([["gmail-outbox"], ["overview"], ["leads"]]);
+  return useMutation({
+    mutationFn: (messageId: string) =>
+      call<{ id: string; delivery_status: string }>(`/api/messages/${messageId}/mark-sent`, {
+        method: "POST",
+        body: JSON.stringify({ by: "dashboard" }),
+      }),
+    onSuccess: () => {
+      toast.success("Marked as sent; the cooldown for this business has started");
+      done();
+    },
+    onError: (e: Error) => toast.error("Could not mark as sent", { description: e.message }),
+  });
+}
+
 export function useAutonomy() {
   return useQuery({ queryKey: ["autonomy"], queryFn: () => call<AutonomyStatus>("/api/autonomy"), ...LIVE });
 }
