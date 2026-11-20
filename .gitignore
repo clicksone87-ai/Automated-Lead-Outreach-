@@ -45,3 +45,6 @@ logs/
 build/
 dist/
 *.zip
+
+# Upstream checkouts pinned by vendor/*.lock.json
+vendor/scout/

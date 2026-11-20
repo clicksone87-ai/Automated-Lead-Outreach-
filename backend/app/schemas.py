@@ -426,7 +426,7 @@ class PlatformStat(BaseModel):
     sources: list[str]
     enabled: bool
     leads: int  # created in the window
-    leads_24h: int
+    leads_recent: int  # leads created in the last `recent_hours` (SOCIAL_MAX_POST_AGE_HOURS)
     qualified: int  # intent 60+
     high: int  # intent 75+
     sellers_filtered: int  # seller posts scored down instead of treated as buyers
@@ -440,4 +440,5 @@ class PlatformStat(BaseModel):
 
 class PlatformReport(BaseModel):
     days: int
+    recent_hours: int
     platforms: list[PlatformStat]

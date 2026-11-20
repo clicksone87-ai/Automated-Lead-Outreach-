@@ -23,6 +23,7 @@ from app.agents.discovery.base import (
     SourceDegradedError,
     industry_keywords,
 )
+from app.config import get_settings
 from app.db.models import EvidenceKind, Lead, TriggerType
 from app.orchestrator.quota import FreeQuotaExceededError
 
@@ -79,18 +80,20 @@ def _client(ctx: SourceContext, *, fallback: bool = False) -> ApifyClient:
     return ApifyClient(token.get_secret_value())
 
 
-MAX_POST_AGE: timedelta = timedelta(hours=8)
+def max_post_age() -> timedelta:
+    """SOCIAL_MAX_POST_AGE_HOURS (8 hours by default)."""
+    return timedelta(hours=get_settings().social_max_post_age_hours)
 
 
-def _is_recent(dt: datetime | None, max_age: timedelta = MAX_POST_AGE) -> bool:
-    """Strict post age cutoff: only posts from the last 8 hours (V2 Social Sources).
+def _is_recent(dt: datetime | None, max_age: timedelta | None = None) -> bool:
+    """Strict post age cutoff: only posts from the last SOCIAL_MAX_POST_AGE_HOURS.
 
     Undated items are dropped because they cannot prove that a post is fresh.
     Every dated item older than the cutoff is dropped.
     """
     if dt is None:
         return False
-    return dt >= datetime.now(UTC) - max_age
+    return dt >= datetime.now(UTC) - (max_age or max_post_age())
 
 
 def _parse_dt(value: Any) -> datetime | None:
@@ -367,7 +370,7 @@ class ApifyFacebookSource(_ApifySource):
         leads += [x for p in items if (x := self._map(p, "search")) and _is_recent(x.posted_at)]
         groups = [g for g in ctx.config.get("public_group_urls") or [] if "/groups/" in str(g)]
         if groups:
-            since = (datetime.now(UTC) - MAX_POST_AGE).strftime(
+            since = (datetime.now(UTC) - max_post_age()).strftime(
                 "%Y-%m-%d"
             )  # day precision; filtered below
             g = _rotate(ctx, "group", groups, 1)

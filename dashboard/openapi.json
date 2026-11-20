@@ -696,7 +696,7 @@
   "/api/reports/platforms": {
    "get": {
     "summary": "Platform Report",
-    "description": "Leads per social platform: X, Reddit, Instagram and Facebook side by side.",
+    "description": "Leads per social platform side by side, with the last SOCIAL_MAX_POST_AGE_HOURS.",
     "operationId": "platform_report_api_reports_platforms_get",
     "parameters": [
      {
@@ -4958,6 +4958,10 @@
       "type": "integer",
       "title": "Days"
      },
+     "recent_hours": {
+      "type": "integer",
+      "title": "Recent Hours"
+     },
      "platforms": {
       "items": {
        "$ref": "#/components/schemas/PlatformStat"
@@ -4969,6 +4973,7 @@
     "type": "object",
     "required": [
      "days",
+     "recent_hours",
      "platforms"
     ],
     "title": "PlatformReport"
@@ -4998,9 +5003,9 @@
       "type": "integer",
       "title": "Leads"
      },
-     "leads_24h": {
+     "leads_recent": {
       "type": "integer",
-      "title": "Leads 24H"
+      "title": "Leads Recent"
      },
      "qualified": {
       "type": "integer",
@@ -5064,7 +5069,7 @@
      "sources",
      "enabled",
      "leads",
-     "leads_24h",
+     "leads_recent",
      "qualified",
      "high",
      "sellers_filtered",

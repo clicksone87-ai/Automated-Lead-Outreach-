@@ -1,4 +1,4 @@
-"""Prefilter step: stops sellers, stale posts, repeats and non-target countries without an LLM."""
+"""Prefilter step: stops sellers, stale posts, repeats and excluded markets without an LLM."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from app.db.models import EvidenceKind, Lead, LeadStatus
 from app.db.session import session_scope
 from app.orchestrator import runs
 from app.orchestrator.agents import AgentContext
-from app.services import evidence
+from app.services import evidence, runtime_settings
 
 pytestmark = [pytest.mark.db, pytest.mark.usefixtures("db")]
 
@@ -80,9 +80,26 @@ async def test_repeated_text_keeps_only_the_first_lead() -> None:
     assert not ok and lead.status == LeadStatus.DUPLICATE
 
 
-async def test_non_target_country_is_parked_and_proactive_triggers_pass() -> None:
-    ok, lead = await _run(await _lead("Need a website", country="BR"))
+async def test_excluded_market_is_parked_worldwide_otherwise_and_triggers_pass() -> None:
+    ok, lead = await _run(await _lead("Need a website for my shop", country="PK"))
     assert not ok and lead.status == LeadStatus.PARKED_COUNTRY
+    assert lead.prefilter_reason == "PK is an excluded market"
+    ok, _ = await _run(await _lead("Need a website for my bakery, budget $500", country="BR"))
+    assert ok  # every other country is a market
     ok, _ = await _run(await _lead("", trigger_type="broken_or_outdated_site", source="local_sites",
                                    source_family="google", posted_at=None))  # fmt: skip
     assert ok
+
+
+async def test_social_age_limit_comes_from_settings_not_the_saved_24h() -> None:
+    async with session_scope() as s:  # an older saved value must not loosen the 8-hour rule
+        await runtime_settings.update(
+            s, {"max_post_age_hours": {"social": 24, "default": 168}}, changed_by="test"
+        )
+    ok, lead = await _run(
+        await _lead("Need a new logo for my cafe", posted_at=NOW - timedelta(hours=10))
+    )
+    assert not ok and "10 h old" in str(lead.prefilter_reason)
+    assert (
+        await _run(await _lead("Need a logo for my bakery", posted_at=NOW - timedelta(hours=7)))
+    )[0]

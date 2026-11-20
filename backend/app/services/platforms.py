@@ -35,7 +35,9 @@ _LEAD_KEY = case(
 )
 
 
-async def platform_report(session: AsyncSession, days: int = 7) -> PlatformReport:
+async def platform_report(
+    session: AsyncSession, days: int = 7, *, recent_hours: int = 8
+) -> PlatformReport:
     now = datetime.now(UTC)
     since = now - timedelta(days=days)
     day0 = (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -48,7 +50,7 @@ async def platform_report(session: AsyncSession, days: int = 7) -> PlatformRepor
             select(
                 _LEAD_KEY,
                 func.count(),
-                func.count().filter(Lead.created_at >= now - timedelta(hours=24)),
+                func.count().filter(Lead.created_at >= now - timedelta(hours=recent_hours)),
                 func.count().filter(Lead.intent_score >= QUALIFIED_MIN),
                 func.count().filter(Lead.intent_score >= HIGH_MIN),
                 func.count().filter(seller),
@@ -109,7 +111,7 @@ async def platform_report(session: AsyncSession, days: int = 7) -> PlatformRepor
                 sources=[x.key for x in rows] or list(ks),
                 enabled=any(s.enabled for s in rows),
                 leads=totals[0],
-                leads_24h=totals[1],
+                leads_recent=totals[1],
                 qualified=totals[2],
                 high=totals[3],
                 sellers_filtered=totals[4],
@@ -121,4 +123,4 @@ async def platform_report(session: AsyncSession, days: int = 7) -> PlatformRepor
                 daily=daily,
             )
         )
-    return PlatformReport(days=days, platforms=out)
+    return PlatformReport(days=days, recent_hours=recent_hours, platforms=out)

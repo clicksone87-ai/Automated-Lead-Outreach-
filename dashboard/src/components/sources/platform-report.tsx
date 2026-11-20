@@ -45,7 +45,7 @@ function Num({ value, label }: { value: number; label: string }) {
   );
 }
 
-function Row({ p, max, days }: { p: Stat; max: number; days: number }) {
+function Row({ p, max, days, recentHours }: { p: Stat; max: number; days: number; recentHours: number }) {
   const share = max ? (p.leads / max) * 100 : 0;
   return (
     <li className="grid gap-3 px-5 py-4 md:grid-cols-[9rem_1fr_minmax(0,18rem)_7rem] md:items-center">
@@ -61,7 +61,7 @@ function Row({ p, max, days }: { p: Stat; max: number; days: number }) {
       <div className="space-y-1">
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-lg font-semibold tabular-nums">{p.leads.toLocaleString()}</span>
-          <span className="text-xs text-muted-foreground">{p.leads_24h} in last 24h</span>
+          <span className="text-xs text-muted-foreground">{p.leads_recent} in last {recentHours}h</span>
         </div>
         <div className="h-2 rounded-full bg-muted" aria-hidden>
           <div className="h-2 rounded-full bg-chart-1" style={{ width: `${share}%`, minWidth: p.leads ? 6 : 0 }} />
@@ -93,7 +93,7 @@ export function PlatformReport() {
     <Panel className="mb-6">
       <PanelHeader
         title="Leads per social platform"
-        description={data ? `${total.toLocaleString()} social leads in the last ${days === 1 ? "24 hours" : `${days} days`}. Only posts from the last 8 hours are collected; sellers are scored out.` : "X, Reddit, Instagram and Facebook side by side."}
+        description={data ? `${total.toLocaleString()} social leads in the last ${days === 1 ? "24 hours" : `${days} days`}. Only posts from the last ${data.recent_hours} hours are collected; sellers are scored out.` : "Every social platform side by side."}
         action={
           <div className="flex gap-1" role="group" aria-label="Time range">
             {RANGES.map((d) => (
@@ -113,7 +113,7 @@ export function PlatformReport() {
       ) : (
         <ul className="divide-y">
           {data.platforms.map((p) => (
-            <Row key={p.platform} p={p} max={max} days={days} />
+            <Row key={p.platform} p={p} max={max} days={days} recentHours={data.recent_hours} />
           ))}
         </ul>
       )}

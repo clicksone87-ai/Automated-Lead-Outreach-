@@ -1,7 +1,8 @@
 """Prefilter agent: the first fast-lane step. Plain rules, no LLM, no network.
 
 Rejects stale posts, sellers, posts that ask for nothing, repeated post text and leads from
-countries we don't target, before any LLM quota is spent. Proactive triggers (new business,
+excluded markets (or untargeted countries when worldwide outreach is off), before any LLM
+quota is spent. Proactive triggers (new business,
 outdated site …) carry no request text and only get the country check.
 """
 
@@ -16,6 +17,7 @@ from sqlalchemy import select
 from app.agents.prefilter.rules import BOARD_URL, check_text, stale_reason
 from app.db.models import Evidence, EvidenceKind, Lead, LeadStatus, TriggerType
 from app.orchestrator.agents import AgentContext, AgentOutcome, register
+from app.policy.country_rules import get_rules
 from app.services import runtime_settings
 from app.services.families import family_for
 
@@ -33,7 +35,15 @@ class PrefilterAgent:
             return AgentOutcome(False, None, "lead not found")
         rs = await runtime_settings.load(s)
 
-        if lead.country and lead.country not in rs.target_countries:
+        if lead.country and get_rules().is_excluded(lead.country):
+            return self._stop(
+                lead, LeadStatus.PARKED_COUNTRY, f"{lead.country} is an excluded market"
+            )
+        if (
+            lead.country
+            and not ctx.settings.all_countries_outreach_enabled
+            and lead.country not in rs.target_countries
+        ):
             return self._stop(
                 lead, LeadStatus.PARKED_COUNTRY, f"{lead.country} not a target country"
             )
@@ -47,7 +57,12 @@ class PrefilterAgent:
             lead.posted_at,
             family=family,
             now=datetime.now(UTC),
-            max_age_hours=rs.max_post_age_hours,
+            # SOCIAL_MAX_POST_AGE_HOURS is the owner's rule for social posts (8 h); it wins
+            # over any older value saved in the settings table.
+            max_age_hours={
+                **rs.max_post_age_hours,
+                "social": ctx.settings.social_max_post_age_hours,
+            },
         )
         if stale:
             return self._stop(lead, LeadStatus.REJECTED_LOW_INTENT, stale)

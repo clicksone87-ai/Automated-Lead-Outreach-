@@ -170,10 +170,12 @@ async def generate_assets(lead_id: uuid.UUID, session: SessionDep) -> dict[str, 
 
 @router.get("/reports/platforms", response_model=PlatformReport)
 async def platform_report(
-    session: SessionDep, days: Annotated[int, Query(ge=1, le=90)] = 7
+    session: SessionDep, settings: SettingsDep, days: Annotated[int, Query(ge=1, le=90)] = 7
 ) -> PlatformReport:
-    """Leads per social platform: X, Reddit, Instagram and Facebook side by side."""
-    return await platforms.platform_report(session, days)
+    """Leads per social platform side by side, with the last SOCIAL_MAX_POST_AGE_HOURS."""
+    return await platforms.platform_report(
+        session, days, recent_hours=settings.social_max_post_age_hours
+    )
 
 
 @router.get("/sources", response_model=list[SourceOut])

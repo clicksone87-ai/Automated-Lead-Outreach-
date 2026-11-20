@@ -43,10 +43,10 @@ def test_spanish_country_word_detected() -> None:
 def test_social_posts_old_fresh_and_undated_are_classified() -> None:
     from datetime import UTC, datetime, timedelta  # noqa: PLC0415
 
-    from app.agents.discovery.sources.social_apify import MAX_POST_AGE, _is_recent  # noqa: PLC0415
+    from app.agents.discovery.sources.social_apify import _is_recent, max_post_age  # noqa: PLC0415
 
     now = datetime.now(UTC)
-    assert timedelta(hours=8) == MAX_POST_AGE
+    assert timedelta(hours=8) == max_post_age()  # SOCIAL_MAX_POST_AGE_HOURS default
     assert _is_recent(now - timedelta(hours=7, minutes=59))
     assert not _is_recent(now - timedelta(hours=8, minutes=1))
     assert not _is_recent(None)

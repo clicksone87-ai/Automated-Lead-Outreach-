@@ -83,7 +83,7 @@ class RuntimeSettings(BaseModel):
     heavy_lane_min_score: int = Field(default=60, ge=0, le=100)
     # Prefilter: oldest post (hours) worth acting on, per source family ("default" for the rest)
     max_post_age_hours: dict[str, int] = Field(
-        default_factory=lambda: {"social": 24, "default": 168}
+        default_factory=lambda: {"social": 8, "default": 168}
     )
     cooldown_days: int = Field(default=90, ge=0)
     max_follow_ups: int = Field(default=2, ge=0, le=5)

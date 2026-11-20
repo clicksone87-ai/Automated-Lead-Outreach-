@@ -54,13 +54,14 @@ async def test_platform_report_counts_leads_runs_and_sellers() -> None:
     async with session_scope() as s:
         report = await platform_report(s, days=7)
     by = {p.platform: p for p in report.platforms}
+    assert report.recent_hours == 8
     assert list(by) == ["x", "reddit", "instagram", "facebook", "tiktok", "threads", "youtube"]
     x = by["x"]
-    assert (x.leads, x.leads_24h, x.qualified, x.high, x.sellers_filtered) == (3, 3, 1, 1, 1)
+    assert (x.leads, x.leads_recent, x.qualified, x.high, x.sellers_filtered) == (3, 3, 1, 1, 1)
     assert (x.items_seen, x.runs, x.failed_runs, x.enabled) == (20, 2, 1, True)
     assert len(x.daily) == 7 and x.daily[-1] == 3
     r = by["reddit"]
-    assert (r.leads, r.leads_24h, r.qualified, r.enabled) == (1, 0, 1, False)
+    assert (r.leads, r.leads_recent, r.qualified, r.enabled) == (1, 0, 1, False)
     assert r.daily[-3] == 1
     assert by["instagram"].leads == 0 and by["instagram"].daily == [0] * 7
 

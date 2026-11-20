@@ -1,0 +1,13 @@
+{
+  "name": "scout",
+  "repository": "https://github.com/kiryano/Scout.git",
+  "commit": "183868d4fe4b9800d649d814ad8685750cc5637d",
+  "license": "MIT",
+  "ported_to": "backend/app/agents/scout/",
+  "not_ported": [
+    "user-agent rotation",
+    "proxy and free-proxy support",
+    "LinkedIn session-cookie scraper",
+    "email-pattern guessing and SMTP probing"
+  ]
+}

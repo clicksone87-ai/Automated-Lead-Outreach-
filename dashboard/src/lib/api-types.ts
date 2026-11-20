@@ -174,7 +174,7 @@ export interface paths {
         };
         /**
          * Platform Report
-         * @description Leads per social platform: X, Reddit, Instagram and Facebook side by side.
+         * @description Leads per social platform side by side, with the last SOCIAL_MAX_POST_AGE_HOURS.
          */
         get: operations["platform_report_api_reports_platforms_get"];
         put?: never;
@@ -1457,6 +1457,8 @@ export interface components {
         PlatformReport: {
             /** Days */
             days: number;
+            /** Recent Hours */
+            recent_hours: number;
             /** Platforms */
             platforms: components["schemas"]["PlatformStat"][];
         };
@@ -1475,8 +1477,8 @@ export interface components {
             enabled: boolean;
             /** Leads */
             leads: number;
-            /** Leads 24H */
-            leads_24h: number;
+            /** Leads Recent */
+            leads_recent: number;
             /** Qualified */
             qualified: number;
             /** High */
