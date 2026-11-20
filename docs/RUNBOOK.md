@@ -107,23 +107,36 @@ Main switches:
 | Variable | Default | Meaning |
 |---|---|---|
 | `APP_TIER` | `free` | `free` uses free-tier providers only and forces paid integrations off |
-| `LLM_PROVIDER` | `gemini` | `gemini` or `openai` |
-| `SEARCH_PROVIDER` | `serper` | `serper` (falls back to Exa), `exa` or `brave` |
-| `EMAIL_PROVIDER` | `smtp` | `smtp` (Mailpit locally) or `resend` |
-| `EMAIL_VERIFICATION_PROVIDER` | `local` | `local` (syntax + MX) or `zerobounce` |
+| `EXCLUDED_COUNTRIES` | `PK,IN,BD` | markets never searched, stored or contacted |
+| `ALL_COUNTRIES_OUTREACH_ENABLED` | `true` | every other country is a market; `false` limits it to the target countries in Settings |
+| `SOCIAL_MAX_POST_AGE_HOURS` | `8` | only social posts younger than this are kept |
+| `LLM_PROVIDER` / `LLM_FALLBACK_PROVIDER` | `gemini` / `groq` | Groq takes over text work when Gemini is capped or down (`GROQ_MODEL`, default `openai/gpt-oss-120b`) |
+| `SEARCH_PROVIDER_ORDER` | `serper,serpapi,scrapingdog,searlo,tavily,exa` | search router order; each provider has its own `*_CAP` |
+| `SOCIAL_SOURCES_ENABLED` / `SOCIAL_PLATFORMS` | `true` / all | social providers and platforms (LinkedIn is never searched) |
+| `SOCIAL_PROVIDER_DAILY_CAP` | `50` | requests per social provider per day |
+| `OUTREACH_EMAIL_MODE` | `gmail` | `gmail` (drafts or compose links from `GMAIL_SENDER`) or `provider` (`EMAIL_PROVIDER`: Mailpit / Resend) |
+| `GMAIL_APP_PASSWORD` / `GMAIL_DELIVERY` | empty / `draft` | with an App Password: `draft` = IMAP draft with attachments, `send` = SMTP; without: compose links |
+| `EMAIL_VERIFICATION_PROVIDER` | `zerobounce` | ZeroBounce within `ZEROBOUNCE_MONTHLY_CAP`, local syntax + MX check as fallback |
 | `MONTHLY_BUDGET_USD` / `DAILY_BUDGET_USD` | `0` | paid spend caps; `0` means no paid call can run |
 
-Free-tier keys: `GEMINI_API_KEY`, `SERPER_API_KEY`, `EXA_API_KEY`, `APIFY_API_TOKEN`,
-`COMPANIES_HOUSE_API_KEY`, `GOOGLE_PAGESPEED_API_KEY`. A missing key turns that integration
+Free-tier keys: `GEMINI_API_KEY`, `GROQ_API_KEY`, `SERPER_API_KEY` (+ `_FALLBACK`),
+`SERPAPI_API_KEY`, `SCRAPINGDOG_API_KEY`, `SEARLO_API_KEY`, `TAVILY_API_KEY`, `EXA_API_KEY`,
+`APIFY_API_TOKEN` (+ `_FALLBACK`), `ENSEMBLEDATA_API_TOKEN`, `SCRAPECREATORS_API_KEY`,
+`SOCIALCRAWL_API_KEY`, `HIKERAPI_ACCESS_KEY`, `COMPANIES_HOUSE_API_KEY`,
+`GOOGLE_PAGESPEED_API_KEY`, `EMAIL_VERIFICATION_API_KEY`. Open data (Overpass, FR
+recherche-entreprises, NO brreg) needs no key. A missing key turns that integration
 off and the Sources page shows "Needs API key"; the system keeps running without it.
 
 Free-tier usage is tracked against each provider's own limit (by default Gemini 500
 requests/day, Serper 2,500 credits, Exa $10 credit, Apify $5/month split per source, PageSpeed
 400/day). When a limit is reached, that work pauses until it resets.
 
-Outreach rules per country live in `backend/app/policy/country_rules.yaml`. Real sending stays
-blocked for a country until `legal_reviewed: true` is set after a legal review; the Mailpit
-sandbox skips only that check. Pricing packages are seeded by `make seed`
+Outreach rules per country live in `backend/app/policy/country_rules.yaml`. Every listed
+country and, through the file's `default` entry, every unlisted one may be drafted and sent to,
+except `EXCLUDED_COUNTRIES`. `sending_enabled: false` switches sending off for one country and
+`requires_prior_consent: true` blocks cold email; `legal_reviewed` only records whether a lawyer
+has confirmed the entry. Free-tier caps and live usage per provider are on the Sources page, and
+`docs/API_AND_ENDPOINTS.md` lists every external service. Pricing packages are seeded by `make seed`
 (`backend/app/services/seed.py`) and shown in Settings.
 
 ## Testing

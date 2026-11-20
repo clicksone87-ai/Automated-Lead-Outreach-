@@ -1,21 +1,26 @@
 # Leads System
 
-A lead-generation and outreach pipeline for a small web design agency. It finds US and UK
-businesses that need a logo, a website, a redesign or SEO work, checks that they are a real fit,
+A lead-generation and outreach pipeline for a small web design agency. It finds businesses
+worldwide (every country except the excluded markets in `EXCLUDED_COUNTRIES`) that need a logo, a website, a redesign or SEO work, checks that they are a real fit,
 finds a verified way to contact them, audits their current site, drafts logo concepts and a
-website preview, and writes a personalised email that a person approves before it is sent.
+website preview, and writes a personalised email that a person approves and sends from Gmail.
 
 Everything runs locally with Docker Compose. The default configuration uses free-tier APIs
-only and delivers every email to a local Mailpit inbox, so nothing leaves the machine until
-you switch to a real email provider.
+only. Approved emails become Gmail drafts (or Gmail compose links until an App Password is
+set); nothing is sent until a person presses Send in Gmail and marks it as sent.
 
-Setup, day-to-day operation, configuration and troubleshooting are in the [runbook](docs/RUNBOOK.md).
+Setup, day-to-day operation, configuration and troubleshooting are in the [runbook](docs/RUNBOOK.md);
+every endpoint and external service is listed in [API and endpoints](docs/API_AND_ENDPOINTS.md).
 
 ## Features
 
-- **Discovery** from licensed search APIs (Serper, Exa), public social posts via Apify (X,
-  Instagram, Facebook public pages and groups, Reddit), Companies House, freelance boards and
-  alert emails, plus proactive triggers for broken or outdated local business sites.
+- **Discovery** from a search router with free caps and fallback (Serper, SerpAPI,
+  ScrapingDog, Searlo, Tavily, Exa), public social posts from the last 8 hours via licensed
+  providers (EnsembleData, ScrapeCreators, SocialCrawl, HikerAPI, Apify) on TikTok, Reddit, X,
+  Threads, YouTube, Instagram and Facebook, Companies House, freelance boards and alert emails,
+  plus proactive triggers for broken or outdated local business sites.
+- **Business search** for businesses with no or an outdated website, by city and category,
+  from OpenStreetMap (© OpenStreetMap contributors) and free registries (FR, NO, GB).
 - **Qualification**: intent scoring (LLM for explicit requests plus rule-based signals),
   country, language and time-zone detection, duplicate matching and cooldowns.
 - **Contact enrichment** from the lead's own post, the business website or a public social
@@ -30,9 +35,10 @@ Setup, day-to-day operation, configuration and troubleshooting are in the [runbo
   (the template is compiled once, each preview takes about a second), tested (smoke test,
   links, Lighthouse) and served privately by Caddy.
 - **Quality check** on logos, previews and evidence links before anything is used.
-- **Proposals and outreach**: evidence-backed claims, React Email templates in four
-  languages, an approval queue, business-hours sending windows, follow-ups, reply
-  classification, unsubscribe links and a permanent suppression list.
+- **Proposals and outreach**: evidence-backed claims, React Email templates, an approval
+  queue, Gmail drafts with attachments (Track A) or a copy-ready manual queue for leads without
+  an email (Track B), "Mark as sent", follow-ups, reply classification, unsubscribe links and
+  a permanent suppression list.
 - **Policy layer in plain code**: budget and free-tier caps, country rules, send limits,
   suppression, one active outreach per business, and restricted actions that are never
   automated.
