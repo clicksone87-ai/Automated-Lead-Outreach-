@@ -29,6 +29,7 @@ from app.db.models import (
     Lead,
     LeadStatus,
     LogoConcept,
+    ManualOutreach,
     Message,
     Preview,
     Proposal,
@@ -209,6 +210,17 @@ async def test_proposal_track_b_manual_drafts(tmp_path: Path) -> None:
     assert tb["channel"] == "platform_reply" and tb["route"] == "https://x.com/post/1"
     assert tb["comment"] and tb["dm"] and tb["contact_form"]
     assert len(tb["comment"]) <= 280
+    async with session_scope() as s:
+        queue = (
+            await s.execute(
+                select(ManualOutreach).where(
+                    ManualOutreach.lead_id == lead_id,
+                    ManualOutreach.status == "pending",
+                )
+            )
+        ).scalar_one()
+    assert queue.channel == "platform_reply"
+    assert queue.post_link == "https://x.com/post/1"
 
 
 class InventingLLM:

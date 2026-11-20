@@ -14,13 +14,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select, update
 
 from app.adapters.llm import LLMOutputError, LLMRequest
+from app.agents.contact_enrichment.agent import track_for_contact
 from app.db.models import (
     ApprovalStatus,
     Audit,
     Brief,
     Business,
     Contact,
-    ContactType,
     Evidence,
     Lead,
     LeadStatus,
@@ -32,6 +32,7 @@ from app.orchestrator import lanes
 from app.orchestrator.agents import AgentContext, AgentOutcome, register
 from app.policy.engine import PolicyEngine
 from app.services import runtime_settings
+from app.services.manual_outreach import sync_queue
 from app.services.unsubscribe import make_token, unsubscribe_url
 
 logger = logging.getLogger(__name__)
@@ -123,6 +124,17 @@ def _assets_line(attached: list[str]) -> str:
     )
 
 
+def track_request(contact: Contact, lead: Lead) -> tuple[str | None, str | None]:
+    route = track_for_contact(contact)
+    request = (
+        None
+        if route == "track_a"
+        else "\n".join(filter(None, [lead.title, lead.raw_text]))[:REQUEST_EXCERPT]
+    )
+    email = None if route == "track_b" else contact.value
+    return request, email
+
+
 class ProposalAgent:
     name: ClassVar[str] = "proposal"
     expensive: ClassVar[bool] = True
@@ -166,11 +178,8 @@ class ProposalAgent:
         # Fast lane: no assets yet. Heavy lane: logos / preview / audit PDF are attached.
         attachments, preview_url = await self._attachments(ctx, lead)
         # Track B: no verified email → also draft a comment, a DM and a contact-form message.
-        request = (
-            None
-            if contact.type == ContactType.EMAIL
-            else "\n".join(filter(None, [lead.title, lead.raw_text]))[:REQUEST_EXCERPT]
-        )
+        request, email = track_request(contact, lead)
+        track_b_route = track_for_contact(contact)
         allowed = {f["evidence_id"] for f in facts}
         draft: ProposalDraft | None = None
         problem = ""
@@ -215,7 +224,6 @@ class ProposalAgent:
         if draft is None:
             return AgentOutcome(False, LeadStatus.NEEDS_REVIEW, f"proposal rejected: {problem}")
 
-        email = contact.value if contact.type == ContactType.EMAIL else None
         token = make_token(ctx.settings, business.id, email or f"lead:{lead.id}")
         sender = {
             "name": ctx.settings.sender_name,
@@ -264,7 +272,7 @@ class ProposalAgent:
         )
         track_b = (
             None
-            if email is not None
+            if track_b_route == "track_a"
             else self._track_b(
                 draft, business.name, str(contact.type), contact.value or lead.source_url
             )
@@ -309,6 +317,7 @@ class ProposalAgent:
         )
         s.add(proposal)
         await s.flush()
+        await sync_queue(s)
         if email is None:
             return AgentOutcome(
                 False, LeadStatus.AWAITING_APPROVAL,

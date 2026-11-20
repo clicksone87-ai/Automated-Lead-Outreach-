@@ -90,14 +90,9 @@ async def sync_queue(session: AsyncSession) -> int:
         elif (
             existing.post_link != track_b["post_link"]
             or existing.drafts != drafts
-            or existing.status == ManualOutreachStatus.SKIPPED
         ):
             existing.post_link = track_b["post_link"]
             existing.drafts = drafts
-            if existing.status == ManualOutreachStatus.SKIPPED:
-                existing.status = ManualOutreachStatus.PENDING
-                existing.done_at = None
-                existing.done_by = None
             changed += 1
     await session.flush()
     return changed
