@@ -1,10 +1,11 @@
-"""Leads-per-platform report for the four social platforms."""
+"""Leads-per-platform report for the social platforms (Apify, official APIs and the
+licensed social data providers)."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Brief, Lead, RunStatus, Source, SourceRun
@@ -13,12 +14,25 @@ from app.schemas import PlatformReport, PlatformStat
 QUALIFIED_MIN, HIGH_MIN = 60, 75
 
 #: platform → (label, source keys). Apify sources and the official APIs report together.
+PROVIDERS_SOURCE = "social_providers"
 PLATFORMS: dict[str, tuple[str, tuple[str, ...]]] = {
-    "x": ("X", ("social_x", "x")),
-    "reddit": ("Reddit", ("social_reddit", "reddit")),
-    "instagram": ("Instagram", ("social_instagram",)),
-    "facebook": ("Facebook", ("social_facebook", "meta")),
+    "x": ("X", ("social_x", "x", f"{PROVIDERS_SOURCE}:x")),
+    "reddit": ("Reddit", ("social_reddit", "reddit", f"{PROVIDERS_SOURCE}:reddit")),
+    "instagram": ("Instagram", ("social_instagram", f"{PROVIDERS_SOURCE}:instagram")),
+    "facebook": ("Facebook", ("social_facebook", "meta", f"{PROVIDERS_SOURCE}:facebook")),
+    "tiktok": ("TikTok", (f"{PROVIDERS_SOURCE}:tiktok",)),
+    "threads": ("Threads", (f"{PROVIDERS_SOURCE}:threads",)),
+    "youtube": ("YouTube", (f"{PROVIDERS_SOURCE}:youtube",)),
 }
+# Leads from the providers source report under "social_providers:<platform>" (the platform is
+# the prefix of their source_item_id).
+_LEAD_KEY = case(
+    (
+        Lead.source == PROVIDERS_SOURCE,
+        literal(f"{PROVIDERS_SOURCE}:") + func.split_part(Lead.source_item_id, ":", 1),
+    ),
+    else_=Lead.source,
+)
 
 
 async def platform_report(session: AsyncSession, days: int = 7) -> PlatformReport:
@@ -26,12 +40,13 @@ async def platform_report(session: AsyncSession, days: int = 7) -> PlatformRepor
     since = now - timedelta(days=days)
     day0 = (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
     keys = [k for _, ks in PLATFORMS.values() for k in ks]
+    lead_sources = [k for k in keys if ":" not in k] + [PROVIDERS_SOURCE]
 
     seller = Brief.data["intent"]["signals"].has_key("seller_not_buyer")
     lead_rows = (
         await session.execute(
             select(
-                Lead.source,
+                _LEAD_KEY,
                 func.count(),
                 func.count().filter(Lead.created_at >= now - timedelta(hours=24)),
                 func.count().filter(Lead.intent_score >= QUALIFIED_MIN),
@@ -39,8 +54,8 @@ async def platform_report(session: AsyncSession, days: int = 7) -> PlatformRepor
                 func.count().filter(seller),
             )
             .outerjoin(Brief, Brief.lead_id == Lead.id)
-            .where(Lead.source.in_(keys), Lead.created_at >= since)
-            .group_by(Lead.source)
+            .where(Lead.source.in_(lead_sources), Lead.created_at >= since)
+            .group_by(_LEAD_KEY)
         )
     ).all()
     by_source = {r[0]: tuple(int(v) for v in r[1:]) for r in lead_rows}
@@ -48,9 +63,9 @@ async def platform_report(session: AsyncSession, days: int = 7) -> PlatformRepor
     day = func.date_trunc("day", Lead.created_at)
     daily_rows = (
         await session.execute(
-            select(Lead.source, day, func.count())
-            .where(Lead.source.in_(keys), Lead.created_at >= day0)
-            .group_by(Lead.source, day)
+            select(_LEAD_KEY, day, func.count())
+            .where(Lead.source.in_(lead_sources), Lead.created_at >= day0)
+            .group_by(_LEAD_KEY, day)
         )
     ).all()
 
@@ -69,7 +84,9 @@ async def platform_report(session: AsyncSession, days: int = 7) -> PlatformRepor
     runs = {r[0]: (int(r[1]), int(r[2]), int(r[3] or 0)) for r in run_rows}
     sources = {
         s.key: s
-        for s in (await session.execute(select(Source).where(Source.key.in_(keys)))).scalars()
+        for s in (
+            await session.execute(select(Source).where(Source.key.in_(lead_sources)))
+        ).scalars()
     }
 
     out: list[PlatformStat] = []
@@ -82,12 +99,14 @@ async def platform_report(session: AsyncSession, days: int = 7) -> PlatformRepor
                 if 0 <= idx < days:
                     daily[idx] += int(n)
         rows = [sources[k] for k in ks if k in sources]
+        if any(k.startswith(f"{PROVIDERS_SOURCE}:") for k in ks) and PROVIDERS_SOURCE in sources:
+            rows.append(sources[PROVIDERS_SOURCE])
         last = max((s for s in rows if s.last_run_at), key=lambda s: s.last_run_at, default=None)  # type: ignore[arg-type, return-value]
         out.append(
             PlatformStat(
                 platform=platform,
                 label=label,
-                sources=[k for k in ks if k in sources] or list(ks),
+                sources=[x.key for x in rows] or list(ks),
                 enabled=any(s.enabled for s in rows),
                 leads=totals[0],
                 leads_24h=totals[1],

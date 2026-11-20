@@ -656,6 +656,14 @@ def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
         else:
             state, note = "ready", ""
         out[key] = IntegrationStatus(key, label, env, has_keys, paid, url, state, note)
+    # Derived: the licensed social providers (any one with a key runs the social source).
+    social = [out[k] for k in ("ensembledata", "scrapecreators", "socialcrawl", "hikerapi")]
+    ready = [x for x in social if x.configured]
+    out["social_providers"] = IntegrationStatus(
+        "social_providers", "Social data providers", tuple(e for x in social for e in x.env_vars),
+        bool(ready), False, "", "ready" if ready else "needs_api_key",
+        "" if ready else "Set at least one social provider key",
+    )  # fmt: skip
     # Derived: the inbox for replies and alert emails — Mailpit in testing, IMAP at go-live.
     inbox = out["mailpit"] if out["mailpit"].configured else out["imap"]
     out["mailbox"] = IntegrationStatus(

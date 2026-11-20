@@ -22,6 +22,7 @@ from app.agents.discovery.sources.social_apify import (
     ApifyRedditSource,
     ApifyXSource,
 )
+from app.agents.discovery.sources.social_providers import SocialProvidersSource
 from app.agents.discovery.sources.web_directory import WebDirectorySource
 from app.config import get_settings
 
@@ -35,6 +36,7 @@ _ALL: list[DiscoverySource] = [
     ApifyXSource(),
     ApifyInstagramSource(),
     ApifyFacebookSource(),
+    SocialProvidersSource(),
     # Official platform APIs: kept, but disabled (off in testing mode).
     RedditSource(),
     XSource(),

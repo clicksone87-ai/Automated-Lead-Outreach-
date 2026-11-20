@@ -24,6 +24,7 @@ from app.agents.discovery.base import (
     industry_keywords,
 )
 from app.db.models import EvidenceKind, Lead, TriggerType
+from app.orchestrator.quota import FreeQuotaExceededError
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +73,8 @@ def _rotate(ctx: SourceContext, key: str, items: list[Any], n: int = 1) -> list[
     return [items[(i + k) % len(items)] for k in range(min(n, len(items)))]
 
 
-def _client(ctx: SourceContext) -> ApifyClient:
-    token = ctx.settings.apify_api_token
+def _client(ctx: SourceContext, *, fallback: bool = False) -> ApifyClient:
+    token = ctx.settings.apify_api_token_fallback if fallback else ctx.settings.apify_api_token
     assert token is not None  # the runner only calls sources whose integration is ready
     return ApifyClient(token.get_secret_value())
 
@@ -115,18 +116,32 @@ async def _run(
 ) -> list[dict[str, Any]]:
     max_items = int(ctx.config.get("max_items", 10))
     max_charge = float(ctx.config.get("max_charge_usd", 0.1))
-    try:
-        run = await _client(ctx).run_actor(
-            ctx.session,
-            actor,
-            actor_input,
-            source=source,
-            max_items=max_items,
-            max_charge_usd=max_charge,
-        )
-    except ApifyRunError as exc:
-        raise SourceDegradedError(str(exc)) from exc
-    return run.items
+    has_fallback = bool(
+        ctx.settings.apify_api_token_fallback
+        and ctx.settings.apify_api_token_fallback.get_secret_value()
+    )
+    last: Exception | None = None
+    # The second token (another free account) takes over when the first is used up or refused.
+    for fallback in (False, True) if has_fallback else (False,):
+        try:
+            run = await _client(ctx, fallback=fallback).run_actor(
+                ctx.session,
+                actor,
+                actor_input,
+                source=source,
+                max_items=max_items,
+                max_charge_usd=max_charge,
+            )
+            return run.items
+        except (ApifyRunError, FreeQuotaExceededError) as exc:
+            if isinstance(exc, FreeQuotaExceededError) and not exc.scope.startswith(
+                "apify:account"
+            ):
+                raise  # our own monthly cap covers both tokens together
+            last = exc
+            if not fallback and has_fallback:
+                logger.info("apify token refused (%s); trying the fallback token", exc)
+    raise SourceDegradedError(str(last)) from last
 
 
 def _lead(

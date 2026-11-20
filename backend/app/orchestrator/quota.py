@@ -102,6 +102,10 @@ def quotas(s: Settings) -> dict[str, Quota]:
         Quota("gmail", "gmail", "day", "units", s.gmail_daily_send_cap, "emails/day"),
     ]
     q += [
+        Quota(p, p, "day", "units", s.social_provider_daily_cap, "requests/day")
+        for p in ("ensembledata", "scrapecreators", "socialcrawl", "hikerapi")
+    ]
+    q += [
         Quota(
             "apify",
             f"apify:{src}",

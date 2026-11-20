@@ -54,7 +54,7 @@ async def test_platform_report_counts_leads_runs_and_sellers() -> None:
     async with session_scope() as s:
         report = await platform_report(s, days=7)
     by = {p.platform: p for p in report.platforms}
-    assert list(by) == ["x", "reddit", "instagram", "facebook"]
+    assert list(by) == ["x", "reddit", "instagram", "facebook", "tiktok", "threads", "youtube"]
     x = by["x"]
     assert (x.leads, x.leads_24h, x.qualified, x.high, x.sellers_filtered) == (3, 3, 1, 1, 1)
     assert (x.items_seen, x.runs, x.failed_runs, x.enabled) == (20, 2, 1, True)
@@ -63,3 +63,18 @@ async def test_platform_report_counts_leads_runs_and_sellers() -> None:
     assert (r.leads, r.leads_24h, r.qualified, r.enabled) == (1, 0, 1, False)
     assert r.daily[-3] == 1
     assert by["instagram"].leads == 0 and by["instagram"].daily == [0] * 7
+
+
+async def test_provider_leads_report_under_their_platform() -> None:
+    async with session_scope() as s:
+        s.add(Source(key="social_providers", enabled=True, schedule_minutes=60, config={}))
+        tiktok = _lead("social_providers", 70)
+        tiktok.source_item_id = "tiktok:71"
+        x = _lead("social_providers", 40)
+        x.source_item_id = "x:2069"
+        s.add_all([tiktok, x, _lead("social_x", 80)])
+    async with session_scope() as s:
+        by = {p.platform: p for p in (await platform_report(s, days=7)).platforms}
+    assert (by["tiktok"].leads, by["tiktok"].qualified, by["tiktok"].enabled) == (1, 1, True)
+    assert by["tiktok"].sources == ["social_providers"]
+    assert by["x"].leads == 2 and by["threads"].leads == 0
