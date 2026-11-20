@@ -203,6 +203,9 @@ class Business(Base):
     has_website: Mapped[bool | None] = mapped_column(Boolean)
     # broken/outdated-site trigger: ok | broken | outdated | unreachable | none
     site_status: Mapped[str | None] = mapped_column(String(20))
+    # OSM_WEBSITE_MISSING | WEBSITE_RECORDED | WEBSITE_DISCOVERED | WEBSITE_VERIFIED |
+    # WEBSITE_UNCONFIRMED (adapters.opendata.WebsiteStatus)
+    website_status: Mapped[str | None] = mapped_column(String(30), index=True)
     site_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(30), default="active")
     cooldown_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -459,6 +462,28 @@ class QualityCheck(Base):
     created_at: Mapped[datetime] = _created()
 
     __table_args__ = (Index("ix_quality_checks_item", "item_type", "item_id"),)
+
+
+class DiscoveryJob(Base):
+    """A business search (city + category) across OpenStreetMap and free registries."""
+
+    __tablename__ = "discovery_jobs"
+
+    id: Mapped[uuid.UUID] = _pk()
+    country: Mapped[str] = mapped_column(String(2), index=True)
+    city: Mapped[str] = mapped_column(String(200))
+    category: Mapped[str] = mapped_column(String(100))
+    sources: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
+    max_results: Mapped[int] = mapped_column(Integer, default=50, server_default="50")
+    status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
+    counts: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+    business_ids: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
+    errors: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
+    attribution: Mapped[str | None] = mapped_column(Text)
+    requested_by: Mapped[str | None] = mapped_column(String(100))
+    created_at: Mapped[datetime] = _created()
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ManualOutreach(Base):

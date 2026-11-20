@@ -47,6 +47,16 @@ async def _has_lead(ctx: SourceContext, business_id: Any, trigger: str | None = 
     return (await ctx.session.execute(stmt.limit(1))).scalar_one_or_none() is not None
 
 
+def _market_filter(ctx: SourceContext) -> Any:
+    """Worldwide except the excluded markets, or only the target countries when worldwide
+    outreach is switched off."""
+    if ctx.settings.all_countries_outreach_enabled:
+        return Business.country.is_not(None) & Business.country.not_in(
+            sorted(ctx.settings.excluded_country_set)
+        )
+    return Business.country.in_(ctx.runtime.target_countries)
+
+
 class SiteHealthSource:
     key: ClassVar[str] = "site_health"
     label: ClassVar[str] = "Trigger: broken or outdated websites"
@@ -69,7 +79,7 @@ class SiteHealthSource:
                     .where(
                         Business.domain.is_not(None),
                         Business.industry == ctx.runtime.active_industry,
-                        Business.country.in_(ctx.runtime.target_countries),
+                        _market_filter(ctx),
                         or_(Business.site_checked_at.is_(None), Business.site_checked_at < cutoff),
                     )
                     .order_by(Business.site_checked_at.asc().nulls_first())
@@ -137,7 +147,7 @@ class NoWebsiteSource:
                         or_(Business.has_website.is_(None), Business.has_website.is_(False)),
                         Business.site_checked_at.is_(None),
                         Business.industry == ctx.runtime.active_industry,
-                        Business.country.in_(ctx.runtime.target_countries),
+                        _market_filter(ctx),
                         Business.registry_source.is_(None)
                         | ~Business.registry_source.like("handle:%"),
                     )
@@ -153,6 +163,7 @@ class NoWebsiteSource:
             found = await self._domain_check(ctx, b)
             if found:
                 b.domain, b.has_website, b.site_status = found, True, None
+                b.website_status = "WEBSITE_VERIFIED"  # the page names the business
                 b.site_checked_at = None  # let site_health check it next
                 continue
             b.has_website = False

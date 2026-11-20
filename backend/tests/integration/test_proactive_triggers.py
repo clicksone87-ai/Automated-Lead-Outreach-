@@ -114,7 +114,7 @@ async def test_site_health_creates_leads_for_broken_and_outdated_only() -> None:
                 _biz("Old Pipes", domain="oldpipes.co.uk"),
                 _biz("Fresh Pipes", domain="freshpipes.co.uk"),
                 _biz("Down Pipes", domain="downpipes.co.uk"),
-                _biz("Elsewhere", domain="elsewhere.fr", country="FR"),
+                _biz("Elsewhere", domain="elsewhere.pk", country="PK"),  # excluded market
             ]
         )
         await s.flush()

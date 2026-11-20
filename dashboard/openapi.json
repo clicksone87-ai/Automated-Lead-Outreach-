@@ -2784,6 +2784,243 @@
      }
     }
    }
+  },
+  "/api/discovery/options": {
+   "get": {
+    "tags": [
+     "discovery"
+    ],
+    "summary": "Options",
+    "operationId": "options_api_discovery_options_get",
+    "parameters": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Options Api Discovery Options Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/discovery/search": {
+   "post": {
+    "tags": [
+     "discovery"
+    ],
+    "summary": "Search",
+    "operationId": "search_api_discovery_search_post",
+    "parameters": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SearchIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "202": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Search Api Discovery Search Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/discovery/jobs": {
+   "get": {
+    "tags": [
+     "discovery"
+    ],
+    "summary": "Jobs",
+    "operationId": "jobs_api_discovery_jobs_get",
+    "parameters": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 50,
+       "title": "Limit"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": true
+         },
+         "title": "Response Jobs Api Discovery Jobs Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/discovery/jobs/{job_id}": {
+   "get": {
+    "tags": [
+     "discovery"
+    ],
+    "summary": "Job",
+    "operationId": "job_api_discovery_jobs__job_id__get",
+    "parameters": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Job Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Job Api Discovery Jobs  Job Id  Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
   }
  },
  "components": {
@@ -5076,6 +5313,57 @@
      "href"
     ],
     "title": "SearchHit"
+   },
+   "SearchIn": {
+    "properties": {
+     "country": {
+      "type": "string",
+      "maxLength": 2,
+      "minLength": 2,
+      "title": "Country",
+      "description": "ISO 3166-1 alpha-2"
+     },
+     "city": {
+      "type": "string",
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "City"
+     },
+     "category": {
+      "type": "string",
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Category"
+     },
+     "max_results": {
+      "type": "integer",
+      "maximum": 200.0,
+      "minimum": 1.0,
+      "title": "Max Results",
+      "default": 50
+     },
+     "sources": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sources"
+     }
+    },
+    "type": "object",
+    "required": [
+     "country",
+     "city",
+     "category"
+    ],
+    "title": "SearchIn"
    },
    "SettingsOut": {
     "properties": {
