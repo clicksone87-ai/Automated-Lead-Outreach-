@@ -60,6 +60,7 @@ from app.schemas import (
     GalleryItem,
     IntegrationOut,
     LeadDetail,
+    LeadFamilyTierCounts,
     LeadPage,
     LeadRow,
     ManualRunOut,
@@ -72,6 +73,7 @@ from app.schemas import (
     StageCount,
 )
 from app.services import manual_runs, runtime_settings
+from app.services.families import family_for
 
 STAGES: list[tuple[str, str, set[str]]] = [
     ("discovery", "Discovery", {LeadStatus.DISCOVERED}),
@@ -398,6 +400,38 @@ SORTS = {
     "status": Lead.status,
     "country": Lead.country,
 }
+
+
+def summarize_lead_family_tiers(
+    rows: list[tuple[str | None, str, int | None]],
+) -> list[LeadFamilyTierCounts]:
+    counts = {
+        family: {"high": 0, "medium": 0, "low": 0, "unscored": 0}
+        for family in ("social", "google", "registry", "other")
+    }
+    for source_family, source, score in rows:
+        family = source_family or family_for(source)
+        if family not in counts:
+            family = "other"
+        if score is None:
+            counts[family]["unscored"] += 1
+        elif score >= 75:
+            counts[family]["high"] += 1
+        elif score >= 60:
+            counts[family]["medium"] += 1
+        else:
+            counts[family]["low"] += 1
+    return [
+        LeadFamilyTierCounts(family=family, **tier_counts)
+        for family, tier_counts in counts.items()
+    ]
+
+
+async def lead_family_tier_counts(session: AsyncSession) -> list[LeadFamilyTierCounts]:
+    rows = (
+        await session.execute(select(Lead.source_family, Lead.source, Lead.intent_score))
+    ).all()
+    return summarize_lead_family_tiers(list(rows))
 
 
 async def list_leads(

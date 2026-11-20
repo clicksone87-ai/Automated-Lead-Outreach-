@@ -19,7 +19,7 @@ import type { LeadRow } from "@/lib/api";
 import { ALL_FAMILIES, FAMILY_INFO, familySources, GOOD_LEADS, TIERS, type Family, type Tier } from "@/lib/families";
 import { ago, titleCase, countryName, languageName } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { useLeads, useSources, useSettings, type LeadFilters } from "@/lib/queries";
+import { useLeadFamilyTierCounts, useLeads, useSources, useSettings, type LeadFilters } from "@/lib/queries";
 import { SERVICES, TRIGGERS } from "@/lib/status";
 import { LANGUAGES } from "@/lib/markets";
 
@@ -113,6 +113,7 @@ function LeadsView() {
   const params = useSearchParams();
   const { data: sources } = useSources();
   const { data: settings } = useSettings();
+  const { data: leadCounts = [] } = useLeadFamilyTierCounts();
   const countryCodes = Object.keys(settings?.country_rules ?? {});
   const get = (k: string) => params.get(k) ?? undefined;
 
@@ -203,8 +204,8 @@ function LeadsView() {
       />
 
       <div className="mb-5 space-y-3">
-        <SourcePicker family={family} onChange={(f) => setParam({ family: f, source: undefined })} />
-        <InterestPicker tier={tier} onChange={(t) => setParam({ tier: t })} />
+        <SourcePicker family={family} counts={leadCounts} onChange={(f) => setParam({ family: f, source: undefined })} />
+        <InterestPicker tier={tier} family={family} counts={leadCounts} onChange={(t) => setParam({ tier: t })} />
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">

@@ -107,6 +107,14 @@ class LeadPage(BaseModel):
     page_size: int
 
 
+class LeadFamilyTierCounts(BaseModel):
+    family: str
+    high: int
+    medium: int
+    low: int
+    unscored: int
+
+
 class EvidenceOut(ORM):
     id: uuid.UUID
     kind: str

@@ -127,6 +127,56 @@
     }
    }
   },
+  "/api/lead-counts": {
+   "get": {
+    "summary": "Lead Family Tier Counts",
+    "operationId": "lead_family_tier_counts_api_lead_counts_get",
+    "parameters": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/LeadFamilyTierCounts"
+         },
+         "title": "Response Lead Family Tier Counts Api Lead Counts Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/leads": {
    "get": {
     "summary": "List Leads",
@@ -4144,6 +4194,39 @@
      "activity"
     ],
     "title": "LeadDetail"
+   },
+   "LeadFamilyTierCounts": {
+    "properties": {
+     "family": {
+      "type": "string",
+      "title": "Family"
+     },
+     "high": {
+      "type": "integer",
+      "title": "High"
+     },
+     "medium": {
+      "type": "integer",
+      "title": "Medium"
+     },
+     "low": {
+      "type": "integer",
+      "title": "Low"
+     },
+     "unscored": {
+      "type": "integer",
+      "title": "Unscored"
+     }
+    },
+    "type": "object",
+    "required": [
+     "family",
+     "high",
+     "medium",
+     "low",
+     "unscored"
+    ],
+    "title": "LeadFamilyTierCounts"
    },
    "LeadPage": {
     "properties": {

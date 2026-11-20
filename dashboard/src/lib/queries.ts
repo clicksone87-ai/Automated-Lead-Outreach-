@@ -21,7 +21,16 @@ export const qk = {
   gallery: ["gallery"] as const,
   timings: (days: number) => ["timings", days] as const,
   platforms: (days: number) => ["platforms", days] as const,
+  leadCounts: ["lead-counts"] as const,
 };
+
+export interface LeadFamilyTierCount {
+  family: "social" | "google" | "registry" | "other";
+  high: number;
+  medium: number;
+  low: number;
+  unscored: number;
+}
 
 export interface LeadFilters {
   page: number;
@@ -68,6 +77,15 @@ export function useLeads(filters: LeadFilters) {
     queryKey: qk.leads(filters),
     queryFn: () => unwrap(api.GET("/api/leads", { params: { query: filters } })),
     placeholderData: keepPreviousData,
+    ...LIVE,
+  });
+}
+
+export function useLeadFamilyTierCounts() {
+  return useQuery({
+    queryKey: qk.leadCounts,
+    queryFn: async () =>
+      (await unwrap(api.GET("/api/lead-counts"))) as LeadFamilyTierCount[],
     ...LIVE,
   });
 }

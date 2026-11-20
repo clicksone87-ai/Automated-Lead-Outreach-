@@ -32,6 +32,7 @@ from app.schemas import (
     HealthOut,
     IntegrationOut,
     LeadDetail,
+    LeadFamilyTierCounts,
     LeadPage,
     OverviewOut,
     PlatformReport,
@@ -85,6 +86,11 @@ async def lead_timings(
     session: SessionDep, days: Annotated[int, Query(ge=1, le=90)] = 7
 ) -> TimingsOut:
     return await timings.timings(session, days=days)
+
+
+@router.get("/lead-counts", response_model=list[LeadFamilyTierCounts])
+async def lead_family_tier_counts(session: SessionDep) -> list[LeadFamilyTierCounts]:
+    return await queries.lead_family_tier_counts(session)
 
 
 @router.get("/leads", response_model=LeadPage)
