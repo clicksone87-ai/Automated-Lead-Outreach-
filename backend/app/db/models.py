@@ -144,6 +144,12 @@ class ApprovalStatus(StrEnum):
     SUPERSEDED = "superseded"  # replaced by a newer draft (e.g. one with the heavy-lane assets)
 
 
+class ManualOutreachStatus(StrEnum):
+    PENDING = "pending"
+    DONE = "done"
+    SKIPPED = "skipped"
+
+
 class DeliveryStatus(StrEnum):
     QUEUED = "queued"
     SCHEDULED = "scheduled"
@@ -453,6 +459,34 @@ class QualityCheck(Base):
     __table_args__ = (Index("ix_quality_checks_item", "item_type", "item_id"),)
 
 
+class ManualOutreach(Base):
+    __tablename__ = "manual_outreach"
+
+    id: Mapped[uuid.UUID] = _pk()
+    lead_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("leads.id", ondelete="CASCADE"), index=True
+    )
+    channel: Mapped[str] = mapped_column(String(20), index=True)
+    post_link: Mapped[str | None] = mapped_column(Text)
+    drafts: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, server_default="{}"
+    )
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default=ManualOutreachStatus.PENDING,
+        server_default=ManualOutreachStatus.PENDING,
+        index=True,
+    )
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    done_by: Mapped[str | None] = mapped_column(String(100))
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _updated()
+
+    __table_args__ = (
+        UniqueConstraint("lead_id", "channel", name="uq_manual_outreach_lead_channel"),
+    )
+
+
 class Proposal(Base):
     __tablename__ = "proposals"
 
@@ -754,6 +788,8 @@ __all__ = [
     "Lead",
     "LeadStatus",
     "LogoConcept",
+    "ManualOutreach",
+    "ManualOutreachStatus",
     "Message",
     "OutreachLock",
     "PolicyDecision",

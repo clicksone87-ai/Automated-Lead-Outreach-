@@ -67,6 +67,28 @@ MAX_PAGES = 6
 MAX_VERIFICATIONS = 3
 USABLE = {VerificationStatus.VALID, VerificationStatus.CATCH_ALL}
 
+DISPOSABLE_DOMAINS = {
+    "10minutemail.com",
+    "mailinator.com",
+    "guerrillamail.com",
+    "temp-mail.org",
+}
+
+
+def track_for_contact(contact: Contact | None) -> str:
+    """Return Track A only for a published, valid, MX-usable email."""
+    if contact is None or contact.type != ContactType.EMAIL:
+        return "track_b"
+    if contact.verification_status not in (VerificationStatus.VALID, VerificationStatus.CATCH_ALL):
+        return "track_b"
+    value = contact.value.strip().casefold()
+    if "@" not in value:
+        return "track_b"
+    domain = value.rsplit("@", 1)[1]
+    if domain in DISPOSABLE_DOMAINS:
+        return "track_b"
+    return "track_a"
+
 
 @dataclass(slots=True)
 class Candidate:

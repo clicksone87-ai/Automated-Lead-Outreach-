@@ -76,6 +76,21 @@ export interface SuppressionItem {
   created_at: string;
 }
 
+export interface ManualOutreachItem {
+  id: string;
+  lead_id: string;
+  business_name: string | null;
+  channel: string;
+  post_link: string | null;
+  comment: string;
+  dm: string;
+  contact_form: string;
+  status: string;
+  done_at: string | null;
+  done_by: string | null;
+  created_at: string;
+}
+
 export interface AutonomyCondition {
   key: string;
   label: string;
@@ -126,6 +141,46 @@ export function useInbox() {
 
 export function useSuppressions() {
   return useQuery({ queryKey: ["suppressions"], queryFn: () => call<SuppressionItem[]>("/api/suppressions") });
+}
+
+export function useManualOutreach(status = "pending") {
+  return useQuery({
+    queryKey: ["manual-outreach", status],
+    queryFn: () => call<ManualOutreachItem[]>(`/api/manual-outreach?status=${status}`),
+    ...LIVE,
+  });
+}
+
+export function useManualOutreachDone() {
+  const done = useInvalidate([["manual-outreach"], ["overview"], ["leads"]]);
+  return useMutation({
+    mutationFn: (id: string) =>
+      call<ManualOutreachItem>(`/api/manual-outreach/${id}/done`, {
+        method: "POST",
+        body: JSON.stringify({ done_by: "dashboard" }),
+      }),
+    onSuccess: () => {
+      toast.success("Manual outreach marked done");
+      done();
+    },
+    onError: (e: Error) => toast.error("Could not update manual outreach", { description: e.message }),
+  });
+}
+
+export function useManualOutreachSkip() {
+  const done = useInvalidate([["manual-outreach"], ["overview"], ["leads"]]);
+  return useMutation({
+    mutationFn: (id: string) =>
+      call<ManualOutreachItem>(`/api/manual-outreach/${id}/skip`, {
+        method: "POST",
+        body: JSON.stringify({ done_by: "dashboard" }),
+      }),
+    onSuccess: () => {
+      toast.success("Manual outreach skipped");
+      done();
+    },
+    onError: (e: Error) => toast.error("Could not update manual outreach", { description: e.message }),
+  });
 }
 
 export function useAutonomy() {

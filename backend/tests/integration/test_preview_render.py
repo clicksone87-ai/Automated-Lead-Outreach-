@@ -6,6 +6,7 @@ network, so it is not part of the test).
 
 from __future__ import annotations
 
+import asyncio
 import shutil
 import time
 from pathlib import Path
@@ -45,7 +46,7 @@ async def test_render_once_then_seconds_per_preview(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     worker_cache = Path("/cache/site-builder")
-    cache_dir = worker_cache if worker_cache.is_dir() else None
+    cache_dir = worker_cache if await asyncio.to_thread(worker_cache.is_dir) else None
     if cache_dir is None:
         async def local_deps(template_dir: Path, cache_root: Path) -> Path:
             return template_dir / "node_modules"

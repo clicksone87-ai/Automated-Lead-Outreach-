@@ -22,6 +22,7 @@ from app.db.models import (
     Deal,
     Lead,
     LeadStatus,
+    ManualOutreachStatus,
     Message,
     Proposal,
     Reply,
@@ -29,6 +30,7 @@ from app.db.models import (
 )
 from app.orchestrator.queue import enqueue_pipeline
 from app.services import activity, autonomy
+from app.services.manual_outreach import list_queue, set_status, sync_queue
 from app.services.outreach_jobs import suppress
 from app.services.unsubscribe import read_token
 
@@ -71,6 +73,10 @@ class StageIn(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
 
 
+class ManualOutreachActionIn(BaseModel):
+    done_by: str = Field(default="dashboard", max_length=100)
+
+
 def _proposal_out(p: Proposal, lead: Lead, business: Business | None) -> dict[str, Any]:
     return {
         "id": str(p.id),
@@ -103,6 +109,42 @@ async def _load(
     assert lead is not None
     business = await session.get(Business, lead.business_id) if lead.business_id else None
     return p, lead, business
+
+
+@router.get("/manual-outreach")
+async def manual_outreach(session: SessionDep, state: str = "pending") -> list[dict[str, Any]]:
+    await sync_queue(session)
+    await session.commit()
+    try:
+        return await list_queue(session, state)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+
+
+@router.post("/manual-outreach/{item_id}/done")
+async def manual_outreach_done(
+    item_id: uuid.UUID,
+    body: ManualOutreachActionIn,
+    session: SessionDep,
+) -> dict[str, Any]:
+    result = await set_status(session, item_id, ManualOutreachStatus.DONE, body.done_by)
+    if result is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "manual outreach item not found")
+    await session.commit()
+    return result
+
+
+@router.post("/manual-outreach/{item_id}/skip")
+async def manual_outreach_skip(
+    item_id: uuid.UUID,
+    body: ManualOutreachActionIn,
+    session: SessionDep,
+) -> dict[str, Any]:
+    result = await set_status(session, item_id, ManualOutreachStatus.SKIPPED, body.done_by)
+    if result is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "manual outreach item not found")
+    await session.commit()
+    return result
 
 
 @router.get("/approvals")

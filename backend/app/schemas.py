@@ -377,6 +377,21 @@ class GalleryItem(BaseModel):
     preview: dict[str, Any] | None
 
 
+class ManualOutreachOut(BaseModel):
+    id: uuid.UUID
+    lead_id: uuid.UUID
+    business_name: str | None
+    channel: str
+    post_link: str | None
+    comment: str
+    dm: str
+    contact_form: str
+    status: str
+    done_at: datetime | None
+    done_by: str | None
+    created_at: datetime
+
+
 class PlatformStat(BaseModel):
     """Leads per social platform (V2 Social sources: leads-per-platform reporting)."""
 
