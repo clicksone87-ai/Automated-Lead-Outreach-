@@ -372,13 +372,13 @@ async def follow_ups(session: AsyncSession, settings: Settings, adapters: Adapte
             FollowUpText,
         )  # fmt: skip
         assert adapters.renderer is not None
-        from app.services.unsubscribe import make_token, unsubscribe_url  # noqa: PLC0415
+        from app.services.email_links import sender_props  # noqa: PLC0415
+        from app.services.unsubscribe import make_token, unsubscribe_link  # noqa: PLC0415
 
         rendered = await adapters.renderer.render("followup", {
             "language": proposal.language, "greeting": "Hello,", "body": text.body, "signoff": "Best regards,",
-            "sender": {"name": settings.sender_name, "businessName": settings.sender_business_name,
-                       "postalAddress": settings.sender_postal_address, "portfolioUrl": settings.portfolio_url},
-            "unsubscribeUrl": unsubscribe_url(settings, make_token(settings, lead.business_id, proposal.to_email)),
+            "sender": sender_props(settings),
+            "unsubscribeUrl": unsubscribe_link(settings, make_token(settings, lead.business_id, proposal.to_email)),
         })  # fmt: skip
         when = next_send_time(now, lead.timezone, lead.country, rs.sending_window)
         sandbox = bool(getattr(adapters.email, "is_sandbox", False))

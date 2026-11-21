@@ -47,6 +47,7 @@ from app.orchestrator.agents import AgentContext, AgentOutcome, register
 from app.orchestrator.errors import TransientAgentError
 from app.policy.engine import PolicyEngine
 from app.services import runtime_settings
+from app.services.email_links import preview_id_for, preview_url
 
 logger = logging.getLogger(__name__)
 TEMPLATE = "trades"
@@ -131,7 +132,7 @@ class WebsiteBuilderAgent:
             logo_svg_reversed=logo_reversed,
             agency=ctx.settings.sender_business_name,
         )
-        preview_id = lead.id.hex
+        preview_id = preview_id_for(lead.id)
         data_dir = Path(ctx.settings.data_dir).resolve()  # noqa: ASYNC240 - cheap, no I/O wait
         try:
             built = await self._build(
@@ -223,8 +224,7 @@ class WebsiteBuilderAgent:
 
     @staticmethod
     def _preview_url(ctx: AgentContext, preview_id: str) -> str:
-        base = ctx.settings.public_preview_base_url.rstrip("/")
-        return f"{base}/{preview_id}/" if base else f"http://{preview_id}.preview.localhost:8080/"
+        return preview_url(ctx.settings, preview_id)
 
     async def _facts(
         self,

@@ -32,10 +32,16 @@ from app.db.models import (
 )
 from app.orchestrator.queue import enqueue_pipeline
 from app.services import activity, autonomy
+from app.services import attachments as attachment_policy
+from app.services.email_links import (
+    preview_id_for,
+    preview_public_url,
+    sender_props,
+)
 from app.services.manual_outreach import list_queue, set_status, sync_queue
 from app.services.outreach_jobs import suppress
 from app.services.sending import MarkSentError, mark_sent
-from app.services.unsubscribe import read_token
+from app.services.unsubscribe import make_token, read_token, unsubscribe_link
 
 router = APIRouter(prefix="/api")
 public = APIRouter()
@@ -213,6 +219,12 @@ async def edit(
         **{k: v for k, v in body.model_dump().items() if v is not None and k != "subject"},
     }
     subject = body.subject or p.subject
+    # Links are rebuilt from settings so an older draft can never carry a localhost address.
+    token = make_token(settings, lead.business_id, p.to_email or f"lead:{lead.id}")
+    draft["unsubscribe_url"] = unsubscribe_link(settings, token)
+    draft["preview_url"] = (
+        preview_public_url(settings, preview_id_for(lead.id)) if draft.get("preview_url") else None
+    )
     assert adapters.renderer is not None
     rendered = await adapters.renderer.render(
         "proposal",
@@ -221,12 +233,9 @@ async def edit(
             "greeting": draft.get("greeting", ""), "intro": draft.get("intro", ""),
             "findings": [c["text"] for c in p.claims], "closing": draft.get("closing", ""),
             "signoff": draft.get("signoff", ""),
-            "sender": {"name": settings.sender_name, "businessName": settings.sender_business_name,
-                       "postalAddress": settings.sender_postal_address, "portfolioUrl": settings.portfolio_url},
-            "unsubscribeUrl": draft.get("unsubscribe_url", ""), "previewUrl": draft.get("preview_url"),
-            "attachments": {"logos": any(a["kind"] == "logo" for a in p.attachments),
-                            "preview": any(a["kind"].startswith("preview") for a in p.attachments),
-                            "audit": any(a["kind"] == "audit_pdf" for a in p.attachments)},
+            "sender": sender_props(settings),
+            "unsubscribeUrl": draft["unsubscribe_url"], "previewUrl": draft["preview_url"],
+            "attachments": attachment_policy.template_flags(p.attachments),
         },
     )  # fmt: skip
     p.subject, p.draft, p.body_html, p.body_text, p.edited_by_human = (
@@ -382,8 +391,12 @@ async def gmail_outbox(
             .limit(200)
         )
     ).all()
-    items = [
-        {
+    items = []
+    for m, p, lead, biz in rows:
+        # Follow-ups travel without attachments.
+        files = [a for a in (p.attachments if m.follow_up_number == 0 else []) if a.get("path")]
+        size = attachment_policy.report_for(files, adapters.storage)
+        items.append({
             "message_id": str(m.id),
             "lead_id": str(lead.id),
             "business_name": biz.name if biz else None,
@@ -396,13 +409,16 @@ async def gmail_outbox(
             "kind": "compose" if (m.provider_id or "").startswith("compose:") else "draft",
             "open_url": _open_url(settings, m),
             "attachments": [
-                {"filename": a.get("filename"), "url": f"/api/files/{a.get('path')}"}
-                for a in (p.attachments if m.follow_up_number == 0 else [])
-                if a.get("path")
+                {"filename": a.get("filename"), "url": f"/api/files/{a.get('path')}",
+                 "bytes": a.get("bytes"), "note": a.get("note")}
+                for a in files
             ],
-        }
-        for m, p, lead, biz in rows
-    ]
+            "attachment_count": size["count"],
+            "attachment_bytes": size["bytes"],
+            "attachment_mb": size["mb"],
+            "attachment_actions": (p.draft or {}).get("attachment_report", {}).get("actions", [])
+            if m.follow_up_number == 0 else [],
+        })  # fmt: skip
     return {"mode": _gmail_mode(adapters), "sender": settings.gmail_sender, "items": items}
 
 

@@ -6,6 +6,7 @@ then human review). At autonomy stage 1 every proposal waits for human approval.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from typing import Any, ClassVar, Self
@@ -31,9 +32,11 @@ from app.db.models import (
 from app.orchestrator import lanes
 from app.orchestrator.agents import AgentContext, AgentOutcome, register
 from app.policy.engine import PolicyEngine
+from app.services import attachments as attachment_policy
 from app.services import runtime_settings
+from app.services.email_links import preview_id_for, preview_public_url, sender_props
 from app.services.manual_outreach import sync_queue
-from app.services.unsubscribe import make_token, unsubscribe_url
+from app.services.unsubscribe import make_token, unsubscribe_link
 
 logger = logging.getLogger(__name__)
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -176,7 +179,7 @@ class ProposalAgent:
 
         facts = await self._facts(ctx, lead)
         # Fast lane: no assets yet. Heavy lane: logos / preview / audit PDF are attached.
-        attachments, preview_url = await self._attachments(ctx, lead)
+        attachments, preview_url, attachment_report = await self._attachments(ctx, lead)
         # Track B: no verified email → also draft a comment, a DM and a contact-form message.
         request, email = track_request(contact, lead)
         track_b_route = track_for_contact(contact)
@@ -199,7 +202,12 @@ class ProposalAgent:
                             problem=problem,
                             request=request,
                             has_assets=bool(attachments),
-                            attached=sorted({a["kind"].split("_")[0] for a in attachments}),
+                            attached=sorted(
+                                {
+                                    k.split("_")[0]
+                                    for k in attachment_policy.attached_kinds(attachments)
+                                }
+                            ),
                         ),
                         lead_id=lead.id,
                         lane="heavy" if lead.lane == "heavy" else "fast",
@@ -225,12 +233,7 @@ class ProposalAgent:
             return AgentOutcome(False, LeadStatus.NEEDS_REVIEW, f"proposal rejected: {problem}")
 
         token = make_token(ctx.settings, business.id, email or f"lead:{lead.id}")
-        sender = {
-            "name": ctx.settings.sender_name,
-            "businessName": ctx.settings.sender_business_name,
-            "postalAddress": ctx.settings.sender_postal_address,
-            "portfolioUrl": ctx.settings.portfolio_url,
-        }
+        unsubscribe = unsubscribe_link(ctx.settings, token)
         assert ctx.adapters.renderer is not None
         rendered = await ctx.adapters.renderer.render(
             "proposal",
@@ -243,14 +246,10 @@ class ProposalAgent:
                 "findings": [c.text for c in draft.claims],
                 "closing": draft.closing,
                 "signoff": draft.signoff,
-                "sender": sender,
-                "unsubscribeUrl": unsubscribe_url(ctx.settings, token),
+                "sender": sender_props(ctx.settings),
+                "unsubscribeUrl": unsubscribe,
                 "previewUrl": preview_url,
-                "attachments": {
-                    "logos": any(a["kind"] == "logo" for a in attachments),
-                    "preview": any(a["kind"].startswith("preview") for a in attachments),
-                    "audit": any(a["kind"] == "audit_pdf" for a in attachments),
-                },
+                "attachments": attachment_policy.template_flags(attachments),
             },
         )
         rs = await runtime_settings.load(s)
@@ -303,7 +302,8 @@ class ProposalAgent:
                 "signoff": draft.signoff,
                 "preview_text": draft.preview_text,
                 "preview_url": preview_url,
-                "unsubscribe_url": unsubscribe_url(ctx.settings, token),
+                "unsubscribe_url": unsubscribe,
+                "attachment_report": attachment_report,
             }
             | ({"track_b": track_b} if track_b else {}),
         )
@@ -421,7 +421,8 @@ class ProposalAgent:
     @staticmethod
     async def _attachments(
         ctx: AgentContext, lead: Lead
-    ) -> tuple[list[dict[str, Any]], str | None]:
+    ) -> tuple[list[dict[str, Any]], str | None, dict[str, Any]]:
+        """Drafts to attach, fitted to Gmail's size limit, and the live preview link if public."""
         out: list[dict[str, Any]] = []
         logos = (
             (
@@ -443,8 +444,9 @@ class ProposalAgent:
         ).scalar_one_or_none()
         preview_url = None
         if preview is not None and preview.qa_status == "passed":
-            if ctx.settings.public_links_enabled and preview.preview_url:
-                preview_url = preview.preview_url
+            # Built from settings, not the stored URL: a tunnel set up after the build counts,
+            # and a stored localhost URL can never reach an email.
+            preview_url = preview_public_url(ctx.settings, preview_id_for(lead.id))
             shots = preview.screenshots or {}
             for key in ("desktop", "mobile"):
                 if shots.get(key):
@@ -459,7 +461,15 @@ class ProposalAgent:
         if audit is not None and audit.report_pdf_path:
             out.append({"kind": "audit_pdf", "path": audit.report_pdf_path, "filename": "website-audit.pdf",
                         "content_type": "application/pdf"})  # fmt: skip
-        return out, preview_url
+        fitted, report = await asyncio.to_thread(
+            attachment_policy.prepare,
+            ctx.adapters.storage,
+            out,
+            folder=f"outbox/{lead.id.hex}",
+        )
+        if report["actions"]:
+            logger.info("attachments for lead %s fitted: %s", lead.id, report["actions"])
+        return fitted, preview_url, report
 
 
 register(ProposalAgent())

@@ -159,8 +159,11 @@ async def test_proposal_claims_map_to_evidence_and_wait_for_approval(tmp_path: P
         "preview_pdf",
         "audit_pdf",
     }
-    assert "Test Agency" in p.body_text and "1 Test Street" in p.body_text and "/u/" in p.body_text
-    assert p.draft["intro"] and p.draft["unsubscribe_url"].startswith("http")
+    assert "Test Agency" in p.body_text and "1 Test Street" in p.body_text
+    # Local mode (no PUBLIC_API_BASE_URL): recipients cannot open localhost, so the footer
+    # offers the reply-based unsubscribe instead of the one-click page.
+    assert "mailto:replies@test-agency.local?subject=unsubscribe" in p.body_text
+    assert p.draft["intro"] and p.draft["unsubscribe_url"].startswith("mailto:")
     assert "track_b" not in p.draft  # email route: no manual drafts
 
 
@@ -263,8 +266,12 @@ async def test_sandbox_send_is_idempotent_with_unsubscribe_headers(tmp_path: Pat
     outcome = await _send(settings, lead_id, sandbox)
     assert outcome.status == LeadStatus.SENT and "Mailpit" in outcome.reason
     email = sandbox.sent[0]
-    assert email.headers["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
-    assert "/u/" in email.headers["List-Unsubscribe"] and email.reply_to.startswith("replies@")
+    # Local mode: only the mailto form, so no RFC 8058 one-click header either.
+    assert (
+        email.headers["List-Unsubscribe"]
+        == "<mailto:replies@test-agency.local?subject=unsubscribe>"
+    )
+    assert "List-Unsubscribe-Post" not in email.headers and email.reply_to.startswith("replies@")
     assert {a.filename for a in email.attachments} >= {"website-audit.pdf", "logo-concept-1.png"}
     again = await _send(settings, lead_id, sandbox)  # rerun never sends twice
     assert len(sandbox.sent) == 1 or not again.proceed
@@ -273,6 +280,22 @@ async def test_sandbox_send_is_idempotent_with_unsubscribe_headers(tmp_path: Pat
         biz = (await s.execute(select(Business))).scalar_one()
     assert len(msgs) == 1 and msgs[0].sandbox and msgs[0].message_id_header
     assert biz.cooldown_until is not None
+
+
+async def test_public_api_url_adds_one_click_unsubscribe(tmp_path: Path) -> None:
+    settings = _settings(tmp_path).model_copy(
+        update={"public_api_base_url": "https://api.agency.example"}
+    )
+    lead_id = await _lead(settings)
+    await _propose(settings, lead_id)
+    await _approve(lead_id)
+    sandbox = SandboxEmail()
+    await _send(settings, lead_id, sandbox)
+    email = sandbox.sent[0]
+    assert email.headers["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+    one_click, mailto = email.headers["List-Unsubscribe"].split(", ")
+    assert one_click.startswith("<https://api.agency.example/u/") and mailto.startswith("<mailto:")
+    assert "https://api.agency.example/u/" in email.text
 
 
 async def test_real_transport_sends_when_the_country_allows(tmp_path: Path) -> None:
