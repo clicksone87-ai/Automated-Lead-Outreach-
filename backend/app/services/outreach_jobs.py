@@ -31,6 +31,7 @@ from app.db.models import (
 )
 from app.policy.engine import PolicyEngine
 from app.services import activity, runtime_settings
+from app.services.email_links import LocalLinkError
 from app.services.sending import deliver, next_send_time
 
 logger = logging.getLogger(__name__)
@@ -395,9 +396,17 @@ async def follow_ups(session: AsyncSession, settings: Settings, adapters: Adapte
             )
             m.error = None
             continue
-        await deliver(session, settings, adapters, lead=lead, proposal=proposal, to=proposal.to_email,
-                      subject=text.subject, html=rendered.html, text=rendered.text, attachments=[],
-                      follow_up_number=n, in_reply_to=sent[0].message_id_header)  # fmt: skip
+        try:
+            async with session.begin_nested():  # a blocked email leaves no half-made message
+                await deliver(session, settings, adapters, lead=lead, proposal=proposal,
+                              to=proposal.to_email, subject=text.subject, html=rendered.html,
+                              text=rendered.text, attachments=[], follow_up_number=n,
+                              in_reply_to=sent[0].message_id_header)  # fmt: skip
+        except LocalLinkError as exc:
+            logger.error("follow-up %d for lead %s not sent: %s", n, lead.id, exc)
+            await activity.emit(session, "email_blocked", f"Follow-up not sent: {exc}"[:500],
+                                lead_id=lead.id, agent="outreach")  # fmt: skip
+            continue
         created += 1
     await session.flush()
     return created

@@ -24,6 +24,7 @@ from app.db.models import (
 from app.orchestrator.agents import AgentContext, AgentOutcome, register
 from app.policy.engine import PolicyEngine
 from app.services import activity, runtime_settings
+from app.services.email_links import LocalLinkError
 from app.services.sending import acquire_lock, deliver, next_send_time, schedule
 
 logger = logging.getLogger(__name__)
@@ -103,11 +104,15 @@ class OutreachAgent:
                 f"scheduled for {when:%Y-%m-%d %H:%M} UTC (recipient business hours)",
             )
 
-        msg = await deliver(
-            s, ctx.settings, ctx.adapters, lead=lead, proposal=proposal, to=proposal.to_email,
-            subject=proposal.subject, html=proposal.body_html, text=proposal.body_text,
-            attachments=proposal.attachments,
-        )  # fmt: skip
+        try:
+            async with s.begin_nested():  # a blocked email leaves no half-made message
+                msg = await deliver(
+                    s, ctx.settings, ctx.adapters, lead=lead, proposal=proposal,
+                    to=proposal.to_email, subject=proposal.subject, html=proposal.body_html,
+                    text=proposal.body_text, attachments=proposal.attachments,
+                )  # fmt: skip
+        except LocalLinkError as exc:  # retrying cannot help: the draft itself must change
+            return AgentOutcome(False, LeadStatus.NEEDS_REVIEW, str(exc)[:500])
         if msg.delivery_status == DeliveryStatus.DRAFTED:
             where = "a Gmail compose link" if msg.provider_id and msg.provider_id.startswith(
                 "compose:") else "Gmail Drafts"  # fmt: skip
