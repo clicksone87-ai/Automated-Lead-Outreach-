@@ -110,12 +110,18 @@ async def test_gemini_429_retry_then_success() -> None:
 async def test_gemini_daily_quota_pauses_instead_of_retrying() -> None:
     err = {"error": {"code": 429, "details": [{"@type": "x.QuotaFailure", "violations": [
         {"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}]}}  # fmt: skip
-    respx.post(f"{BASE}/models/m-text:generateContent").mock(
-        return_value=httpx.Response(429, json=err)
-    )
+    # A daily 429 is per model: the next model is tried once (no waiting/retrying); only when
+    # every model is at its daily limit does Gemini stop for the day.
+    routes = [
+        respx.post(f"{BASE}/models/{m}:generateContent").mock(
+            return_value=httpx.Response(429, json=err)
+        )
+        for m in ("m-text", "m-fallback")
+    ]
     async with session_scope() as s:
         with pytest.raises(FreeQuotaExceededError):
             await _gemini().structured(s, LLMRequest(agent="a", task="t"), Brief)
+    assert [r.call_count for r in routes] == [1, 1]
 
 
 @respx.mock

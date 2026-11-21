@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
@@ -19,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import make_transient
 
 from app.config import Settings, get_settings
-from app.db.models import Cost, PolicyDecision
+from app.db.models import Cost, PolicyDecision, ProviderBalance
 from app.orchestrator.budget import BudgetExceededError
 
 _LOCK_KEY = 0x71756F7461  # "quota"
@@ -212,6 +213,7 @@ async def consume(
                 )
                 await own.commit()  # keep the refusal on record
                 raise FreeQuotaExceededError(q.scope, spent, q.cap, amount)
+        await _check_live_balance(own, provider, units, credit_usd, agent=agent, lead_id=lead_id)
         row = Cost(
             provider=provider,
             agent=agent,
@@ -225,6 +227,91 @@ async def consume(
         )
         await _insert(own, row)
     return row
+
+
+def _period_start(period: str, now: datetime) -> datetime | None:
+    if period == "day_utc":
+        return now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if period == "day_pacific":
+        pac = now.astimezone(ZoneInfo("America/Los_Angeles"))
+        return pac.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
+    if period == "month":
+        return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return None
+
+
+async def _check_live_balance(
+    own: AsyncSession, provider: str, units: float, credit_usd: float, *, agent: str,
+    lead_id: uuid.UUID | None,
+) -> None:  # fmt: skip
+    """Refuse when the provider's own reported balance, minus our usage since that check,
+    cannot cover this call. A daily/monthly balance read before the last reset is ignored."""
+    bal = await own.get(ProviderBalance, provider)
+    if bal is None or bal.remaining is None:
+        return
+    now = datetime.now(UTC)
+    start = _period_start(bal.period, now)
+    if start is not None and bal.checked_at < start:
+        return  # the provider has reset since the balance was read
+    usd = bal.unit == "usd"
+    col = Cost.credit_usd if usd else Cost.units
+    spent = float(
+        (
+            await own.execute(
+                select(func.coalesce(func.sum(col), 0)).where(
+                    Cost.provider == provider, Cost.created_at >= bal.checked_at
+                )
+            )
+        ).scalar_one()
+    )
+    per = 1.0 if usd else bal.cost_per_call
+    need = (credit_usd if usd else units) * per
+    if need <= 0 or spent * per + need <= bal.remaining + 1e-9:
+        return
+    scope = f"{provider}:live"
+    await _insert(own, PolicyDecision(
+        check="free_quota", action=f"{agent}:{provider}", lead_id=lead_id, allowed=False,
+        reason=f"{provider} reports {bal.remaining:g} {bal.unit} left at {bal.checked_at:%Y-%m-%d %H:%M} UTC; "
+               f"{spent * per:g} used since",
+        details={"scope": scope, "amount": need},
+    ))  # fmt: skip
+    await own.commit()
+    raise FreeQuotaExceededError(scope, spent * per, bal.remaining, need)
+
+
+async def save_balance(
+    provider: str, *, remaining: float | None, limit: float | None = None, unit: str = "units",
+    period: str = "lifetime", cost_per_call: float = 1.0, note: str | None = None,
+    raw: dict[str, object] | None = None,
+) -> None:  # fmt: skip
+    """Store what a provider reports as left (upsert)."""
+    async with _own_transaction() as own:
+        bal = await own.get(ProviderBalance, provider) or ProviderBalance(provider=provider)
+        bal.remaining, bal.limit, bal.unit, bal.period = remaining, limit, unit, period
+        bal.cost_per_call, bal.note, bal.raw = cost_per_call, note, dict(raw or {})
+        bal.checked_at = datetime.now(UTC)
+        own.add(bal)
+
+
+async def model_exhausted(model: str) -> bool:
+    """A Gemini model whose learned daily limit (from Google's own 429) is used up today."""
+    async with _own_transaction() as own:
+        bal = await own.get(ProviderBalance, f"gemini:{model}")
+        if bal is None or bal.limit is None:
+            return False
+        start = _period_start("day_pacific", datetime.now(UTC))
+        assert start is not None
+        if bal.remaining == 0 and bal.checked_at >= start:
+            return True  # Google said no today
+        used = (
+            await own.execute(
+                select(func.count()).select_from(Cost).where(
+                    Cost.provider == "gemini", Cost.created_at >= start,
+                    Cost.description.like(f"{model} %"),
+                )
+            )
+        ).scalar_one()  # fmt: skip
+        return int(used) >= int(bal.limit)
 
 
 async def settle(

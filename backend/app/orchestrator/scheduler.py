@@ -130,6 +130,14 @@ async def weekly_report(ctx: dict[str, Any]) -> str:
         return str(report.id)
 
 
+async def refresh_balances(ctx: dict[str, Any]) -> int:
+    """Read every provider's own remaining balance (free endpoints) so caps stay real."""
+    from app.services import account_status  # noqa: PLC0415
+
+    rows = await account_status.check_all(get_settings(), free_only=True)
+    return sum(r.result == "ok" for r in rows)
+
+
 async def heartbeat(ctx: dict[str, Any]) -> None:
     """Monitoring: proves the scheduler is alive (read by /api/monitoring)."""
     from datetime import UTC, datetime  # noqa: PLC0415
@@ -157,6 +165,7 @@ class SchedulerSettings:
         cron(follow_ups, minute={33}),
         cron(weekly_report, weekday={0}, hour={6}, minute={30}),
         cron(heartbeat, minute=set(range(60))),
+        cron(refresh_balances, hour=set(range(0, 24, 2)), minute={17}),
     ]
     on_startup = startup
     redis_settings = redis_settings()

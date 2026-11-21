@@ -127,6 +127,28 @@ async def _check_providers() -> dict[str, object]:
     return {"providers": provider_check.as_dicts(rows)}
 
 
+async def _account_status() -> dict[str, object]:
+    """One live call per provider, concurrently; what each provider says is left."""
+    from app.services import account_status  # noqa: PLC0415
+
+    rows = await account_status.check_all(get_settings())
+    sys.stderr.write(account_status.render(rows) + chr(10))
+    return {
+        "providers": [
+            r.__dict__
+            if hasattr(r, "__dict__")
+            else {
+                "provider": r.provider,
+                "key_set": r.key_set,
+                "result": r.result,
+                "left": r.left,
+                "notes": r.notes,
+            }
+            for r in rows
+        ]
+    }
+
+
 async def _run_one_source(key: str) -> dict[str, object]:
     """Run a single discovery source once (forced) and report the leads it created."""
     settings, adapters = get_settings(), get_adapters()
@@ -169,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
             "run-pending",
             "backup",
             "check-providers",
+            "account-status",
             "purge-demo",
         ],
     )
@@ -189,6 +212,7 @@ def main(argv: list[str] | None = None) -> int:
             "run-pending": _run_pending,
             "backup": _backup,
             "check-providers": _check_providers,
+            "account-status": _account_status,
             "purge-demo": _purge_demo,
         }[args.command]
     if sys.platform == "win32":

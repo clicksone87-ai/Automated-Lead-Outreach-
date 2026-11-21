@@ -73,6 +73,23 @@ def _retry_delay(err: dict[str, Any]) -> float | None:
     return None
 
 
+def _daily_limit(err: dict[str, Any]) -> float | None:
+    """quotaValue of a per-day violation in a 429 (the model's real free daily limit)."""
+    for d in err.get("details", []) or []:
+        for v in d.get("violations", []) or []:
+            qid = str(v.get("quotaId", "")) + str(v.get("quotaMetric", ""))
+            if ("PerDay" in qid or "per_day" in qid.lower()) and v.get("quotaValue") is not None:
+                try:
+                    return float(v["quotaValue"])
+                except (TypeError, ValueError):
+                    return None
+    return None
+
+
+class GeminiModelExhaustedError(GeminiUnavailableError):
+    """One model's own daily limit is used up; the next model may still answer."""
+
+
 def _is_daily_quota(err: dict[str, Any]) -> bool:
     for d in err.get("details", []) or []:
         for v in d.get("violations", []) or []:
@@ -221,7 +238,13 @@ class GeminiLLM:
                 err = {"message": resp.text[:300]}
             if resp.status_code == 429:
                 if _is_daily_quota(err):
-                    raise FreeQuotaExceededError("gemini:daily(server)", 0, 0, 1)
+                    limit = _daily_limit(err)
+                    await quota.save_balance(
+                        f"gemini:{model}", remaining=0, limit=limit, unit="requests",
+                        period="day_pacific", note="learned from Google's 429",
+                        raw={"error": err},
+                    )  # fmt: skip
+                    raise GeminiModelExhaustedError(f"{model}: daily limit {limit or '?'} reached")
                 wait = min(_retry_delay(err) or 2.0 * (2**attempt), MAX_RETRY_WAIT_S)
                 logger.info(
                     "gemini 429 on %s, waiting %.0fs (attempt %d)", model, wait, attempt + 1
@@ -252,10 +275,14 @@ class GeminiLLM:
         models = [self._models[request.kind], *self._fallbacks, self._models["text"]]
         seen: list[str] = []
         last: Exception | None = None
+        exhausted = 0
         for model in models:
             if model in seen:
                 continue
             seen.append(model)
+            if await quota.model_exhausted(model):
+                exhausted += 1
+                continue
             try:
                 return await self._post(session, model, body, request)
             except _SchemaRejectedError:
@@ -264,7 +291,11 @@ class GeminiLLM:
                 return await self._post(session, model, body, request)
             except (GeminiUnavailableError, httpx.TimeoutException, httpx.TransportError) as exc:
                 logger.warning("gemini %s unavailable (%s); trying next model", model, exc)
+                exhausted += isinstance(exc, GeminiModelExhaustedError)
                 last = exc
+        if exhausted == len(seen):
+            # Every model is at Google's own daily limit: the LLM fallback (Groq) takes text.
+            raise FreeQuotaExceededError("gemini:daily(server)", 0, 0, 1)
         raise GeminiUnavailableError(f"all Gemini models failed: {last}")
 
     async def structured(self, session: AsyncSession, request: LLMRequest, schema: type[T]) -> T:

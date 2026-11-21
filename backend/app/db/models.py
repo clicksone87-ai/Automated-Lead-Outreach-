@@ -11,6 +11,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -465,6 +466,24 @@ class QualityCheck(Base):
     created_at: Mapped[datetime] = _created()
 
     __table_args__ = (Index("ix_quality_checks_item", "item_type", "item_id"),)
+
+
+class ProviderBalance(Base):
+    """What a provider itself reports as left (or a model's learned daily limit). The quota
+    layer refuses calls once our usage since `checked_at` would exceed `remaining`."""
+
+    __tablename__ = "provider_balances"
+
+    provider: Mapped[str] = mapped_column(String(80), primary_key=True)
+    remaining: Mapped[float | None] = mapped_column(Float)
+    limit: Mapped[float | None] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(20), default="units", server_default="units")
+    # lifetime | month | day_utc | day_pacific: a daily balance stops applying after its reset
+    period: Mapped[str] = mapped_column(String(20), default="lifetime", server_default="lifetime")
+    cost_per_call: Mapped[float] = mapped_column(Float, default=1.0, server_default="1")
+    note: Mapped[str | None] = mapped_column(Text)
+    raw: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class DiscoveryJob(Base):
