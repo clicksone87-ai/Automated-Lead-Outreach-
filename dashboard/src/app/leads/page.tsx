@@ -206,6 +206,10 @@ function LeadsView() {
       <div className="mb-5 space-y-3">
         <SourcePicker family={family} counts={leadCounts} onChange={(f) => setParam({ family: f, source: undefined })} />
         <InterestPicker tier={tier} family={family} counts={leadCounts} onChange={(t) => setParam({ tier: t })} />
+        <p className="text-xs text-muted-foreground">
+          Leads that will never be worked are kept apart, with the reason:{" "}
+          <Link href="/not-useful" className="font-medium text-primary hover:underline">Not useful</Link>
+        </p>
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">

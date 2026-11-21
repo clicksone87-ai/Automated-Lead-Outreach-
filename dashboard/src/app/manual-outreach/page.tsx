@@ -6,12 +6,16 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { CardsSkeleton, EmptyState, ErrorState } from "@/components/common/states";
 import { StatusPill } from "@/components/common/status-pill";
+import { ManualSteps } from "@/components/outreach/manual-steps";
 import { Button } from "@/components/ui/button";
 import {
   type ManualOutreachItem,
+  useConfirmContact,
+  useContactFailed,
+  useManualMarkSent,
   useManualOutreach,
-  useManualOutreachDone,
   useManualOutreachSkip,
+  usePrepareAssets,
 } from "@/lib/outreach";
 
 function safeHref(url: string | null): string | null {
@@ -47,8 +51,12 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 }
 
 function DraftCard({ item }: { item: ManualOutreachItem }) {
-  const done = useManualOutreachDone();
   const skip = useManualOutreachSkip();
+  const confirm = useConfirmContact();
+  const failed = useContactFailed();
+  const prepare = usePrepareAssets();
+  const sent = useManualMarkSent();
+  const pending = skip.isPending || confirm.isPending || failed.isPending || prepare.isPending || sent.isPending;
   const href = safeHref(item.post_link);
   const drafts = [
     ["Comment", item.comment],
@@ -84,12 +92,17 @@ function DraftCard({ item }: { item: ManualOutreachItem }) {
           </section>
         ))}
       </div>
-      <footer className="mt-4 flex justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={() => skip.mutate(item.id)} disabled={skip.isPending}>
+      <ManualSteps
+        item={item}
+        pending={pending}
+        onConfirm={() => confirm.mutate(item.id)}
+        onContactFailed={() => failed.mutate(item.id)}
+        onPrepare={(kinds) => prepare.mutate({ id: item.id, kinds })}
+        onMarkSent={() => sent.mutate(item.id)}
+      />
+      <footer className="mt-3 flex justify-end">
+        <Button variant="ghost" size="sm" onClick={() => skip.mutate(item.id)} disabled={pending}>
           <SkipForward className="size-3.5" /> Skip
-        </Button>
-        <Button size="sm" onClick={() => done.mutate(item.id)} disabled={done.isPending}>
-          <Check className="size-3.5" /> Mark as done
         </Button>
       </footer>
     </article>
@@ -102,7 +115,7 @@ export default function ManualOutreachPage() {
     <>
       <PageHeader
         title="Manual outreach"
-        description="Copy-ready Track B drafts for comment, DM or contact form. Nothing is posted automatically."
+        description="Leads you reach by hand: confirm the contact works, prepare a logo or website preview if you like, send the message on the platform, then mark it as sent. Nothing is posted automatically."
         actions={data ? <StatusPill tone={data.length ? "warning" : "success"}>{data.length} pending</StatusPill> : null}
       />
       {isError ? (
