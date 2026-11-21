@@ -252,9 +252,15 @@ async def resolve_business(session: AsyncSession, c: BusinessCandidate) -> Match
     match = await find_match(session, c)
     if match:
         business, matched_on = match
-        _merge(business, c)
+        fill_gaps(business, c)
         await session.flush()
         return MatchResult(business, created=False, matched_on=matched_on)
+    return MatchResult(await create_business(session, c), created=True, matched_on="new")
+
+
+async def create_business(session: AsyncSession, c: BusinessCandidate) -> Business:
+    """A new business record for the candidate (callers have already looked for a match)."""
+    norm = normalize_name(c.name)
     business = Business(
         name=c.name.strip()[:300],
         normalized_name=norm[:300],
@@ -273,10 +279,10 @@ async def resolve_business(session: AsyncSession, c: BusinessCandidate) -> Match
     )
     session.add(business)
     await session.flush()
-    return MatchResult(business, created=True, matched_on="new")
+    return business
 
 
-def _merge(b: Business, c: BusinessCandidate) -> None:
+def fill_gaps(b: Business, c: BusinessCandidate) -> None:
     """Fill gaps only; never overwrite existing values with candidate data."""
     domain = normalize_domain(c.domain)
     if not b.domain and domain:

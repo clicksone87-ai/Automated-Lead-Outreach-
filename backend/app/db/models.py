@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -208,6 +210,12 @@ class Business(Base):
     # WEBSITE_UNCONFIRMED (adapters.opendata.WebsiteStatus)
     website_status: Mapped[str | None] = mapped_column(String(30), index=True)
     site_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The OpenStreetMap element this business was seen as (None for other sources), and when
+    # OpenStreetMap first and last listed it.
+    osm_type: Mapped[str | None] = mapped_column(String(10))
+    osm_id: Mapped[int | None] = mapped_column(BigInteger)
+    first_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     status: Mapped[str] = mapped_column(String(30), default="active")
     cooldown_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created()
@@ -218,6 +226,7 @@ class Business(Base):
 
     __table_args__ = (
         UniqueConstraint("registry_source", "registry_number", name="uq_business_registry"),
+        UniqueConstraint("osm_type", "osm_id", name="uq_business_osm"),
         Index(
             "ix_business_name_trgm",
             "normalized_name",
@@ -487,6 +496,56 @@ class DiscoveryJob(Base):
     created_at: Mapped[datetime] = _created()
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GeoCity(Base):
+    """A populated place from GeoNames cities15000 (CC BY 4.0), refreshed monthly."""
+
+    __tablename__ = "geonames_cities"
+
+    geonameid: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    name: Mapped[str] = mapped_column(String(200))
+    ascii_name: Mapped[str] = mapped_column(String(200))
+    country: Mapped[str] = mapped_column(String(2))
+    lat: Mapped[float] = mapped_column(Float)
+    lon: Mapped[float] = mapped_column(Float)
+    population: Mapped[int] = mapped_column(BigInteger)
+    feature_code: Mapped[str] = mapped_column(String(10))
+    timezone: Mapped[str | None] = mapped_column(String(64))
+    refreshed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_geonames_cities_country_pop", "country", "population"),)
+
+
+class SweepCity(Base):
+    """One city of one day's OpenStreetMap sweep: pending until done, retried on failure."""
+
+    __tablename__ = "osm_sweep_cities"
+
+    id: Mapped[uuid.UUID] = _pk()
+    day: Mapped[date] = mapped_column(Date)
+    country: Mapped[str] = mapped_column(String(2), index=True)
+    geonameid: Mapped[int] = mapped_column(Integer)
+    city: Mapped[str] = mapped_column(String(200))
+    lat: Mapped[float] = mapped_column(Float)
+    lon: Mapped[float] = mapped_column(Float)
+    population: Mapped[int | None] = mapped_column(BigInteger)
+    # pending | running | done | failed
+    status: Mapped[str] = mapped_column(String(10), default="pending", server_default="pending")
+    counts: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+    error: Mapped[str | None] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    mirror: Mapped[str | None] = mapped_column(Text)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _updated()
+
+    __table_args__ = (
+        UniqueConstraint("day", "geonameid", name="uq_osm_sweep_day_city"),
+        Index("ix_osm_sweep_cities_day_status", "day", "status"),
+    )
 
 
 class ManualOutreach(Base):

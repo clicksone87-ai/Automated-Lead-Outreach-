@@ -88,9 +88,12 @@ def test_discovery_has_its_own_queue() -> None:
     discovery = worker._worker(worker.DiscoveryWorkerSettings)
     fast = worker._worker(worker.WorkerSettings)
     assert discovery.queue_name == "arq:discovery" and set(discovery.functions) == {
-        "run_source_job"
+        "run_source_job",
+        "run_osm_sweep_job",
+        "refresh_geonames_job",
     }
-    assert "run_source_job" not in fast.functions
+    for name in ("run_source_job", "run_osm_sweep_job", "refresh_geonames_job"):
+        assert name not in fast.functions
 
 
 @pytest.mark.usefixtures("db")

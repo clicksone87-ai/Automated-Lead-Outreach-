@@ -78,7 +78,12 @@ class SiteHealthSource:
                     select(Business)
                     .where(
                         Business.domain.is_not(None),
-                        Business.industry == ctx.runtime.active_industry,
+                        # OpenStreetMap sweep results span many trades; their recorded
+                        # websites are checked whatever the active industry is.
+                        or_(
+                            Business.industry == ctx.runtime.active_industry,
+                            Business.osm_id.is_not(None),
+                        ),
                         _market_filter(ctx),
                         or_(Business.site_checked_at.is_(None), Business.site_checked_at < cutoff),
                     )

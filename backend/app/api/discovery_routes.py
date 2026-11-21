@@ -1,8 +1,10 @@
-"""Business search API: start a no-website / outdated-website search and read its results."""
+"""Business search API: start a no-website / outdated-website search and read its results, and
+the progress of the weekly OpenStreetMap sweep."""
 
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
@@ -12,7 +14,7 @@ from sqlalchemy import select
 from app.adapters.opendata import CATEGORIES, ROUTES, WebsiteStatus
 from app.api.deps import SessionDep, SettingsDep
 from app.db.models import DiscoveryJob
-from app.services import business_search, runtime_settings
+from app.services import business_search, osm_sweep, runtime_settings
 
 router = APIRouter(prefix="/api/discovery", tags=["discovery"])
 
@@ -70,3 +72,10 @@ async def job(job_id: uuid.UUID, session: SessionDep) -> dict[str, Any]:
     if j is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "job not found")
     return {**business_search.job_out(j), "results": await business_search.job_results(session, j)}
+
+
+@router.get("/sweep")
+async def sweep(session: SessionDep, settings: SettingsDep) -> dict[str, Any]:
+    """Today's countries and cities (done / failed / pending), businesses per country this
+    week, and the GeoNames and OpenStreetMap attributions."""
+    return await osm_sweep.status(session, settings, datetime.now(UTC))
