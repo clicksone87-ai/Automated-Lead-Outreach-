@@ -107,3 +107,53 @@ export function useStartSearch() {
     onError: (e: Error) => toast.error("Search refused", { description: e.message }),
   });
 }
+
+/** Weekly OpenStreetMap world sweep (GET /api/discovery/sweep). */
+
+export type SweepCityStatus = "pending" | "running" | "done" | "failed";
+
+export interface SweepCity {
+  country: string;
+  city: string;
+  population: number | null;
+  status: SweepCityStatus;
+  attempts: number;
+  counts: Record<string, number>;
+  error: string | null;
+  mirror: string | null;
+  next_attempt_at: string | null;
+  finished_at: string | null;
+}
+
+export interface SweepWeekCountry {
+  country: string;
+  weekday: number;
+  /** null = not swept yet this week (shown as unknown) */
+  cities: number | null;
+  done: number | null;
+  failed: number | null;
+  businesses: number | null;
+}
+
+export interface SweepStatus {
+  enabled: boolean;
+  day: string;
+  weekday: number;
+  week_start: string;
+  today_countries: string[];
+  cities: SweepCity[];
+  totals: Record<SweepCityStatus, number>;
+  backlog_pending: number;
+  week: SweepWeekCountry[];
+  geonames: { cities: number; countries: number; refreshed_at: string | null; source_url: string };
+  settings: { radius_m: number; cities_per_country: number; daily_lead_cap: number; max_attempts: number };
+  attribution: { geonames: string; osm: string };
+}
+
+export function useSweepStatus() {
+  return useQuery({
+    queryKey: ["discovery-sweep"],
+    queryFn: () => call<SweepStatus>("/api/discovery/sweep"),
+    refetchInterval: 60_000,
+  });
+}
