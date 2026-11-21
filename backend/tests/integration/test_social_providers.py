@@ -285,13 +285,14 @@ async def test_socialcrawl_x_latest_reddit_since_and_linkedin_credits() -> None:
     crawl = SocialCrawl("ck")
     async with session_scope() as s:
         xs = await crawl.search(s, "x", "need a website", agent="d")
+        asked_at = datetime.now(UTC)  # the request's own time, not the module's import time
         rs = await crawl.search(s, "reddit", "need a website", agent="d")
         ls = await crawl.search(s, "linkedin", "need a website", agent="d")
     xp = x.calls[0].request.url.params
     assert (xp["sort"], xp["max_age_days"]) == ("latest", "1")
     assert xs[0].platform == "x" and xs[0].posted_at == parse_time(FRESH)
     since = parse_time(reddit.calls[0].request.url.params["since"])
-    assert since is not None and abs((NOW - since) - timedelta(hours=8)) < timedelta(minutes=5)
+    assert since is not None and abs((asked_at - since) - timedelta(hours=8)) < timedelta(minutes=5)
     assert rs[0].extra["subreddit"] == "smallbusiness" and rs[0].text.startswith("Need a website")
     lp = li.calls[0].request.url.params
     assert (lp["sort_by"], lp["date_posted"]) == ("date_posted", "past_24h")
