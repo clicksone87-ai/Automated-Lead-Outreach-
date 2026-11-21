@@ -2,8 +2,9 @@
 
 Rejects stale posts, sellers, posts that ask for nothing, repeated post text and leads from
 excluded markets (or untargeted countries when worldwide outreach is off), before any LLM
-quota is spent. Proactive triggers (new business,
-outdated site …) carry no request text and only get the country check.
+quota is spent. Social posts past the 8-hour rule and freelance-platform listings go to "Not
+useful" with their reason. Proactive triggers (new business, outdated site …) carry no request
+text and only get the country check.
 """
 
 from __future__ import annotations
@@ -14,14 +15,14 @@ from typing import ClassVar
 
 from sqlalchemy import select
 
+from app.agents.discovery.freshness import is_social_url
 from app.agents.prefilter.rules import BOARD_URL, check_text, stale_reason
 from app.db.models import Evidence, EvidenceKind, Lead, LeadStatus, TriggerType
 from app.orchestrator.agents import AgentContext, AgentOutcome, register
 from app.policy.country_rules import get_rules
-from app.services import runtime_settings
-from app.services.families import family_for
-
-JOB_BOARD_SOURCES = frozenset({"freelancer", "alert_emails"})
+from app.services import not_useful, runtime_settings
+from app.services.families import SOCIAL, family_for
+from app.services.not_useful import NotUsefulReason
 
 
 class PrefilterAgent:
@@ -52,7 +53,12 @@ class PrefilterAgent:
                 True, None, "proactive trigger: scored by rules", {"needs_llm": False}
             )
 
+        if BOARD_URL.search(lead.source_url):
+            return self._not_useful(lead, NotUsefulReason.FREELANCE, "freelance-platform listing")
+
         family = lead.source_family or family_for(lead.source)
+        if is_social_url(lead.source_url):
+            family = SOCIAL
         stale = stale_reason(
             lead.posted_at,
             family=family,
@@ -64,12 +70,13 @@ class PrefilterAgent:
                 "social": ctx.settings.social_max_post_age_hours,
             },
         )
+        if stale and family == SOCIAL:
+            return self._not_useful(lead, NotUsefulReason.OLDER_THAN_8H, stale)
         if stale:
             return self._stop(lead, LeadStatus.REJECTED_LOW_INTENT, stale)
 
         text = "\n".join(filter(None, [lead.title, lead.raw_text]))
-        job_listing = lead.source in JOB_BOARD_SOURCES or bool(BOARD_URL.search(lead.source_url))
-        verdict = check_text(text, lead.language, job_listing=job_listing)
+        verdict = check_text(text, lead.language)
         if not verdict.passed:
             return self._stop(lead, LeadStatus.REJECTED_LOW_INTENT, verdict.reason)
 
@@ -85,6 +92,14 @@ class PrefilterAgent:
         if status == LeadStatus.REJECTED_LOW_INTENT:
             lead.intent_score = 0  # counted as low intent, never as "not scored yet"
         return AgentOutcome(False, status, f"prefilter: {reason}", {"rule": reason})
+
+    @staticmethod
+    def _not_useful(lead: Lead, reason: NotUsefulReason, detail: str) -> AgentOutcome:
+        lead.prefilter_reason = detail
+        not_useful.mark(lead, reason, detail)
+        return AgentOutcome(
+            False, LeadStatus.NOT_USEFUL, lead.status_reason or detail, {"rule": detail}
+        )
 
     @staticmethod
     async def _repeated_text(ctx: AgentContext, lead: Lead) -> bool:

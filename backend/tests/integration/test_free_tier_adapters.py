@@ -20,7 +20,8 @@ from app.adapters.email_free import LocalVerifier, MailpitMailbox, build_mime
 from app.adapters.gemini import BASE, GeminiLLM, GeminiUnavailableError, inline_refs
 from app.adapters.llm import LLMRequest
 from app.adapters.search_free import ExaSearch, FallbackSearch, SerperSearch
-from app.agents.discovery.sources.social_apify import ApifyFacebookSource, _parse_dt
+from app.adapters.social import parse_time
+from app.agents.discovery.sources.social_apify import ApifyFacebookSource
 from app.config import Settings
 from app.db.models import Cost, VerificationStatus
 from app.db.session import session_scope
@@ -153,18 +154,17 @@ async def test_quota_cap_enforced_and_reported() -> None:
 
 
 async def test_apify_per_source_share_caps() -> None:
-    settings = _settings(apify_monthly_cap_usd=1.0)  # x share = 0.2
+    # Apify serves Facebook and Instagram only: half of the monthly cap each.
+    assert set(quota.APIFY_SOURCE_SHARE) == {"social_facebook", "social_instagram"}
+    settings = _settings(apify_monthly_cap_usd=1.0)
+    ig = "apify:social_instagram"
     async with session_scope() as s:
-        await quota.consume(
-            s, "apify", agent="d", credit_usd=0.15, scope="apify:social_x", settings=settings
-        )
+        await quota.consume(s, "apify", agent="d", credit_usd=0.45, scope=ig, settings=settings)
         with pytest.raises(FreeQuotaExceededError):
-            await quota.consume(
-                s, "apify", agent="d", credit_usd=0.1, scope="apify:social_x", settings=settings
-            )
+            await quota.consume(s, "apify", agent="d", credit_usd=0.1, scope=ig, settings=settings)
         # another source still has its own share
         await quota.consume(
-            s, "apify", agent="d", credit_usd=0.1, scope="apify:social_reddit", settings=settings
+            s, "apify", agent="d", credit_usd=0.1, scope="apify:social_facebook", settings=settings
         )
 
 
@@ -302,7 +302,7 @@ def test_facebook_mapping_and_dates() -> None:
          "time": "2026-11-16T15:39:23.000Z", "user": {"name": "Mike"}}, "search")  # fmt: skip
     assert lead is not None and lead.author == "Mike"
     assert lead.evidence_data["platform"] == "facebook" and lead.posted_at is not None
-    assert _parse_dt("Mon Nov 16 15:39:23 +0000 2026") is not None
+    assert parse_time("Mon Nov 16 15:39:23 +0000 2026") is not None
     assert ApifyFacebookSource._map({"url": "u", "text": ""}, "search") is None
 
 
@@ -395,6 +395,6 @@ async def test_apify_refuses_to_run_when_account_usage_reached_cap() -> None:
     async with session_scope() as s:
         with pytest.raises(FreeQuotaExceededError):
             await ApifyClient("t").run_actor(
-                s, "apify/x", {}, source="social_x", max_items=1, max_charge_usd=0.01
+                s, "apify/x", {}, source="social_instagram", max_items=1, max_charge_usd=0.01
             )
     assert not start.called

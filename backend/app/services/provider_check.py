@@ -200,13 +200,6 @@ async def check_all(  # noqa: PLR0915 - one small closure per provider
         assert ok.ok, "model answered ok=false"
         return f"{llm.model}: structured output valid; {len(models)} models: {', '.join(models)}"
 
-    async def apify_fallback() -> str:
-        from app.adapters.apify import ApifyClient  # noqa: PLC0415
-
-        usage = await ApifyClient(secret(settings.apify_api_token_fallback)).monthly_usage()
-        assert usage is not None, "token rejected"
-        return f"fallback token ok; ${usage['used_usd']:.3f} of ${usage['limit_usd']:.0f} used"
-
     from app.adapters.search_router import (  # noqa: PLC0415
         ScrapingDogSearch,
         SearloSearch,
@@ -240,7 +233,6 @@ async def check_all(  # noqa: PLR0915 - one small closure per provider
     for name, fn, configured in (
         ("gmail", gmail, bool(settings.gmail_mode)),
         ("serper_fallback", serper_fallback, settings.serper_api_key_fallback is not None),
-        ("apify_fallback", apify_fallback, settings.apify_api_token_fallback is not None),
     ):
         if not configured:
             out.append(CheckResult(name, False, "needs_api_key", "not set"))
