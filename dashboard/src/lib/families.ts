@@ -32,7 +32,7 @@ export const FAMILY_INFO: Record<Family, FamilyInfo> = {
   },
   other: {
     label: "Other places",
-    hint: "Freelance boards, alert emails, feeds and directories.",
+    hint: "Feeds and directories.",
     phrase: "from other places",
   },
 };
@@ -46,10 +46,10 @@ export const FAMILIES: Record<Family, string> = {
 };
 
 const FAMILY_SOURCES: Record<Family, string[]> = {
-  social: ["social_reddit", "social_x", "social_instagram", "social_facebook", "reddit", "x", "meta", "scout_profiles"],
+  social: ["social_providers", "social_instagram", "social_facebook", "scout_profiles", "social_reddit", "social_x", "reddit", "x", "meta"],
   google: ["search_api", "local_sites", "site_health"],
   registry: ["companies_house", "opencorporates"],
-  other: ["freelancer", "alert_emails", "rss", "web_directory", "no_website_check"],
+  other: ["rss", "web_directory", "no_website_check"],
 };
 
 export const familySources = (f: Family) => FAMILY_SOURCES[f];
