@@ -189,7 +189,8 @@ async def test_sweep_stores_merges_creates_leads_and_retries_failed_cities(
         berlin, hamburg = rows["Berlin"], rows["Hamburg"]
         assert berlin.status == "done" and berlin.attempts == 1 and berlin.mirror == MAIN
         assert berlin.counts == {"elements": 6, "found": 4, "excluded": 1, "created": 2,
-                                 "matched": 1, "no_website": 2, "with_website": 1, "leads": 2}  # fmt: skip
+                                 "matched": 1, "no_website": 2, "with_website": 1, "leads": 2,
+                                 "errors": 0}  # fmt: skip
         assert hamburg.status == "pending" and hamburg.attempts == 1
         assert hamburg.error and "Overpass unavailable" in hamburg.error and "502" in hamburg.error
         assert hamburg.next_attempt_at and hamburg.next_attempt_at >= MONDAY + timedelta(minutes=20)
@@ -368,3 +369,35 @@ async def test_api_sweep_status(tmp_path: Path) -> None:
         "osm": "© OpenStreetMap contributors (ODbL)",
     }
     assert body["settings"]["radius_m"] == 8000
+
+
+def _el(osm_id: int, name: str, **tags: str) -> dict[str, Any]:
+    return {"type": "node", "id": osm_id, "lat": 41.0, "lon": 28.9,
+            "tags": {"name": name, **tags}}  # fmt: skip
+
+
+async def test_name_only_match_keeps_its_own_website_and_city_is_not_lost() -> None:
+    """Live sweep bug: a new element matched another OSM element by name only; its website was
+    merged onto that element before a second record was created with the same domain, and the
+    unique domain failed the whole city."""
+    settings = Settings(_env_file=None, data_dir=Path("./.test-data"))  # type: ignore[call-arg]
+    first = Overpass(["https://x.test"]).parse_sweep(
+        {"elements": [_el(10, "Pizza Roma", amenity="restaurant", phone="+39 06 1111111")]},
+        "IT",
+        "Rome",
+    )
+    second = Overpass(["https://x.test"]).parse_sweep(
+        {"elements": [
+            _el(11, "Pizza Roma", amenity="restaurant", phone="+39 06 2222222", website="https://pizzaroma2.it/"),
+            _el(12, "Mission of Hungary", office="diplomatic", phone="+1 212 0000000", website="https://gov.hu"),
+        ]}, "IT", "Rome",
+    )  # fmt: skip
+    assert [f.name for f in second] == ["Pizza Roma"]  # diplomatic offices are not prospects
+    async with session_scope() as s:
+        a = await osm_sweep.store_one(s, settings, first[0], industry="restaurant")
+        b = await osm_sweep.store_one(s, settings, second[0], industry="restaurant")
+    assert a is not None and b is not None and a[0].id != b[0].id
+    async with session_scope() as s:
+        rows = {r.osm_id: r for r in (await s.execute(select(Business))).scalars()}
+    assert rows[10].domain is None  # the other place did not get this website
+    assert rows[11].domain == "pizzaroma2.it"

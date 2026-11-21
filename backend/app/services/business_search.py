@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import logging
 import uuid
+import zlib
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.opendata import (
@@ -35,8 +36,9 @@ from app.services.dedup import (
     BusinessCandidate,
     create_business,
     fill_gaps,
+    find_match,
     normalize_domain,
-    resolve_business,
+    normalize_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -145,11 +147,18 @@ async def store_one(
         if b is not None:
             fill_gaps(b, cand)
     if b is None:
-        match = await resolve_business(session, cand)
-        b, created = match.business, match.created
-        if ref and b.osm_id is not None and match.matched_on == "name":
-            # Another OSM element with a similar name (two "Pizza Roma" in one country) is a
-            # different place; only domain, registry or contact matches merge two elements.
+        # Decide before merging: a name-only hit on another OSM element is a different place
+        # (two "Pizza Roma" in one country), and merging first would copy this element's
+        # website onto it, so the new record and the merged one would share a domain.
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(:k)"),
+            {"k": zlib.crc32(normalize_name(cand.name).encode())},
+        )
+        match = await find_match(session, cand)
+        if match is not None and not (ref and match[0].osm_id is not None and match[1] == "name"):
+            b, created = match[0], False
+            fill_gaps(b, cand)
+        else:
             b, created = await create_business(session, cand), True
     if ref:
         if b.osm_id is None:

@@ -147,6 +147,11 @@ SWEEP_AMENITIES: tuple[str, ...] = (
     "restaurant", "cafe", "bar", "fast_food", "dentist", "clinic", "doctors", "pharmacy",
     "beauty", "veterinary", "bank",
 )  # fmt: skip
+# Offices that are not businesses buying a website: embassies, public bodies, parties,
+# charities and places of worship.
+SWEEP_SKIP_OFFICES: frozenset[str] = frozenset(
+    {"government", "diplomatic", "political_party", "religion", "ngo", "association", "charity"}
+)
 PHONE_KEYS: tuple[str, ...] = ("phone", "contact:phone", "mobile", "contact:mobile")
 EMAIL_KEYS: tuple[str, ...] = ("email", "contact:email")
 
@@ -312,6 +317,8 @@ class Overpass:
         for el in body.get("elements") or []:
             tags = el.get("tags") or {}
             if not tags.get("name") or tags.get("brand:wikidata"):
+                continue
+            if tags.get("office") in SWEEP_SKIP_OFFICES:
                 continue
             if not (_first(tags, PHONE_KEYS) or _first(tags, EMAIL_KEYS)):
                 continue

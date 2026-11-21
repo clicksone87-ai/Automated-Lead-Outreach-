@@ -275,7 +275,14 @@ async def test_sandbox_send_is_idempotent_with_unsubscribe_headers(tmp_path: Pat
     assert biz.cooldown_until is not None
 
 
-async def test_real_transport_sends_when_the_country_allows(tmp_path: Path) -> None:
+async def test_real_transport_sends_when_the_country_allows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Inside the recipient's business hours whatever day the suite runs (weekends and nights
+    # would otherwise schedule the send); the window itself is tested separately.
+    from app.agents.outreach import agent as outreach_agent  # noqa: PLC0415
+
+    monkeypatch.setattr(outreach_agent, "next_send_time", lambda now, *a, **k: now)
     settings = _settings(tmp_path)
     lead_id = await _lead(settings)
     await _propose(settings, lead_id)

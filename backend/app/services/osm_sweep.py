@@ -27,6 +27,7 @@ from typing import Any, ClassVar
 import httpx
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.opendata import FoundBusiness, OpenDataError, Overpass, WebsiteStatus
@@ -267,8 +268,20 @@ async def store_city(
         "leads": 0,
     }
     candidates: list[tuple[FoundBusiness, Business]] = []
+    counts["errors"] = 0
     for f in found:
-        stored = await store_one(session, settings, f, industry=industry_for(f.category), now=now)
+        # One record that cannot be stored must not cost the whole city its results.
+        try:
+            async with session.begin_nested():
+                stored = await store_one(
+                    session, settings, f, industry=industry_for(f.category), now=now
+                )
+        except IntegrityError as exc:
+            counts["errors"] += 1
+            logger.warning(
+                "osm sweep: skipped %s (%s): %s", f.name, f.source_id, str(exc.orig)[:160]
+            )
+            continue
         if stored is None:
             counts["excluded"] += 1
             continue
