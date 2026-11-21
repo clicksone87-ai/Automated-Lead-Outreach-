@@ -32,7 +32,8 @@ async def _lead(text: str, **kw: object) -> uuid.UUID:
         **kw,
     }
     async with session_scope() as s:
-        lead = Lead(source_url=f"https://reddit.test/{uuid.uuid4().hex}", source_item_id=uuid.uuid4().hex,
+        url = str(fields.pop("source_url", f"https://reddit.test/{uuid.uuid4().hex}"))
+        lead = Lead(source_url=url, source_item_id=uuid.uuid4().hex,
                     raw_text=text, pipeline_state={}, **fields)  # fmt: skip
         s.add(lead)
         await s.flush()
@@ -103,3 +104,25 @@ async def test_social_age_limit_comes_from_settings_not_the_saved_24h() -> None:
     assert (
         await _run(await _lead("Need a logo for my bakery", posted_at=NOW - timedelta(hours=7)))
     )[0]
+
+
+async def test_stale_or_undated_social_post_goes_to_not_useful() -> None:
+    ok, lead = await _run(await _lead("Need a logo", posted_at=NOW - timedelta(hours=9)))
+    assert not ok and lead.status == LeadStatus.NOT_USEFUL
+    assert lead.not_useful_reason == "older_than_8h"
+    assert str(lead.status_reason).startswith("not useful: older than 8 h")
+    # A social post URL counts as social whatever the source.
+    ok, lead = await _run(await _lead(
+        "Need a website for my shop", source="search_api", source_family="google",
+        source_url="https://www.reddit.com/r/Leeds/comments/1abc/x/", posted_at=None,
+    ))  # fmt: skip
+    assert not ok and lead.not_useful_reason == "older_than_8h"
+
+
+async def test_freelance_platform_listing_goes_to_not_useful() -> None:
+    ok, lead = await _run(await _lead(
+        "Website redesign for a contractor", source="search_api", source_family="google",
+        source_url="https://www.upwork.com/jobs/~01abc", posted_at=None,
+    ))  # fmt: skip
+    assert not ok and lead.status == LeadStatus.NOT_USEFUL
+    assert lead.not_useful_reason == "freelance"
