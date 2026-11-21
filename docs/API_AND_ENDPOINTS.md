@@ -90,6 +90,10 @@ endpoint names, environment variable **names** and free-tier caps only, never ke
 |---|---|---|
 | GET | `/api/gmail/outbox` | Gmail Outbox |
 
+Each outbox item carries `attachment_count`, `attachment_bytes`, `attachment_mb` and
+`attachment_actions` (what the size policy compressed, merged or left out to fit Gmail's
+25 MB limit); each attachment has its `bytes` and an optional `note`.
+
 ### health
 
 | Method | Path | Summary |

@@ -4,6 +4,8 @@ ZeroBounce with the local fallback. No live calls."""
 from __future__ import annotations
 
 import email
+import smtplib
+import ssl
 import uuid
 from email import policy
 from pathlib import Path
@@ -98,6 +100,9 @@ class FakeSmtp:
     def quit(self) -> None:
         self.calls.append("quit")
 
+    def close(self) -> None:
+        self.calls.append("close")
+
 
 @pytest.fixture(autouse=True)
 def _reset_fakes() -> None:
@@ -178,6 +183,76 @@ async def test_app_password_send_uses_starttls_smtp() -> None:
     assert smtp.calls == ["starttls", f"login:{SENDER}", "quit"]
     assert smtp.sent[0]["Subject"] == "A new website for Hub City Plumbing"
     assert FakeImap.instances == []
+
+
+class FakeSmtpSsl(FakeSmtp):
+    """Port 465: TLS from the first byte, so no STARTTLS call."""
+
+    def __init__(self, host: str, port: int) -> None:
+        super().__init__(host, port)
+        self.host, self.port = host, port
+
+
+def _starttls_failing(exc: BaseException) -> type[FakeSmtp]:
+    class Failing(FakeSmtp):
+        def starttls(self) -> None:
+            self.calls.append("starttls")
+            raise exc
+
+    return Failing
+
+
+def _connect_failing(exc: BaseException) -> type[FakeSmtp]:
+    class Refused(FakeSmtp):
+        def __init__(self, host: str, port: int) -> None:
+            raise exc
+
+    return Refused
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [
+        _connect_failing(ConnectionRefusedError(111, "refused")),
+        _connect_failing(TimeoutError("timed out")),
+        _connect_failing(smtplib.SMTPServerDisconnected("closed")),
+        _starttls_failing(ssl.SSLError("wrong version number")),
+        _starttls_failing(smtplib.SMTPServerDisconnected("closed during STARTTLS")),
+        _starttls_failing(smtplib.SMTPNotSupportedError("STARTTLS not supported")),
+    ],
+    ids=["refused", "timeout", "disconnected", "ssl_error", "starttls_disconnect", "no_starttls"],
+)
+async def test_send_falls_back_to_smtp_ssl_465(factory: type[FakeSmtp]) -> None:
+    FakeSmtpSsl.instances.clear()
+    gmail = GmailEmail(SENDER, "app-pass", delivery="send", smtp_factory=factory,
+                       smtp_ssl_factory=FakeSmtpSsl)  # fmt: skip
+    await gmail.send(_email())
+    ssl_conn = next(i for i in FakeSmtp.instances if isinstance(i, FakeSmtpSsl))
+    assert (ssl_conn.host, ssl_conn.port) == ("smtp.gmail.com", 465)
+    assert ssl_conn.calls == [f"login:{SENDER}", "quit"]
+    assert len(ssl_conn.sent) == 1
+    assert sum(len(i.sent) for i in FakeSmtp.instances) == 1  # handed over exactly once
+
+
+async def test_refused_login_does_not_fall_back() -> None:
+    class BadLogin(FakeSmtp):
+        def login(self, user: str, password: str) -> None:
+            raise smtplib.SMTPAuthenticationError(535, b"bad credentials")
+
+    gmail = GmailEmail(SENDER, "wrong", delivery="send", smtp_factory=BadLogin,
+                       smtp_ssl_factory=FakeSmtpSsl)  # fmt: skip
+    with pytest.raises(smtplib.SMTPAuthenticationError):
+        await gmail.send(_email())
+    assert not any(isinstance(i, FakeSmtpSsl) for i in FakeSmtp.instances)
+
+
+async def test_drafts_still_use_imap_ssl_993_only() -> None:
+    gmail = GmailEmail(SENDER, "app-pass", imap_factory=FakeImap,
+                       smtp_factory=_connect_failing(ConnectionRefusedError()),
+                       smtp_ssl_factory=FakeSmtpSsl)  # fmt: skip
+    await gmail.send(_email())
+    assert (FakeImap.instances[0].host, FakeImap.instances[0].port) == ("imap.gmail.com", 993)
+    assert FakeSmtp.instances == []
 
 
 def _gmail_settings(tmp: Path) -> Settings:
@@ -271,6 +346,10 @@ async def test_outbox_api_compose_link_and_mark_sent(
         assert item["attachments"] and all(
             a["url"].startswith("/api/files/") for a in item["attachments"]
         )
+        assert item["attachment_count"] == len(item["attachments"]) == 4
+        assert item["attachment_bytes"] == sum(a["bytes"] for a in item["attachments"]) > 0
+        assert item["attachment_mb"] == round(item["attachment_bytes"] / 1_000_000, 2)
+        assert item["attachment_actions"] == []  # small files: nothing had to change
         done = await client.post(
             f"/api/messages/{item['message_id']}/mark-sent", json={"by": "owner"}
         )

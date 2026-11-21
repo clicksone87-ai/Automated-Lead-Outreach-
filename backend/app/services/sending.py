@@ -29,8 +29,10 @@ from app.db.models import (
 )
 from app.orchestrator import quota
 from app.services import activity, runtime_settings
+from app.services import attachments as attachment_policy
+from app.services.email_links import assert_no_local_links
 from app.services.runtime_settings import SendingWindow
-from app.services.unsubscribe import make_token, unsubscribe_url
+from app.services.unsubscribe import make_token, unsubscribe_mailto, unsubscribe_url
 
 GMAIL_ADAPTERS = ("gmail", "gmail_compose")
 logger = logging.getLogger(__name__)
@@ -98,30 +100,27 @@ def outgoing(
     idempotency_key: str,
     in_reply_to: str | None = None,
 ) -> OutgoingEmail:
+    """Build the email. Raises LocalLinkError if any part would point at this machine."""
     token = make_token(settings, lead.business_id, to)
     url = unsubscribe_url(settings, token)
-    headers = {
-        # RFC 8058 one-click unsubscribe + mailto fallback
-        "List-Unsubscribe": f"<{url}>, <mailto:{settings.reply_address}?subject=unsubscribe>",
-        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-        "X-Lead-Id": str(lead.id),
-    }
+    mailto = unsubscribe_mailto(settings)
+    # RFC 8058 one-click needs a public URL; without one only the mailto form is offered.
+    headers = {"List-Unsubscribe": f"<{url}>, <{mailto}>" if url else f"<{mailto}>"}
+    if url:
+        headers["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+    headers["X-Lead-Id"] = str(lead.id)
     if in_reply_to:
         headers["In-Reply-To"] = in_reply_to
         headers["References"] = in_reply_to
-    files = []
-    for a in attachments:
-        try:
-            files.append(
-                EmailAttachment(
-                    filename=a["filename"],
-                    content=adapters.storage.read_bytes(a["path"]),
-                    content_type=a.get("content_type", "application/octet-stream"),
-                )
-            )
-        except (OSError, ValueError, KeyError):
-            logger.warning("attachment missing for lead %s: %s", lead.id, a.get("path"))
-    return OutgoingEmail(
+    # Proposals are fitted when drafted; this re-check covers older records with the same policy.
+    fitted = attachment_policy.fit(attachment_policy.load(adapters.storage, attachments))
+    if fitted.changed:
+        logger.warning("attachments for lead %s resized at send time: %s", lead.id, fitted.actions)
+    files = [
+        EmailAttachment(filename=i.filename, content=i.data, content_type=i.content_type)
+        for i in fitted.items
+    ]
+    email = OutgoingEmail(
         from_address=settings.from_address,
         to=to,
         subject=subject,
@@ -133,6 +132,8 @@ def outgoing(
         idempotency_key=idempotency_key,
         tags={"lead": str(lead.id)},
     )
+    assert_no_local_links(email)
+    return email
 
 
 async def acquire_lock(session: AsyncSession, lead: Lead) -> bool:

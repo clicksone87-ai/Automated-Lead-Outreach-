@@ -31,6 +31,7 @@ from app.db.models import (
 )
 from app.policy.engine import PolicyEngine
 from app.services import activity, runtime_settings
+from app.services.email_links import LocalLinkError
 from app.services.sending import deliver, next_send_time
 
 logger = logging.getLogger(__name__)
@@ -372,13 +373,13 @@ async def follow_ups(session: AsyncSession, settings: Settings, adapters: Adapte
             FollowUpText,
         )  # fmt: skip
         assert adapters.renderer is not None
-        from app.services.unsubscribe import make_token, unsubscribe_url  # noqa: PLC0415
+        from app.services.email_links import sender_props  # noqa: PLC0415
+        from app.services.unsubscribe import make_token, unsubscribe_link  # noqa: PLC0415
 
         rendered = await adapters.renderer.render("followup", {
             "language": proposal.language, "greeting": "Hello,", "body": text.body, "signoff": "Best regards,",
-            "sender": {"name": settings.sender_name, "businessName": settings.sender_business_name,
-                       "postalAddress": settings.sender_postal_address, "portfolioUrl": settings.portfolio_url},
-            "unsubscribeUrl": unsubscribe_url(settings, make_token(settings, lead.business_id, proposal.to_email)),
+            "sender": sender_props(settings),
+            "unsubscribeUrl": unsubscribe_link(settings, make_token(settings, lead.business_id, proposal.to_email)),
         })  # fmt: skip
         when = next_send_time(now, lead.timezone, lead.country, rs.sending_window)
         sandbox = bool(getattr(adapters.email, "is_sandbox", False))
@@ -395,9 +396,17 @@ async def follow_ups(session: AsyncSession, settings: Settings, adapters: Adapte
             )
             m.error = None
             continue
-        await deliver(session, settings, adapters, lead=lead, proposal=proposal, to=proposal.to_email,
-                      subject=text.subject, html=rendered.html, text=rendered.text, attachments=[],
-                      follow_up_number=n, in_reply_to=sent[0].message_id_header)  # fmt: skip
+        try:
+            async with session.begin_nested():  # a blocked email leaves no half-made message
+                await deliver(session, settings, adapters, lead=lead, proposal=proposal,
+                              to=proposal.to_email, subject=text.subject, html=rendered.html,
+                              text=rendered.text, attachments=[], follow_up_number=n,
+                              in_reply_to=sent[0].message_id_header)  # fmt: skip
+        except LocalLinkError as exc:
+            logger.error("follow-up %d for lead %s not sent: %s", n, lead.id, exc)
+            await activity.emit(session, "email_blocked", f"Follow-up not sent: {exc}"[:500],
+                                lead_id=lead.id, agent="outreach")  # fmt: skip
+            continue
         created += 1
     await session.flush()
     return created

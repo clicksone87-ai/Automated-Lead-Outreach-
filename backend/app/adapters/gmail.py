@@ -3,7 +3,8 @@
 Three routes, best first:
 - App Password + GMAIL_DELIVERY=draft: the full email (text, HTML, attachments) is put into the
   Gmail Drafts folder over IMAP APPEND; nothing leaves the account until the human sends it.
-- App Password + GMAIL_DELIVERY=send: sent through smtp.gmail.com (STARTTLS, port 587).
+- App Password + GMAIL_DELIVERY=send: sent through smtp.gmail.com (STARTTLS, port 587; when
+  587 is blocked or the TLS upgrade fails, implicit TLS on port 465).
 - No App Password: a Gmail compose link (to, subject, plain-text body). Attachments cannot travel
   in a link, so the dashboard offers them for download next to the link.
 After a draft or link, the message waits as `drafted` until "Mark as sent" is pressed.
@@ -15,6 +16,7 @@ import asyncio
 import contextlib
 import hashlib
 import imaplib
+import logging
 import re
 import smtplib
 import time
@@ -24,6 +26,8 @@ from urllib.parse import quote, urlencode
 
 from app.adapters.email import DeliveryEvent, OutgoingEmail
 from app.adapters.email_free import build_mime
+
+logger = logging.getLogger(__name__)
 
 GMAIL_WEB = "https://mail.google.com/mail/"
 # Gmail opens compose links reliably up to about 2,000 characters of URL.
@@ -90,16 +94,22 @@ class GmailEmail:
         imap_port: int = 993,
         smtp_host: str = "smtp.gmail.com",
         smtp_port: int = 587,
+        smtp_ssl_port: int = 465,
         imap_factory: Callable[[str, int], Any] | None = None,
         smtp_factory: Callable[[str, int], Any] | None = None,
+        smtp_ssl_factory: Callable[[str, int], Any] | None = None,
     ) -> None:
         self.sender = sender
         self._password = app_password
         self.delivery = "send" if delivery == "send" else "draft"
         self._imap = (imap_host, imap_port)
         self._smtp = (smtp_host, smtp_port)
+        self._smtp_ssl = (smtp_host, smtp_ssl_port)
         self._imap_factory = imap_factory or (lambda h, p: imaplib.IMAP4_SSL(h, p, timeout=30))
         self._smtp_factory = smtp_factory or (lambda h, p: smtplib.SMTP(h, p, timeout=30))
+        self._smtp_ssl_factory = smtp_ssl_factory or (
+            lambda h, p: smtplib.SMTP_SSL(h, p, timeout=30)
+        )
 
     @property
     def hands_off(self) -> bool:
@@ -135,10 +145,30 @@ class GmailEmail:
             with contextlib.suppress(OSError, imaplib.IMAP4.error):
                 imap.logout()
 
-    def _send(self, msg: Any) -> None:
-        smtp = self._smtp_factory(*self._smtp)
+    def _connect_smtp(self) -> Any:
+        """A TLS-protected SMTP connection: STARTTLS on 587, else implicit TLS on 465.
+
+        Only connecting and the TLS upgrade fall back; a refused login or a failed send is
+        raised as it is, so a message is never handed over twice.
+        """
+        smtp = None
         try:
+            smtp = self._smtp_factory(*self._smtp)
             smtp.starttls()
+            return smtp
+        except (OSError, smtplib.SMTPException) as exc:  # refused, timeout, disconnect, SSL
+            if smtp is not None:
+                with contextlib.suppress(OSError, smtplib.SMTPException):
+                    smtp.close()
+            logger.warning(
+                "Gmail SMTP %s:%s with STARTTLS failed (%s); trying SSL on port %s",
+                *self._smtp, type(exc).__name__, self._smtp_ssl[1],
+            )  # fmt: skip
+            return self._smtp_ssl_factory(*self._smtp_ssl)
+
+    def _send(self, msg: Any) -> None:
+        smtp = self._connect_smtp()
+        try:
             smtp.login(self.sender, self._password)
             smtp.send_message(msg)
         finally:

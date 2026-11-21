@@ -189,6 +189,7 @@ def build_adapters(s: Settings) -> Adapters:  # noqa: PLR0915 - one flat decisio
             imap_port=s.gmail_imap_port,
             smtp_host=s.gmail_smtp_host,
             smtp_port=s.gmail_smtp_port,
+            smtp_ssl_port=s.gmail_smtp_ssl_port,
         )
     elif s.gmail_mode == "compose":
         email = GmailComposeLink(s.gmail_sender.strip())

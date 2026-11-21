@@ -13,6 +13,7 @@ import uuid
 from dataclasses import dataclass
 
 from app.config import Settings
+from app.services.email_links import public_base
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +56,17 @@ def read_token(settings: Settings, token: str) -> UnsubscribeTarget | None:
         return None
 
 
-def unsubscribe_url(settings: Settings, token: str) -> str:
-    base = (settings.public_api_base_url or "http://localhost:8000").rstrip("/")
-    return f"{base}/u/{token}"
+def unsubscribe_url(settings: Settings, token: str) -> str | None:
+    """The one-click link, only when the API is publicly reachable (PUBLIC_API_BASE_URL)."""
+    base = public_base(settings.public_api_base_url)
+    return f"{base}/u/{token}" if base else None
+
+
+def unsubscribe_mailto(settings: Settings) -> str:
+    """Reply-based unsubscribe; the reply poller suppresses on the subject "unsubscribe"."""
+    return f"mailto:{settings.reply_address}?subject=unsubscribe"
+
+
+def unsubscribe_link(settings: Settings, token: str) -> str:
+    """What the email footer links to: the one-click page if public, else the mailto form."""
+    return unsubscribe_url(settings, token) or unsubscribe_mailto(settings)

@@ -195,7 +195,13 @@ export interface GmailOutboxItem {
   created_at: string;
   kind: "draft" | "compose";
   open_url: string | null;
-  attachments: { filename: string | null; url: string }[];
+  attachments: { filename: string | null; url: string; bytes: number | null; note: string | null }[];
+  /** Files that travel with this email and their total size (follow-ups carry none). */
+  attachment_count: number;
+  attachment_bytes: number;
+  attachment_mb: number;
+  /** What the size policy did to fit Gmail's 25 MB limit (compressed, merged, left out). */
+  attachment_actions: string[];
 }
 
 export interface GmailOutbox {

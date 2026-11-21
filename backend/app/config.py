@@ -195,6 +195,7 @@ class Settings(BaseSettings):
     gmail_imap_port: int = 993
     gmail_smtp_host: str = "smtp.gmail.com"
     gmail_smtp_port: int = 587
+    gmail_smtp_ssl_port: int = 465  # fallback when STARTTLS on 587 fails
     gmail_daily_send_cap: int = Field(default=400, ge=0)
     gmail_oauth_client_id: str = ""
     gmail_oauth_client_secret: SecretStr | None = None
@@ -336,8 +337,10 @@ class Settings(BaseSettings):
 
     @property
     def public_links_enabled(self) -> bool:
-        """True when previews can be linked publicly instead of attached as screenshots/PDF."""
-        return bool(self.public_preview_base_url)
+        """True when previews can be linked publicly (screenshots are attached either way)."""
+        from app.services.email_links import public_base  # noqa: PLC0415 - avoids an import cycle
+
+        return public_base(self.public_preview_base_url) is not None
 
 
 # Paid integrations that are forced off while APP_TIER=free (testing mode), keys or not.
