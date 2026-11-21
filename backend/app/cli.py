@@ -179,6 +179,24 @@ async def _purge_demo() -> dict[str, object]:
         return dict(await seed.purge_demo_data(session))
 
 
+async def _geonames_refresh() -> dict[str, object]:
+    """Download and load the GeoNames city list now, whatever its age."""
+    from app.services import geonames  # noqa: PLC0415
+
+    return dict(await geonames.refresh(get_settings(), force=True))
+
+
+async def _osm_sweep(max_cities: int | None) -> dict[str, object]:
+    """Sweep up to `max_cities` of today's pending cities now (all due ones when omitted)."""
+    from app.services import osm_sweep  # noqa: PLC0415
+
+    adapters = get_adapters()
+    try:
+        return dict(await osm_sweep.run_job(get_settings(), adapters, max_cities=max_cities))
+    finally:
+        await adapters.fetcher.aclose()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="app.cli")
     parser.add_argument(
@@ -193,9 +211,15 @@ def main(argv: list[str] | None = None) -> int:
             "check-providers",
             "account-status",
             "purge-demo",
+            "geonames-refresh",
+            "osm-sweep",
         ],
     )
-    parser.add_argument("target", nargs="?", help="source key (run-source) or lead id (run-lead)")
+    parser.add_argument(
+        "target",
+        nargs="?",
+        help="source key (run-source), lead id (run-lead) or number of cities (osm-sweep)",
+    )
     args = parser.parse_args(argv)
     if args.command in ("run-source", "run-lead") and not args.target:
         parser.error(f"{args.command} needs a target")
@@ -205,6 +229,8 @@ def main(argv: list[str] | None = None) -> int:
         runner: Any = lambda: _run_one_source(args.target)  # noqa: E731
     elif args.command == "run-lead":
         runner = lambda: _run_one_lead(args.target)  # noqa: E731
+    elif args.command == "osm-sweep":
+        runner = lambda: _osm_sweep(int(args.target) if args.target else None)  # noqa: E731
     else:
         runner = {
             "seed": _seed,
@@ -214,6 +240,7 @@ def main(argv: list[str] | None = None) -> int:
             "check-providers": _check_providers,
             "account-status": _account_status,
             "purge-demo": _purge_demo,
+            "geonames-refresh": _geonames_refresh,
         }[args.command]
     if sys.platform == "win32":
         # psycopg async needs the selector loop on Windows (containers are Linux); the

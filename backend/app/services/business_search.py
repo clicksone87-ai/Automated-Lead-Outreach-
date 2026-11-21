@@ -25,12 +25,19 @@ from app.adapters.opendata import (
     OpenDataError,
     Overpass,
     WebsiteStatus,
+    osm_ref,
     route_for,
 )
 from app.config import Settings
 from app.db.models import Business, Contact, DiscoveryJob, VerificationStatus
 from app.db.session import session_scope
-from app.services.dedup import BusinessCandidate, normalize_domain, resolve_business
+from app.services.dedup import (
+    BusinessCandidate,
+    create_business,
+    fill_gaps,
+    normalize_domain,
+    resolve_business,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -91,12 +98,9 @@ async def start_job(
 
 async def _fetch(settings: Settings, src: str, job: DiscoveryJob) -> list[FoundBusiness]:
     if src == "osm":
-        urls = [
-            settings.overpass_api_url,
-            *[u.strip() for u in settings.overpass_fallback_urls.split(",")],
-        ]
-        return await Overpass(urls, per_minute=settings.overpass_max_requests_per_minute,
-                              attribution=settings.osm_attribution).search(
+        return await Overpass(settings.overpass_urls, per_minute=settings.overpass_max_requests_per_minute,
+                              attribution=settings.osm_attribution,
+                              contact=settings.overpass_contact).search(
             job.country, job.city, job.category, job.max_results)  # fmt: skip
     if src == "fr_recherche":
         return await FrRechercheEntreprises(
@@ -113,6 +117,62 @@ async def _fetch(settings: Settings, src: str, job: DiscoveryJob) -> list[FoundB
     raise OpenDataError(f"unknown source {src}")
 
 
+async def store_one(
+    session: AsyncSession, settings: Settings, f: FoundBusiness, *, industry: str | None,
+    now: datetime | None = None,
+) -> tuple[Business, bool] | None:  # fmt: skip
+    """Upsert one result: an OpenStreetMap element by (osm_type, osm_id), anything else (and
+    an element seen for the first time) through the normal duplicate matching, so OSM and
+    registry records of one business end up as one record. None for excluded markets."""
+    if f.country.upper() in settings.excluded_country_set:
+        return None
+    now = now or datetime.now(UTC)
+    ref = osm_ref(f)
+    domain = normalize_domain(f.website) if f.website else None
+    cand = BusinessCandidate(
+        name=f.name, domain=domain, registry_number=f.source_id, registry_source=f.source,
+        country=f.country, industry=industry, address=f.address, phone=f.phone,
+        has_website=True if f.website else None,
+    )  # fmt: skip
+    b: Business | None = None
+    created = False
+    if ref:
+        b = (
+            await session.execute(
+                select(Business).where(Business.osm_type == ref[0], Business.osm_id == ref[1])
+            )
+        ).scalar_one_or_none()
+        if b is not None:
+            fill_gaps(b, cand)
+    if b is None:
+        match = await resolve_business(session, cand)
+        b, created = match.business, match.created
+        if ref and b.osm_id is not None and match.matched_on == "name":
+            # Another OSM element with a similar name (two "Pizza Roma" in one country) is a
+            # different place; only domain, registry or contact matches merge two elements.
+            b, created = await create_business(session, cand), True
+    if ref:
+        if b.osm_id is None:
+            b.osm_type, b.osm_id = ref
+        b.first_seen = b.first_seen or now
+        b.last_seen = now
+    # Keep the strongest evidence: a registry's silence never overrides what OSM or a
+    # website check said.
+    if _STRENGTH[f.website_status] >= _STRENGTH.get(b.website_status or "", -1):
+        b.website_status = f.website_status
+    if f.website_status == WebsiteStatus.OSM_WEBSITE_MISSING and not b.domain:
+        b.has_website = False
+    email = (f.email or "").strip().lower()
+    if email and "@" in email and f.url:
+        exists = (await session.execute(select(Contact.id).where(
+            Contact.business_id == b.id, Contact.value == email))).first()  # fmt: skip
+        if not exists:
+            session.add(Contact(business_id=b.id, type="email", value=email, source_url=f.url,
+                                verification_status=VerificationStatus.UNVERIFIED))  # fmt: skip
+    await session.flush()
+    return b, created
+
+
 async def store(
     session: AsyncSession, settings: Settings, found: list[FoundBusiness], *, industry: str | None
 ) -> tuple[list[uuid.UUID], dict[str, int]]:
@@ -121,31 +181,13 @@ async def store(
     counts: dict[str, int] = {"found": len(found), "excluded": 0, "created": 0, "matched": 0}
     ids: list[uuid.UUID] = []
     for f in found:
-        if f.country.upper() in settings.excluded_country_set:
+        stored = await store_one(session, settings, f, industry=industry)
+        if stored is None:
             counts["excluded"] += 1
             continue
-        domain = normalize_domain(f.website) if f.website else None
-        match = await resolve_business(session, BusinessCandidate(
-            name=f.name, domain=domain, registry_number=f.source_id, registry_source=f.source,
-            country=f.country, industry=industry, address=f.address, phone=f.phone,
-            has_website=True if f.website else None,
-        ))  # fmt: skip
-        b = match.business
-        counts["created" if match.created else "matched"] += 1
+        b, created = stored
+        counts["created" if created else "matched"] += 1
         counts[f.website_status.value] = counts.get(f.website_status.value, 0) + 1
-        # Keep the strongest evidence: a registry's silence never overrides what OSM or a
-        # website check said.
-        if _STRENGTH[f.website_status] >= _STRENGTH.get(b.website_status or "", -1):
-            b.website_status = f.website_status
-        if f.website_status == WebsiteStatus.OSM_WEBSITE_MISSING and not b.domain:
-            b.has_website = False
-        if f.email and f.url:
-            exists = (await session.execute(select(Contact.id).where(
-                Contact.business_id == b.id, Contact.value == f.email.strip().lower()))).first()  # fmt: skip
-            if not exists:
-                session.add(Contact(business_id=b.id, type="email", value=f.email.strip().lower(),
-                                    source_url=f.url,
-                                    verification_status=VerificationStatus.UNVERIFIED))  # fmt: skip
         ids.append(b.id)
     await session.flush()
     return ids, counts

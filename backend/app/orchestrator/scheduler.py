@@ -21,7 +21,13 @@ from app.db.session import session_scope
 from app.learning.report import run_weekly
 from app.logging_setup import configure_logging
 from app.orchestrator import lanes
-from app.orchestrator.queue import SCHEDULER_QUEUE, enqueue_source, redis_settings
+from app.orchestrator.queue import (
+    SCHEDULER_QUEUE,
+    enqueue_geonames_refresh,
+    enqueue_osm_sweep,
+    enqueue_source,
+    redis_settings,
+)
 from app.services import backup, cache, outreach_jobs
 
 logger = logging.getLogger(__name__)
@@ -45,6 +51,20 @@ async def tick_sources(ctx: dict[str, Any]) -> int:
             if await enqueue_source(row.key, slot):
                 queued += 1
     return queued
+
+
+async def osm_sweep_tick(ctx: dict[str, Any]) -> bool:
+    """Queue an OpenStreetMap sweep run (a run that is still busy makes the new one exit)."""
+    if not get_settings().osm_sweep_enabled:
+        return False
+    return await enqueue_osm_sweep(datetime.now(UTC).strftime("%Y%m%d%H%M"))
+
+
+async def geonames_refresh(ctx: dict[str, Any]) -> bool:
+    """Daily check; the job re-downloads the city list once it is GEONAMES_REFRESH_DAYS old."""
+    if not get_settings().osm_sweep_enabled:
+        return False
+    return await enqueue_geonames_refresh(datetime.now(UTC).strftime("%Y%m%d"))
 
 
 async def fast_sweep(ctx: dict[str, Any]) -> int:
@@ -164,6 +184,8 @@ class SchedulerSettings:
         cron(poll_delivery, minute={11, 26, 41, 56}),
         cron(follow_ups, minute={33}),
         cron(weekly_report, weekday={0}, hour={6}, minute={30}),
+        cron(osm_sweep_tick, minute={7, 22, 37, 52}),
+        cron(geonames_refresh, hour={2}, minute={41}),
         cron(heartbeat, minute=set(range(60))),
         cron(refresh_balances, hour=set(range(0, 24, 2)), minute={17}),
     ]

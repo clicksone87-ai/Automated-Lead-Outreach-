@@ -40,6 +40,14 @@ _ENV_FILES: tuple[str, ...] | None = (
 )
 
 
+# Public Overpass instances, in the order they are tried after OVERPASS_API_URL.
+DEFAULT_OVERPASS_MIRRORS: tuple[str, ...] = (
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=_ENV_FILES,
@@ -142,14 +150,31 @@ class Settings(BaseSettings):
 
     # Open data and registries (no keys)
     overpass_api_url: str = "https://overpass-api.de/api/interpreter"
+    # Comma separated, tried in order after the main URL. Empty = the public mirrors in
+    # DEFAULT_OVERPASS_MIRRORS; "none" = no fallback.
     overpass_fallback_urls: str = ""
     overpass_max_requests_per_minute: int = Field(default=2, ge=1)
+    # Sent in the User-Agent so mirror operators can reach us. Empty = GMAIL_SENDER.
+    overpass_contact_email: str = ""
     geofabrik_base_url: str = "https://download.geofabrik.de"
     geofabrik_enabled: bool = False
     fr_recherche_entreprises_url: str = "https://recherche-entreprises.api.gouv.fr"
     fr_recherche_max_rps: int = Field(default=5, ge=1, le=7)
     no_brreg_api_url: str = "https://data.brreg.no/enhetsregisteret/api"
     osm_attribution: str = "© OpenStreetMap contributors (ODbL)"
+
+    # Weekly world sweep: the most populous cities of every market, one seventh of the
+    # countries per day, searched on OpenStreetMap.
+    osm_sweep_enabled: bool = True
+    osm_sweep_cities_per_country: int = Field(default=10, ge=1, le=50)
+    osm_sweep_radius_m: int = Field(default=8000, ge=500, le=25000)
+    # Attempts per city and day before it is marked failed (backoff between attempts)
+    osm_sweep_max_attempts: int = Field(default=5, ge=1, le=20)
+    # New leads per day from the sweep (every business found is still stored)
+    osm_sweep_daily_lead_cap: int = Field(default=300, ge=0)
+    geonames_cities_url: str = "https://download.geonames.org/export/dump/cities15000.zip"
+    geonames_refresh_days: int = Field(default=30, ge=1)
+    geonames_attribution: str = "GeoNames (geonames.org), CC BY 4.0"
 
     # Social providers (all on; each platform falls back to the next provider)
     social_sources_enabled: bool = True
@@ -283,6 +308,22 @@ class Settings(BaseSettings):
     @property
     def excluded_country_set(self) -> frozenset[str]:
         return frozenset(c.strip().upper() for c in self.excluded_countries.split(",") if c.strip())
+
+    @property
+    def overpass_urls(self) -> list[str]:
+        """Main Overpass URL first, then the fallback mirrors (never the same URL twice)."""
+        raw = self.overpass_fallback_urls.strip()
+        if raw.lower() == "none":
+            extra: list[str] = []
+        elif raw:
+            extra = [u.strip() for u in raw.split(",") if u.strip()]
+        else:
+            extra = list(DEFAULT_OVERPASS_MIRRORS)
+        return list(dict.fromkeys(u for u in (self.overpass_api_url.strip(), *extra) if u))
+
+    @property
+    def overpass_contact(self) -> str:
+        return self.overpass_contact_email.strip() or self.gmail_sender.strip()
 
     @property
     def search_order(self) -> list[str]:

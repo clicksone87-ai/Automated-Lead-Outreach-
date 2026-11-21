@@ -16,8 +16,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
+import re
 import time
 from collections import deque
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -25,7 +28,16 @@ from typing import Any
 import httpx
 
 logger = logging.getLogger(__name__)
-UA = {"User-Agent": "LeadsSystemBot/0.1 (business search; respects usage policies)"}
+
+
+def bot_user_agent(contact: str = "") -> str:
+    """Identifying User-Agent; with a contact address when one is configured, as the Overpass
+    and Nominatim usage policies ask."""
+    who = f"; contact: {contact.strip()}" if contact.strip() else ""
+    return f"LeadsSystemBot/0.1 (business search; respects usage policies{who})"
+
+
+UA = {"User-Agent": bot_user_agent()}
 
 
 class WebsiteStatus(StrEnum):
@@ -123,13 +135,48 @@ class _RateLimiter:
 
 _OVERPASS_LIMIT: _RateLimiter | None = None
 
+# Answers that mean "this mirror is busy or slow right now", not "the query is wrong".
+RETRYABLE_STATUS = frozenset({429, 502, 503, 504})
+# Overpass reports a query that ran out of time or memory with HTTP 200 and a remark; the
+# elements are then incomplete, so the answer is treated like a timeout.
+_RUNTIME_ERROR = re.compile(r"runtime error|timed out|out of memory", re.I)
+
+# The weekly sweep: named shops, offices, crafts and these amenities.
+SWEEP_KEYS: tuple[str, ...] = ("shop", "office", "craft")
+SWEEP_AMENITIES: tuple[str, ...] = (
+    "restaurant", "cafe", "bar", "fast_food", "dentist", "clinic", "doctors", "pharmacy",
+    "beauty", "veterinary", "bank",
+)  # fmt: skip
+PHONE_KEYS: tuple[str, ...] = ("phone", "contact:phone", "mobile", "contact:mobile")
+EMAIL_KEYS: tuple[str, ...] = ("email", "contact:email")
+
+
+def _first(tags: dict[str, str], keys: tuple[str, ...]) -> str | None:
+    """First value of the first key present; OSM separates several values with ';'."""
+    for k in keys:
+        v = (tags.get(k) or "").split(";")[0].strip()
+        if v:
+            return v
+    return None
+
+
+def _retry_after(resp: httpx.Response) -> float:
+    try:
+        return max(0.0, float(resp.headers.get("retry-after", "0")))
+    except ValueError:
+        return 0.0
+
 
 class Overpass:
-    """OpenStreetMap through the Overpass API, mirrors tried in order on 429/5xx/timeouts."""
+    """OpenStreetMap through the Overpass API. Mirrors are tried in order; when every mirror is
+    busy (429/5xx/timeouts) the whole list is tried again after a backoff with jitter, up to
+    `rounds` passes."""
 
     def __init__(
         self, urls: list[str], *, per_minute: int = 2, attribution: str = "",
-        client: httpx.AsyncClient | None = None,
+        client: httpx.AsyncClient | None = None, contact: str = "", rounds: int = 1,
+        backoff_s: float = 10.0, max_backoff_s: float = 120.0, timeout_s: float = 70.0,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:  # fmt: skip
         global _OVERPASS_LIMIT  # noqa: PLW0603 - one limit for the whole process
         if _OVERPASS_LIMIT is None or _OVERPASS_LIMIT.per_minute != per_minute:
@@ -137,9 +184,16 @@ class Overpass:
         self.limit = _OVERPASS_LIMIT
         self.urls = [u for u in urls if u]
         self.attribution = attribution or "© OpenStreetMap contributors (ODbL)"
+        self.rounds = max(1, rounds)
+        self.backoff_s, self.max_backoff_s = backoff_s, max_backoff_s
+        self._sleep = sleep
         self._client = client or httpx.AsyncClient(
-            timeout=httpx.Timeout(70, connect=10), headers=UA
+            timeout=httpx.Timeout(timeout_s, connect=10),
+            headers={"User-Agent": bot_user_agent(contact)},
         )
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
 
     @staticmethod
     def query(country: str, city: str, category: str, limit: int) -> str:
@@ -158,49 +212,134 @@ class Overpass:
             f"({parts});out center tags {int(limit)};"
         )
 
+    @staticmethod
+    def sweep_query(lat: float, lon: float, radius_m: int, timeout_s: int = 90) -> str:
+        """Named shops/offices/crafts and the listed amenities within `radius_m` of a point,
+        only those with a phone number or an email address (the website split is done on the
+        answer, so one query serves both groups)."""
+        around = f"(around:{int(radius_m)},{lat:.5f},{lon:.5f})"
+        contact = '[~"^(' + "|".join(PHONE_KEYS + EMAIL_KEYS) + ')$"~"."]'
+        amenity = '["amenity"~"^(' + "|".join(SWEEP_AMENITIES) + ')$"]'
+        parts = [f'nwr["{k}"]["name"]{contact}{around};' for k in SWEEP_KEYS]
+        parts.append(f'nwr{amenity}["name"]{contact}{around};')
+        return f"[out:json][timeout:{int(timeout_s)}];({''.join(parts)});out center tags;"
+
+    def _backoff(self, rnd: int, retry_after: float) -> float:
+        base = min(
+            self.max_backoff_s, max(retry_after, self.backoff_s * float(2 ** max(0, rnd - 1)))
+        )
+        return base + random.uniform(0, self.backoff_s)  # noqa: S311 - jitter, not security
+
+    async def run(self, q: str) -> tuple[dict[str, Any], str]:
+        """Answer of the first mirror that answers cleanly, and that mirror's URL."""
+        last, retry_after = "", 0.0
+        for rnd in range(self.rounds):
+            if rnd:
+                await self._sleep(self._backoff(rnd, retry_after))
+                retry_after = 0.0
+            for url in self.urls:
+                await self.limit.wait()
+                try:
+                    resp = await self._client.post(url, data={"data": q})
+                except httpx.HTTPError as exc:
+                    last = f"{url}: {type(exc).__name__}"
+                    continue
+                if resp.status_code == 200:
+                    try:
+                        body = resp.json()
+                    except ValueError:
+                        last = f"{url}: answer is not JSON"
+                        continue
+                    remark = str(body.get("remark") or "")
+                    if _RUNTIME_ERROR.search(remark):
+                        last = f"{url}: {remark[:160]}"
+                        continue
+                    return body, url
+                if resp.status_code == 400:  # the query itself is wrong: no mirror will take it
+                    raise OpenDataError(f"Overpass rejected the query ({url}: HTTP 400)")
+                if resp.status_code == 429:
+                    retry_after = max(retry_after, _retry_after(resp))
+                last = f"{url}: HTTP {resp.status_code}"
+        raise OpenDataError(f"Overpass unavailable ({last})")
+
     async def search(
         self, country: str, city: str, category: str, limit: int = 50
     ) -> list[FoundBusiness]:
-        q = self.query(country, city, category, limit)
-        last = ""
-        for url in self.urls:
-            await self.limit.wait()
-            try:
-                resp = await self._client.post(url, data={"data": q})
-            except httpx.HTTPError as exc:
-                last = f"{url}: {type(exc).__name__}"
-                continue
-            if resp.status_code == 200:
-                return self.parse(resp.json(), country, category)
-            last = f"{url}: HTTP {resp.status_code}"
-        raise OpenDataError(f"Overpass unavailable ({last})")
+        body, _ = await self.run(self.query(country, city, category, limit))
+        return self.parse(body, country, category)
+
+    async def sweep(
+        self, lat: float, lon: float, radius_m: int, *, country: str, city: str
+    ) -> tuple[list[FoundBusiness], str, int]:
+        """One sweep city: the kept businesses, the mirror that answered and the raw element
+        count."""
+        body, url = await self.run(self.sweep_query(lat, lon, radius_m))
+        return self.parse_sweep(body, country, city), url, len(body.get("elements") or [])
+
+    def _found(
+        self, el: dict[str, Any], tags: dict[str, str], country: str, category: str,
+        city: str | None = None,
+    ) -> FoundBusiness:  # fmt: skip
+        centre = el.get("center") or {}
+        site = _website_tag(tags)
+        street = " ".join(x for x in (tags.get("addr:housenumber"), tags.get("addr:street")) if x)
+        addr = ", ".join(x for x in (street, tags.get("addr:postcode"), tags.get("addr:city")) if x)
+        own = (tags.get("addr:country") or "").strip().upper()
+        return FoundBusiness(
+            source="osm", source_id=f"{el.get('type')}/{el.get('id')}", name=tags["name"],
+            country=(own if len(own) == 2 and own.isalpha() else country.upper())[:2],
+            website_status=WebsiteStatus.WEBSITE_RECORDED if site else WebsiteStatus.OSM_WEBSITE_MISSING,
+            website=site, phone=_first(tags, PHONE_KEYS), email=_first(tags, EMAIL_KEYS),
+            address=addr or None, city=tags.get("addr:city") or city,
+            lat=el.get("lat") or centre.get("lat"), lon=el.get("lon") or centre.get("lon"),
+            url=f"https://www.openstreetmap.org/{el.get('type')}/{el.get('id')}",
+            category=category, attribution=self.attribution, raw={"tags": tags},
+        )  # fmt: skip
 
     def parse(self, body: dict[str, Any], country: str, category: str) -> list[FoundBusiness]:
         out = []
         for el in body.get("elements") or []:
             tags = el.get("tags") or {}
-            if not tags.get("name"):
-                continue
-            centre = el.get("center") or {}
-            site = _website_tag(tags)
-            street = " ".join(
-                x for x in (tags.get("addr:housenumber"), tags.get("addr:street")) if x
-            )
-            addr = ", ".join(
-                x for x in (street, tags.get("addr:postcode"), tags.get("addr:city")) if x
-            )
-            out.append(FoundBusiness(
-                source="osm", source_id=f"{el.get('type')}/{el.get('id')}", name=tags["name"],
-                country=(tags.get("addr:country") or country).upper()[:2],
-                website_status=WebsiteStatus.WEBSITE_RECORDED if site else WebsiteStatus.OSM_WEBSITE_MISSING,
-                website=site, phone=tags.get("phone") or tags.get("contact:phone"),
-                email=tags.get("email") or tags.get("contact:email"), address=addr or None,
-                city=tags.get("addr:city"), lat=el.get("lat") or centre.get("lat"),
-                lon=el.get("lon") or centre.get("lon"),
-                url=f"https://www.openstreetmap.org/{el.get('type')}/{el.get('id')}",
-                category=category, attribution=self.attribution, raw={"tags": tags},
-            ))  # fmt: skip
+            if tags.get("name"):
+                out.append(self._found(el, tags, country, category))
         return out
+
+    def parse_sweep(self, body: dict[str, Any], country: str, city: str) -> list[FoundBusiness]:
+        """Named businesses with a phone or email. Branches of chains (a `brand:wikidata` tag)
+        are skipped: their website and marketing are run centrally, so they are not
+        prospects."""
+        out = []
+        for el in body.get("elements") or []:
+            tags = el.get("tags") or {}
+            if not tags.get("name") or tags.get("brand:wikidata"):
+                continue
+            if not (_first(tags, PHONE_KEYS) or _first(tags, EMAIL_KEYS)):
+                continue
+            category = sweep_category(tags)
+            if category is None:
+                continue
+            out.append(self._found(el, tags, country, category, city))
+        return out
+
+
+def sweep_category(tags: dict[str, str]) -> str | None:
+    """The tag that put an element in the sweep, as key=value."""
+    if tags.get("amenity") in SWEEP_AMENITIES:
+        return f"amenity={tags['amenity']}"
+    for k in ("craft", "office", "shop"):
+        if tags.get(k):
+            return f"{k}={tags[k]}"
+    return None
+
+
+def osm_ref(f: FoundBusiness) -> tuple[str, int] | None:
+    """(osm_type, osm_id) of an OpenStreetMap result."""
+    if f.source != "osm":
+        return None
+    kind, _, num = f.source_id.partition("/")
+    if kind not in ("node", "way", "relation") or not num.isdigit():
+        return None
+    return kind, int(num)
 
 
 class FrRechercheEntreprises:

@@ -64,6 +64,23 @@ async def enqueue_heavy(lead_id: uuid.UUID) -> bool:
     return job is not None
 
 
+async def enqueue_osm_sweep(slot: str) -> bool:
+    """One OpenStreetMap sweep run on the discovery queue (a run takes up to 20 minutes)."""
+    pool = await get_pool()
+    job = await pool.enqueue_job(
+        "run_osm_sweep_job", _job_id=f"osm_sweep:{slot}", _queue_name=DISCOVERY_QUEUE
+    )
+    return job is not None
+
+
+async def enqueue_geonames_refresh(slot: str) -> bool:
+    pool = await get_pool()
+    job = await pool.enqueue_job(
+        "refresh_geonames_job", _job_id=f"geonames:{slot}", _queue_name=DISCOVERY_QUEUE
+    )
+    return job is not None
+
+
 async def enqueue_source(key: str, slot: str, *, force: bool = False) -> bool:
     pool = await get_pool()
     job = await pool.enqueue_job(

@@ -58,6 +58,7 @@ endpoint names, environment variable **names** and free-tier caps only, never ke
 | GET | `/api/discovery/jobs/{job_id}` | Job |
 | GET | `/api/discovery/options` | Options |
 | POST | `/api/discovery/search` | Search |
+| GET | `/api/discovery/sweep` | Weekly OpenStreetMap sweep: today's countries and cities (done / failed / pending), businesses per country this week (`null` = unknown), GeoNames and OSM attribution |
 
 ### events
 
@@ -244,7 +245,8 @@ are kept.
 
 | Source | Endpoint | Countries |
 |---|---|---|
-| OpenStreetMap (Overpass) | `POST {OVERPASS_API_URL}`, then `OVERPASS_FALLBACK_URLS`; at most `OVERPASS_MAX_REQUESTS_PER_MINUTE` | all; results carry `OSM_ATTRIBUTION` |
+| OpenStreetMap (Overpass) | `POST {OVERPASS_API_URL}`, then `OVERPASS_FALLBACK_URLS` (empty = overpass.kumi.systems, overpass.private.coffee); at most `OVERPASS_MAX_REQUESTS_PER_MINUTE`; User-Agent carries `OVERPASS_CONTACT_EMAIL` (empty = `GMAIL_SENDER`) | all; results carry `OSM_ATTRIBUTION` |
+| GeoNames cities15000 | `GET {GEONAMES_CITIES_URL}` (zip, ~3.4 MB) to `DATA_DIR/geonames`, reloaded every `GEONAMES_REFRESH_DAYS` | city list of the sweep; shown with `GEONAMES_ATTRIBUTION` (CC BY 4.0) |
 | recherche-entreprises | `GET {FR_RECHERCHE_ENTREPRISES_URL}/search` (≤ `FR_RECHERCHE_MAX_RPS`/s) | FR |
 | Brønnøysund (brreg) | `GET {NO_BRREG_API_URL}/enheter` | NO |
 | Companies House | `GET https://api.company-information.service.gov.uk/advanced-search/companies` (Basic auth, `COMPANIES_HOUSE_API_KEY`) | GB |
@@ -253,6 +255,23 @@ are kept.
 Website status values: `OSM_WEBSITE_MISSING`, `WEBSITE_RECORDED`, `WEBSITE_DISCOVERED`,
 `WEBSITE_VERIFIED`, `WEBSITE_UNCONFIRMED`. Searches for `EXCLUDED_COUNTRIES` are refused, and
 results located there are dropped before they are stored.
+
+**Weekly world sweep** (`OSM_SWEEP_*`). Countries with a GeoNames city, minus
+`EXCLUDED_COUNTRIES`, sorted by ISO code; a country is swept on the weekday equal to its
+index modulo 7 (Monday = 0), so every country once a week. Per country the
+`OSM_SWEEP_CITIES_PER_COUNTRY` most populous cities; per city one Overpass query for named
+`shop`, `office`, `craft` and `amenity` in restaurant, cafe, bar, fast_food, dentist, clinic,
+doctors, pharmacy, beauty, veterinary, bank within `OSM_SWEEP_RADIUS_M` that list a phone or
+an email (chain branches with `brand:wikidata` are skipped). Without `website` /
+`contact:website` / `url`: `OSM_WEBSITE_MISSING` and a `no_website` lead (source `osm_sweep`,
+at most `OSM_SWEEP_DAILY_LEAD_CAP` a day, businesses with an email first) through the normal
+ingest path and the fast lane. With a website: `WEBSITE_RECORDED`, checked later by the
+`site_health` trigger. Businesses are upserted on (`osm_type`, `osm_id`) with `first_seen` /
+`last_seen`. Every city of every day is a row in `osm_sweep_cities`; a failed city stays
+pending and is retried (20 min, doubling, up to 6 h) until `OSM_SWEEP_MAX_ATTEMPTS`.
+Scheduler: `osm_sweep_tick` every 15 minutes queues `run_osm_sweep_job` (discovery queue,
+one run at a time, up to 20 minutes); `geonames_refresh` daily at 02:41 UTC. By hand:
+`python -m app.cli geonames-refresh` and `python -m app.cli osm-sweep [cities]`.
 
 ### Email
 

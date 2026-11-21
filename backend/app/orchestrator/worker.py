@@ -27,6 +27,7 @@ from app.logging_setup import configure_logging
 from app.orchestrator import lanes
 from app.orchestrator.queue import DEFAULT_QUEUE, DISCOVERY_QUEUE, HEAVY_QUEUE, redis_settings
 from app.orchestrator.runs import TransientAgentError
+from app.services import geonames, osm_sweep
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,26 @@ async def run_source_job(ctx: dict[str, Any], key: str, force: bool = False) -> 
     }
 
 
+SWEEP_LOCK = "lock:osm_sweep"
+
+
+async def run_osm_sweep_job(ctx: dict[str, Any]) -> dict[str, Any]:
+    """One sweep batch. A Redis lock keeps runs from overlapping: the scheduler queues one
+    every 15 minutes and a run may take up to 20."""
+    redis = ctx["redis"]
+    if not await redis.set(SWEEP_LOCK, "1", nx=True, ex=DiscoveryWorkerSettings.job_timeout):
+        return {"status": "busy"}
+    try:
+        return await osm_sweep.run_job(get_settings(), get_adapters())
+    finally:
+        await redis.delete(SWEEP_LOCK)
+
+
+async def refresh_geonames_job(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Re-download the GeoNames cities when they are older than GEONAMES_REFRESH_DAYS."""
+    return await geonames.refresh(get_settings())
+
+
 async def startup(ctx: dict[str, Any]) -> None:
     configure_logging()
     log_missing_integrations(get_settings())
@@ -128,9 +149,10 @@ class WorkerSettings:
 
 
 class DiscoveryWorkerSettings:
-    """Discovery queue: source runs (crawls with polite per-site delays can take minutes)."""
+    """Discovery queue: source runs (crawls with polite per-site delays can take minutes), the
+    OpenStreetMap sweep and its GeoNames city list."""
 
-    functions: ClassVar[list[Any]] = [run_source_job]
+    functions: ClassVar[list[Any]] = [run_source_job, run_osm_sweep_job, refresh_geonames_job]
     redis_settings = redis_settings()
     queue_name = DISCOVERY_QUEUE
     max_jobs = 3
