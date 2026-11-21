@@ -1,7 +1,7 @@
 """osm sweep: businesses.osm_type/osm_id/first_seen/last_seen, geonames_cities, osm_sweep_cities
 
 Revision ID: 05d3363cc15c
-Revises: 8d1c4e7a2b90
+Revises: 4f7b2c9d1e35
 Create Date: 2026-11-21 18:00:00+00:00
 """
 
@@ -12,7 +12,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "05d3363cc15c"
-down_revision: str | None = "8d1c4e7a2b90"
+down_revision: str | None = "4f7b2c9d1e35"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
