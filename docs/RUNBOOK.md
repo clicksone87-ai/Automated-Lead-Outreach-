@@ -34,6 +34,7 @@ make check-providers      # one live call per configured provider
 | Mailpit (all outgoing email) | http://localhost:8025 |
 | Adminer (server `postgres`, user/password/db `leads`) | http://localhost:8081 |
 | Website previews | `http://<preview_id>.preview.localhost:8080` |
+| Preview-only port for a tunnel (static previews only) | `http://127.0.0.1:8090/p/<preview_id>/` |
 
 All ports are bound to 127.0.0.1.
 
@@ -115,7 +116,9 @@ Main switches:
 | `SOCIAL_SOURCES_ENABLED` / `SOCIAL_PLATFORMS` | `true` / all | social providers and platforms (LinkedIn is never searched) |
 | `SOCIAL_PROVIDER_DAILY_CAP` | `50` | requests per social provider per day |
 | `OUTREACH_EMAIL_MODE` | `gmail` | `gmail` (drafts or compose links from `GMAIL_SENDER`) or `provider` (`EMAIL_PROVIDER`: Mailpit / Resend) |
-| `GMAIL_APP_PASSWORD` / `GMAIL_DELIVERY` | empty / `draft` | with an App Password: `draft` = IMAP draft with attachments, `send` = SMTP; without: compose links |
+| `GMAIL_APP_PASSWORD` / `GMAIL_DELIVERY` | empty / `draft` | with an App Password: `draft` = IMAP draft with attachments, `send` = SMTP (587 STARTTLS, falls back to 465 SSL); without: compose links |
+| `PUBLIC_PREVIEW_BASE_URL` | empty | tunnel hostname of the preview-only port; empty = screenshots only, no preview link |
+| `PUBLIC_API_BASE_URL` | empty | public API base for one-click unsubscribe; empty = mailto unsubscribe only |
 | `EMAIL_VERIFICATION_PROVIDER` | `zerobounce` | ZeroBounce within `ZEROBOUNCE_MONTHLY_CAP`, local syntax + MX check as fallback |
 | `MONTHLY_BUDGET_USD` / `DAILY_BUDGET_USD` | `0` | paid spend caps; `0` means no paid call can run |
 
@@ -188,6 +191,86 @@ To check a backup without touching live data, restore it into a scratch database
 5. Optionally enable paid email verification (`EMAIL_VERIFICATION_PROVIDER=zerobounce`).
 
 No code changes are needed. Autonomy starts at stage 1, where every email needs approval.
+
+### Public preview links (Cloudflare Tunnel)
+
+Recipients cannot open `localhost` links, so by default every proposal attaches the preview
+screenshots and PDF and contains no preview link. To add live links without a server, expose
+the preview-only Caddy port through a Cloudflare Tunnel.
+
+Port `8090` (bound to 127.0.0.1 like every other port) serves only the static preview files at
+`/p/<preview_id>/` from `./data/previews/<preview_id>/site`, read-only. It has no
+`reverse_proxy`, so the API, the dashboard, Mailpit and Adminer cannot be reached through it.
+There are no directory listings, dotfiles are hidden, only GET and HEAD are allowed, every
+response is `noindex` with security headers, and anything else returns 404.
+
+1. Start a tunnel to that port only:
+
+   ```bash
+   # quick tunnel, prints a random https://<name>.trycloudflare.com hostname
+   cloudflared tunnel --url http://127.0.0.1:8090
+   # or a named tunnel on your own hostname
+   cloudflared tunnel create leads-previews
+   cloudflared tunnel route dns leads-previews previews.example.com
+   cloudflared tunnel run --url http://127.0.0.1:8090 leads-previews
+   ```
+
+2. Set `PUBLIC_PREVIEW_BASE_URL=https://<tunnel hostname>` in `.env` and restart `api`,
+   `worker` and `scheduler`. New proposals then link to `<PUBLIC_PREVIEW_BASE_URL>/p/<id>/`;
+   the screenshot is still attached. A `localhost` value is ignored.
+3. Check that only previews are reachable (locally and again through the tunnel hostname):
+
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/api/health        # 404
+   curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/api/gmail/outbox  # 404
+   curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/                  # 404
+   curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/p/                # 404
+   curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/p/<preview_id>/   # 200
+   curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/p/<preview_id>/design/classic/  # 200
+   curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:8090/p/<preview_id>/        # 405
+   curl -sI http://127.0.0.1:8090/p/<preview_id>/ | grep -i x-robots-tag  # noindex, nofollow, noarchive
+   ```
+
+   `<preview_id>` is a folder name under `./data/previews/`. Preview pages use root-relative
+   links (`/styles.css`, `/design/<name>/`); a request carrying a preview page as its Referer is
+   redirected back under that preview's `/p/<id>/`, so it never leaves the previews folder.
+
+`PUBLIC_API_BASE_URL` works the same way for unsubscribe links: while it is empty (or local),
+emails offer only the reply-based unsubscribe (`mailto:<reply address>?subject=unsubscribe`,
+handled by the reply poller) and no one-click `List-Unsubscribe-Post` header. Never point the
+preview tunnel at port 8000 or 3000; publishing one-click unsubscribe needs a setup that
+exposes only `/u/<token>` of the API.
+
+### Email attachments and links
+
+Gmail accepts at most 25 MB per message, counted after base64 encoding (about a third larger
+than the files). Each proposal's attachments are fitted when it is drafted, by one policy in
+`backend/app/services/attachments.py`, against a budget of 23 MB encoded (about 16.8 MB of
+files), leaving room for the text, HTML and headers. When they do not fit, the same steps run
+in order and stop as soon as the email fits:
+
+1. images over 300 KB are scaled to fit 1600 x 6000 px and saved as high-quality JPEG
+   (quality 85) or optimised PNG, whichever is smaller (PNG only for transparent images);
+2. the secondary images (logos, mobile screenshot) are merged into one `drafts.pdf`;
+3. items are left out in this order: preview PDF, audit PDF, merged PDF, mobile screenshot,
+   logos;
+4. if the main screenshot alone is still too large it is shrunk further.
+
+The main preview screenshot is never left out. Changed files are stored under
+`data/outbox/<lead_id>/`, every attachment record carries its size, and the proposal's
+`draft.attachment_report` lists what was done. The email text only mentions what is really
+attached. The Gmail outbox shows the attachment count and size for each email.
+
+Every outgoing email (proposals and follow-ups, any provider) is checked before it leaves: if
+the subject, text, HTML, headers or attachment names contain `localhost`, `127.x.x.x`,
+`*.localhost`, `0.0.0.0` or `[::1]`, it is not sent. A proposal goes to `needs_review`; a
+follow-up is skipped and logged as `email_blocked`. A `localhost` `PORTFOLIO_URL` is left out
+of the footer.
+
+With `GMAIL_DELIVERY=send`, mail goes through `smtp.gmail.com:587` with STARTTLS. If that
+connection is refused, times out, disconnects or fails the TLS upgrade, the same message is
+sent over implicit TLS on port 465 (`GMAIL_SMTP_SSL_PORT`). A rejected login is not retried.
+Drafts always use IMAP over SSL on port 993.
 
 ### Single Linux server
 
