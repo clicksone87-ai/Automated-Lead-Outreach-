@@ -1,9 +1,14 @@
-"""Search API source: Brave Search queries, then fetch the result pages (never scrape Google)."""
+"""Search API source: Brave Search queries, then fetch the result pages (never scrape Google).
+
+A result that is a social post must prove it is fresh from the result's own date ("3 hours
+ago", ISO time); an undated or older one is skipped before its page is fetched.
+"""
 
 from __future__ import annotations
 
 import hashlib
 import logging
+from datetime import UTC, datetime
 from typing import Any, ClassVar
 
 from app.adapters.fetcher import FetchError
@@ -13,6 +18,7 @@ from app.agents.discovery.base import (
     industry_keywords,
     looks_like_request,
 )
+from app.agents.discovery.freshness import is_fresh_post, is_social_url, parse_result_age
 from app.agents.discovery.sources._html import main_text, page_title
 from app.db.models import EvidenceKind, TriggerType
 
@@ -62,6 +68,7 @@ class SearchApiSource:
 
         leads: list[RawLead] = []
         seen: set[str] = set()
+        now = datetime.now(UTC)
         for query, country in batch:
             results = await ctx.adapters.search.search(
                 ctx.session,
@@ -75,6 +82,11 @@ class SearchApiSource:
                 if r.url in seen:
                     continue
                 seen.add(r.url)
+                posted_at = None
+                if is_social_url(r.url):
+                    posted_at = parse_result_age(r.age, now)
+                    if not is_fresh_post(posted_at, ctx.settings, now):
+                        continue
                 text = f"{r.title}\n{r.description}"
                 page_text = None
                 if not ctx.adapters.search.is_mock:
@@ -95,6 +107,7 @@ class SearchApiSource:
                         trigger_type=TriggerType.EXPLICIT_REQUEST,
                         title=r.title[:500],
                         text=(page_text or r.description)[:8000],
+                        posted_at=posted_at,
                         evidence_kind=EvidenceKind.PAGE,
                         evidence_data={"query": query, "search_country": country, "age": r.age},
                         business=None,

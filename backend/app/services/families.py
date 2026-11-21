@@ -8,10 +8,13 @@ REGISTRY = "registry"
 OTHER = "other"
 
 SOURCE_FAMILY: dict[str, str] = {
-    "social_reddit": SOCIAL,
-    "social_x": SOCIAL,
+    "social_providers": SOCIAL,
     "social_instagram": SOCIAL,
     "social_facebook": SOCIAL,
+    "scout_profiles": SOCIAL,
+    # Retired Apify X and Reddit sources: their stored leads stay social.
+    "social_reddit": SOCIAL,
+    "social_x": SOCIAL,
     "reddit": SOCIAL,
     "x": SOCIAL,
     "meta": SOCIAL,

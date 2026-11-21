@@ -1,7 +1,7 @@
 """Platform access rules enforced in code.
 
 Domains listed here are never fetched directly; their content only arrives through official
-APIs, alert emails or feeds.
+APIs, licensed data providers or feeds.
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Final
 
 FORBIDDEN_FETCH_DOMAINS: Final[dict[str, str]] = {
-    "linkedin.com": "LinkedIn scraping is not allowed (approved APIs only)",
+    "linkedin.com": "LinkedIn is never fetched directly (licensed providers' LinkedIn endpoints only)",
     "google.com": "never scrape Google result pages (use the search API adapter)",
     "google.co.uk": "never scrape Google result pages (use the search API adapter)",
     "google.de": "never scrape Google result pages (use the search API adapter)",
@@ -17,16 +17,16 @@ FORBIDDEN_FETCH_DOMAINS: Final[dict[str, str]] = {
     "google.es": "never scrape Google result pages (use the search API adapter)",
     "google.ie": "never scrape Google result pages (use the search API adapter)",
     "maps.app.goo.gl": "Google Maps only via the Places API",
-    "facebook.com": "Meta content only via the Graph API",
-    "instagram.com": "Meta content only via the Graph API",
-    "x.com": "X content only via the official API",
-    "twitter.com": "X content only via the official API",
-    "reddit.com": "Reddit content only via the official Data API",
-    "upwork.com": "job boards only via official APIs / alert emails",
-    "fiverr.com": "job boards only via official APIs / alert emails",
+    "facebook.com": "Meta content only via the Graph API or licensed providers",
+    "instagram.com": "Meta content only via the Graph API or licensed providers",
+    "x.com": "X content only via the official API or licensed providers",
+    "twitter.com": "X content only via the official API or licensed providers",
+    "reddit.com": "Reddit content only via the official Data API or licensed providers",
+    "upwork.com": "freelance platforms are handled outside this system",
+    "fiverr.com": "freelance platforms are handled outside this system",
     "craigslist.org": "classifieds prohibit scraping — alerts only",
     "gumtree.com": "classifieds prohibit scraping — alerts only",
-    "facebook.net": "Meta content only via the Graph API",
+    "facebook.net": "Meta content only via the Graph API or licensed providers",
 }
 
 

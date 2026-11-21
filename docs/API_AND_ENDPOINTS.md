@@ -233,13 +233,28 @@ Sources page under "Provider fallback").
 | Provider | Endpoints used | Auth | Platforms | Cap |
 |---|---|---|---|---|
 | EnsembleData | `GET https://ensembledata.com/apis/tt/keyword/search` | `token` query | TikTok | `SOCIAL_PROVIDER_DAILY_CAP` (free trial: 50 units/day) |
-| ScrapeCreators | `GET https://api.scrapecreators.com/v1/{reddit/search, twitter/search/posts, threads/search, youtube/search, tiktok/search/keyword, instagram/search/hashtag}` | `x-api-key` | Reddit, X, Threads, YouTube, TikTok, Instagram | `SOCIAL_PROVIDER_DAILY_CAP` |
-| SocialCrawl | `GET https://www.socialcrawl.dev/v1/{tiktok/search, facebook/search/posts}` | `x-api-key` | TikTok, Facebook | `SOCIAL_PROVIDER_DAILY_CAP` (one-time 100 free credits) |
+| ScrapeCreators | `GET https://api.scrapecreators.com/v1/{reddit/search, threads/search, youtube/search, tiktok/search/keyword, instagram/search/hashtag, linkedin/search/posts}` | `x-api-key` | Reddit, Threads, YouTube, TikTok, Instagram, LinkedIn | `SOCIAL_PROVIDER_DAILY_CAP` (1 credit per search) |
+| SocialCrawl | `GET https://www.socialcrawl.dev/v1/{twitter/search/tweets?sort=latest, reddit/search?since=, facebook/search/posts, tiktok/search, linkedin/search/posts?sort_by=date_posted}` | `x-api-key` | X, Facebook, Reddit and LinkedIn fallback, TikTok fallback | `SOCIAL_PROVIDER_DAILY_CAP` (one-time 100 free credits; 1 per page, LinkedIn 5) |
 | HikerAPI | `GET {HIKERAPI_BASE_URL}/g2/hashtag/medias` | `x-access-key` | Instagram | `SOCIAL_PROVIDER_DAILY_CAP`; off until `HIKERAPI_ACCESS_KEY` is set; response shape unverified |
-| Apify | actor runs (`api.apify.com/v2/acts/...`) | `APIFY_API_TOKEN`, then `APIFY_API_TOKEN_FALLBACK` | X, Instagram, Facebook, Reddit | `APIFY_MONTHLY_CAP_USD` (both tokens together) |
+| Apify | actor runs (`api.apify.com/v2/acts/...`) | `APIFY_API_TOKEN` (one token) | Facebook, Instagram only | `APIFY_MONTHLY_CAP_USD`, half per source |
 
-LinkedIn is never searched (project rule). Only posts younger than `SOCIAL_MAX_POST_AGE_HOURS`
-are kept.
+Provider order per platform (the next one takes over on an error or a full cap): TikTok
+EnsembleData > SocialCrawl > ScrapeCreators; Reddit ScrapeCreators > SocialCrawl; X SocialCrawl
+only (ScrapeCreators' X search is Google-indexed with no "latest" order); Threads, YouTube
+ScrapeCreators; Instagram HikerAPI > ScrapeCreators (plus Apify); Facebook SocialCrawl (plus
+Apify); LinkedIn ScrapeCreators > SocialCrawl. LinkedIn is read only through these LinkedIn
+endpoints: linkedin.com itself is never fetched, no cookies or logins.
+
+The 8-hour rule: every social post, from any source or a search result whose URL is a post,
+must carry its own timestamp and be at most `SOCIAL_MAX_POST_AGE_HOURS` old when it is stored;
+undated posts are dropped (`app/agents/discovery/freshness.py`, enforced in the discovery
+runner for every source). Scout profile leads are profiles, not posts, and are exempt.
+
+Cap math with the defaults (`social_providers` every 60 min, 3 platforms per run, 50 credits per
+provider per day): 72 searches a day over 8 platforms = 9 per platform, one every 160 minutes.
+EnsembleData 9/day, ScrapeCreators 45/day, SocialCrawl 18/day (its one-time balance lasts about
+5 days at that rate). Pinterest, Twitch, GitHub and Linktree are covered by Scout (8 searches a
+day, each platform at least daily).
 
 ### Business search (no keys)
 

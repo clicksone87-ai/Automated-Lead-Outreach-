@@ -56,6 +56,7 @@ PLATFORM_SOURCES = {
     "social_instagram",
     "social_facebook",
     "social_reddit",
+    "social_providers",
     "scout_profiles",
 }
 #: Profile leads (no post to reply to): the manual route is a DM on the profile.

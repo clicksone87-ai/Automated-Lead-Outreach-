@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     exa_api_key: SecretStr | None = None
     exa_free_credit_usd: float = Field(default=10.0, ge=0)
 
-    # Apify (licensed third-party provider for public social posts)
+    # Apify (licensed third-party provider; Facebook and Instagram posts only, one token)
     apify_api_token: SecretStr | None = None
     apify_monthly_cap_usd: float = Field(default=5.0, ge=0)
 
@@ -179,7 +179,6 @@ class Settings(BaseSettings):
     # Social providers (all on; each platform falls back to the next provider)
     social_sources_enabled: bool = True
     social_platforms: str = "instagram,tiktok,facebook,x,reddit,youtube,linkedin,pinterest,threads,twitch,github,linktree"
-    apify_api_token_fallback: SecretStr | None = None
     ensembledata_api_token: SecretStr | None = None
     scrapecreators_api_key: SecretStr | None = None
     socialcrawl_api_key: SecretStr | None = None
@@ -226,7 +225,6 @@ class Settings(BaseSettings):
     reply_imap_host: str = ""
     reply_imap_user: str = ""
     reply_imap_password: SecretStr | None = None
-    alerts_imap_folder: str = "Alerts"
 
     # Email verification: local (syntax + MX, free) | zerobounce
     email_verification_provider: str = "local"
@@ -238,7 +236,6 @@ class Settings(BaseSettings):
     reddit_user_agent: str = ""
     x_bearer_token: SecretStr | None = None
     meta_access_token: SecretStr | None = None
-    freelancer_api_token: SecretStr | None = None
 
     # Registries
     opencorporates_api_key: SecretStr | None = None
@@ -539,7 +536,7 @@ def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
         ),
         (
             "apify",
-            "Apify (public social posts)",
+            "Apify (Facebook and Instagram posts)",
             ("APIFY_API_TOKEN",),
             _has(s.apify_api_token),
             False,
@@ -652,16 +649,6 @@ def integration_status(s: Settings) -> dict[str, IntegrationStatus]:
             _has(s.meta_access_token),
             True,
             "https://developers.facebook.com",
-            True,
-        ),
-        # public project search works without a token
-        (
-            "freelancer",
-            "Freelancer.com API",
-            ("FREELANCER_API_TOKEN",),
-            True,
-            False,
-            "https://developers.freelancer.com",
             True,
         ),
         (

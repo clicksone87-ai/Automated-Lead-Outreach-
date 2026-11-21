@@ -46,6 +46,7 @@ All ports are bound to 127.0.0.1.
 | `docker compose exec api python -m app.cli run-source <key>` | run one discovery source |
 | `docker compose exec api python -m app.cli run-lead <lead_id>` | run or resume one lead |
 | `docker compose exec api python -m app.cli run-pending` | resume every lead waiting mid-pipeline |
+| `make clean-leads` (`python -m app.cli clean-leads [--dry-run]`) | move social posts that were older than 8 h when found (or undated) and freelance-platform leads to "Not useful"; idempotent; leads already drafted, sent or answered are kept |
 | `make check-providers` | live provider check (secrets are never printed) |
 | `make backup` | database backup now (the scheduler also runs one daily) |
 | `make shell` | shell in the API container |
@@ -109,11 +110,11 @@ Main switches:
 | `APP_TIER` | `free` | `free` uses free-tier providers only and forces paid integrations off |
 | `EXCLUDED_COUNTRIES` | `PK,IN,BD` | markets never searched, stored or contacted |
 | `ALL_COUNTRIES_OUTREACH_ENABLED` | `true` | every other country is a market; `false` limits it to the target countries in Settings |
-| `SOCIAL_MAX_POST_AGE_HOURS` | `8` | only social posts younger than this are kept |
+| `SOCIAL_MAX_POST_AGE_HOURS` | `8` | every social post must carry its time and be at most this old when stored; undated posts are dropped |
 | `LLM_PROVIDER` / `LLM_FALLBACK_PROVIDER` | `gemini` / `groq` | Groq takes over text work when Gemini is capped or down (`GROQ_MODEL`, default `openai/gpt-oss-120b`) |
 | `SEARCH_PROVIDER_ORDER` | `serper,serpapi,scrapingdog,searlo,tavily,exa` | search router order; each provider has its own `*_CAP` |
-| `SOCIAL_SOURCES_ENABLED` / `SOCIAL_PLATFORMS` | `true` / all | social providers and platforms (LinkedIn is never searched) |
-| `SOCIAL_PROVIDER_DAILY_CAP` | `50` | requests per social provider per day |
+| `SOCIAL_SOURCES_ENABLED` / `SOCIAL_PLATFORMS` | `true` / all | social providers and platforms (LinkedIn only through the providers' LinkedIn endpoints) |
+| `SOCIAL_PROVIDER_DAILY_CAP` | `50` | credits per social provider per day (1 per search; SocialCrawl LinkedIn 5) |
 | `OUTREACH_EMAIL_MODE` | `gmail` | `gmail` (drafts or compose links from `GMAIL_SENDER`) or `provider` (`EMAIL_PROVIDER`: Mailpit / Resend) |
 | `GMAIL_APP_PASSWORD` / `GMAIL_DELIVERY` | empty / `draft` | with an App Password: `draft` = IMAP draft with attachments, `send` = SMTP; without: compose links |
 | `EMAIL_VERIFICATION_PROVIDER` | `zerobounce` | ZeroBounce within `ZEROBOUNCE_MONTHLY_CAP`, local syntax + MX check as fallback |
@@ -121,14 +122,14 @@ Main switches:
 
 Free-tier keys: `GEMINI_API_KEY`, `GROQ_API_KEY`, `SERPER_API_KEY` (+ `_FALLBACK`),
 `SERPAPI_API_KEY`, `SCRAPINGDOG_API_KEY`, `SEARLO_API_KEY`, `TAVILY_API_KEY`, `EXA_API_KEY`,
-`APIFY_API_TOKEN` (+ `_FALLBACK`), `ENSEMBLEDATA_API_TOKEN`, `SCRAPECREATORS_API_KEY`,
+`APIFY_API_TOKEN` (Facebook and Instagram only), `ENSEMBLEDATA_API_TOKEN`, `SCRAPECREATORS_API_KEY`,
 `SOCIALCRAWL_API_KEY`, `HIKERAPI_ACCESS_KEY`, `COMPANIES_HOUSE_API_KEY`,
 `GOOGLE_PAGESPEED_API_KEY`, `EMAIL_VERIFICATION_API_KEY`. Open data (Overpass, FR
 recherche-entreprises, NO brreg) needs no key. A missing key turns that integration
 off and the Sources page shows "Needs API key"; the system keeps running without it.
 
 Free-tier usage is tracked against each provider's own limit (by default Gemini 500
-requests/day, Serper 2,500 credits, Exa $10 credit, Apify $5/month split per source, PageSpeed
+requests/day, Serper 2,500 credits, Exa $10 credit, Apify $5/month split between Facebook and Instagram, PageSpeed
 400/day). When a limit is reached, that work pauses until it resets.
 
 Outreach rules per country live in `backend/app/policy/country_rules.yaml`. Every listed

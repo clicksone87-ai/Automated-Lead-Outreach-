@@ -21,6 +21,7 @@ from app.agents.discovery.base import (
     SourceDegradedError,
     detect_services,
 )
+from app.agents.discovery.freshness import is_fresh_post, is_social_post
 from app.agents.discovery.sources import SOURCES
 from app.config import Settings, integration_status
 from app.db.models import Lead, LeadStatus, RunStatus, Source, SourceRun
@@ -102,7 +103,9 @@ async def run_source(  # noqa: PLR0915 - linear bookkeeping, clearer in one plac
         async with session.begin_nested():
             items = await source.fetch(ctx)
             for item in items:
-                lead_id = await ingest(session, adapters, source, item, uses_mock=uses_mock)
+                lead_id = await ingest(
+                    session, adapters, source, item, uses_mock=uses_mock, settings=settings
+                )
                 if lead_id:
                     lead_ids.append(lead_id)
     except SourceDegradedError as exc:
@@ -151,8 +154,23 @@ async def ingest(
     item: RawLead,
     *,
     uses_mock: bool,
+    settings: Settings | None = None,
 ) -> uuid.UUID | None:
-    """Create a lead for a raw item. Idempotent on (source, source_item_id)."""
+    """Create a lead for a raw item. Idempotent on (source, source_item_id).
+
+    Every lead passes through here, so this is where the 8-hour rule for social posts is
+    enforced for every source, whatever its own filters did: no timestamp or too old = no lead.
+    """
+    if is_social_post(source.key, item.trigger_type, item.source_url) and not is_fresh_post(
+        item.posted_at, settings
+    ):
+        logger.info(
+            "dropped %s item %s: social post %s",
+            source.key,
+            item.source_item_id,
+            f"posted {item.posted_at.isoformat()}" if item.posted_at else "without a timestamp",
+        )
+        return None
     exists = (
         await session.execute(
             select(Lead.id).where(

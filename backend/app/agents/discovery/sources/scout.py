@@ -5,6 +5,13 @@ trade businesses through the licensed search API ("site:tiktok.com plumber Leeds
 profile within the platform rules (see `app.agents.scout.client`), and creates a
 `profile_without_site` lead when the profile links to no website. Bio emails, phones and links
 travel with the lead; Contact Enrichment verifies the email or falls back to a DM draft.
+
+Scout is the only path to Pinterest, Twitch, GitHub and Linktree (no provider offers a post
+search there). Its leads are profiles, not posts: a business account with no website is a
+standing need with no post time, so the 8-hour post rule does not apply to them; any post
+URL that reaches the runner is still held to it. Coverage: every 6 hours, 2 searches per run
+(8 a day), rotating platform fastest, so each of the 7 platforms is searched at least once a
+day for 8 of the SERPER_DAILY_CAP searches.
 """
 
 from __future__ import annotations
@@ -35,8 +42,7 @@ SITE_FILTER = {
     "twitch": "site:twitch.tv",
     "github": "site:github.com",
 }
-# Twitch and GitHub rarely hold local trade businesses; add them in the source config.
-DEFAULT_PLATFORMS = ["tiktok", "youtube", "instagram", "linktree", "pinterest"]
+DEFAULT_PLATFORMS = ["tiktok", "youtube", "instagram", "linktree", "pinterest", "twitch", "github"]
 
 
 def _stem(trade: str) -> str:
@@ -76,8 +82,8 @@ class ScoutProfilesSource:
     key: ClassVar[str] = "scout_profiles"
     label: ClassVar[str] = "Scout: creator & business profiles"
     description: ClassVar[str] = (
-        "TikTok, YouTube, Instagram, Pinterest, Linktree (plus Twitch and GitHub on request) "
-        "profiles of local businesses with no website; bio emails, phones and links extracted."
+        "TikTok, YouTube, Instagram, Pinterest, Linktree, Twitch and GitHub profiles of local "
+        "businesses with no website; bio emails, phones and links extracted."
     )
     integration: ClassVar[str] = "serper"
     default_enabled: ClassVar[bool] = True
@@ -90,7 +96,7 @@ class ScoutProfilesSource:
     )
     default_config: ClassVar[dict[str, Any]] = {
         "platforms": DEFAULT_PLATFORMS,
-        "queries_per_run": 1,
+        "queries_per_run": 2,
         "max_profiles": 8,
         "min_followers": 0,
         "skip_with_website": True,
@@ -98,8 +104,11 @@ class ScoutProfilesSource:
 
     def queries(self, ctx: SourceContext) -> list[tuple[str, str, str, str, str]]:
         """(platform, query, country, language, trade), rotating platform fastest."""
+        wanted = set(ctx.settings.social_platform_list)
         platforms = [
-            p for p in ctx.config.get("platforms") or DEFAULT_PLATFORMS if p in SITE_FILTER
+            p
+            for p in ctx.config.get("platforms") or DEFAULT_PLATFORMS
+            if p in SITE_FILTER and p in wanted
         ]
         industry = ctx.runtime.active_industry
         countries = [c for c in (ctx.runtime.target_countries or ["GB", "US"]) if c in CITIES]
@@ -120,7 +129,7 @@ class ScoutProfilesSource:
         queries = self.queries(ctx)
         if not queries:
             return []
-        per_run = int(ctx.config.get("queries_per_run", 1))
+        per_run = int(ctx.config.get("queries_per_run", 2))
         cursor = int(ctx.state.get("cursor", 0)) % len(queries)
         ctx.state["cursor"] = cursor + per_run
         client = ScoutClient(ctx.session, ctx.adapters, ctx.settings)

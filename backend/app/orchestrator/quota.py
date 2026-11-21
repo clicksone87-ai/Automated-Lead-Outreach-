@@ -28,11 +28,10 @@ Period = Literal["day", "month", "lifetime"]
 Measure = Literal["units", "credit_usd"]
 
 # Apify monthly free credit split per social source (fractions of APIFY_MONTHLY_CAP_USD).
+# Apify serves Facebook and Instagram only; X and Reddit come from the social providers.
 APIFY_SOURCE_SHARE: dict[str, float] = {
-    "social_reddit": 0.3,
-    "social_facebook": 0.3,
-    "social_x": 0.2,
-    "social_instagram": 0.2,
+    "social_facebook": 0.5,
+    "social_instagram": 0.5,
 }
 
 
@@ -66,7 +65,7 @@ class FreeQuotaExceededError(BudgetExceededError):
 @dataclass(frozen=True, slots=True)
 class Quota:
     provider: str
-    scope: str  # provider, or provider:sub-scope (e.g. apify:social_reddit)
+    scope: str  # provider, or provider:sub-scope (e.g. apify:social_facebook)
     period: Period
     measure: Measure
     cap: float
@@ -103,7 +102,7 @@ def quotas(s: Settings) -> dict[str, Quota]:
         Quota("gmail", "gmail", "day", "units", s.gmail_daily_send_cap, "emails/day"),
     ]
     q += [
-        Quota(p, p, "day", "units", s.social_provider_daily_cap, "requests/day")
+        Quota(p, p, "day", "units", s.social_provider_daily_cap, "credits/day")
         for p in ("ensembledata", "scrapecreators", "socialcrawl", "hikerapi")
     ]
     q += [

@@ -1,5 +1,6 @@
-"""Leads-per-platform report for the social platforms (Apify, official APIs and the
-licensed social data providers)."""
+"""Leads-per-platform report for the social platforms (Apify for Facebook and Instagram,
+official APIs and the licensed social data providers). `leads_recent` counts the leads stored
+in the last `recent_hours` (8 by default, the social post age limit)."""
 
 from __future__ import annotations
 
@@ -13,7 +14,8 @@ from app.schemas import PlatformReport, PlatformStat
 
 QUALIFIED_MIN, HIGH_MIN = 60, 75
 
-#: platform → (label, source keys). Apify sources and the official APIs report together.
+#: platform → (label, source keys). Apify sources and the official APIs report together; the
+#: retired Apify X and Reddit keys stay so their stored leads are still counted.
 PROVIDERS_SOURCE = "social_providers"
 PLATFORMS: dict[str, tuple[str, tuple[str, ...]]] = {
     "x": ("X", ("social_x", "x", f"{PROVIDERS_SOURCE}:x")),
@@ -23,6 +25,7 @@ PLATFORMS: dict[str, tuple[str, tuple[str, ...]]] = {
     "tiktok": ("TikTok", (f"{PROVIDERS_SOURCE}:tiktok",)),
     "threads": ("Threads", (f"{PROVIDERS_SOURCE}:threads",)),
     "youtube": ("YouTube", (f"{PROVIDERS_SOURCE}:youtube",)),
+    "linkedin": ("LinkedIn", (f"{PROVIDERS_SOURCE}:linkedin",)),
 }
 # Leads from the providers source report under "social_providers:<platform>" (the platform is
 # the prefix of their source_item_id).

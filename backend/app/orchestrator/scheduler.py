@@ -13,8 +13,8 @@ from sqlalchemy import select
 from app.adapters.base import AdapterUnavailableError
 from app.adapters.registry import get_adapters
 from app.agents.discovery.runner import ensure_source_rows
+from app.agents.discovery.sources import SOURCES
 from app.agents.discovery.sources.reddit import sync_deletions
-from app.agents.discovery.sources.social_apify import sync_reddit_deletions
 from app.config import get_settings, integration_status
 from app.db.models import Source
 from app.db.session import session_scope
@@ -39,7 +39,12 @@ async def tick_sources(ctx: dict[str, Any]) -> int:
     queued = 0
     async with session_scope() as session:
         await ensure_source_rows(session, get_settings())
-        rows = (await session.execute(select(Source).where(Source.enabled.is_(True)))).scalars()
+        rows = (
+            await session.execute(
+                # Rows of retired sources stay for their history but are never scheduled.
+                select(Source).where(Source.enabled.is_(True), Source.key.in_(list(SOURCES)))
+            )
+        ).scalars()
         for row in rows:
             due = (
                 row.last_run_at is None
@@ -90,19 +95,13 @@ async def heavy_picker(ctx: dict[str, Any]) -> int:
 
 
 async def reddit_deletion_sync(ctx: dict[str, Any]) -> int:
-    """Delete stored Reddit posts that were deleted on Reddit (official API or Apify)."""
+    """Delete stored Reddit posts that were deleted on Reddit (official API, when approved)."""
     s = get_settings()
     removed = 0
     async with session_scope() as session:
         if integration_status(s)["reddit"].configured:
             with contextlib.suppress(AdapterUnavailableError):
                 removed += await sync_deletions(session, s)
-        apify = get_adapters().apify
-        if apify is not None:
-            try:
-                removed += await sync_reddit_deletions(session, apify)
-            except Exception:  # an actor problem must never break the scheduler
-                logger.exception("apify reddit deletion sync failed")
     return removed
 
 

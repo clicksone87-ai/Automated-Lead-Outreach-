@@ -1,6 +1,7 @@
 """Social data providers with recorded response shapes (EnsembleData, ScrapeCreators, SocialCrawl,
 HikerAPI): parsing, per-provider daily caps, fallback, the 8-hour rule and the source. No live
-calls; values are synthetic, structures follow responses captured on 2026-11-21."""
+calls; values are synthetic, structures follow responses captured on 2026-11-21 (SocialCrawl X,
+Reddit and LinkedIn search and ScrapeCreators LinkedIn search included)."""
 
 from __future__ import annotations
 
@@ -14,6 +15,8 @@ import respx
 from sqlalchemy import select
 
 from app.adapters.social import (
+    PLATFORM_ORDER,
+    TIMEOUT,
     EnsembleData,
     HikerApi,
     ScrapeCreators,
@@ -56,13 +59,33 @@ SC_REDDIT = {"success": True, "credits_remaining": 1299, "credits_charged": 1, "
                         "author": "cafeowner", "subreddit": "smallbusiness", "created_utc": FRESH,
                         "url": "https://www.reddit.com/r/smallbusiness/comments/1abc/x/",
                         "permalink": "/r/smallbusiness/comments/1abc/x/"}]}  # fmt: skip
-SC_X = {"success": True, "credits_remaining": 1298, "credits_charged": 1, "query": "q", "cursor": "c",
-        "posts": [{"__typename": "Tweet", "rest_id": "2069",
-                   "core": {"user_results": {"result": {"core": {"screen_name": "plumberjoe"}}}},
-                   "legacy": {"full_text": "Anyone know a web designer?", "lang": "en",
-                              "created_at": datetime.fromtimestamp(FRESH, UTC).strftime(
-                                  "%a %b %d %H:%M:%S +0000 %Y")},
-                   "url": "https://x.com/plumberjoe/status/2069"}]}  # fmt: skip
+SC_LINKEDIN = {"success": True, "credits_remaining": 1294, "credits_charged": 1, "query": "q",
+               "cursor": "2", "posts": [{
+                   "activityUrn": "urn:li:activity:7529498362484723713",
+                   "url": "https://www.linkedin.com/posts/owner_need-a-site-activity-7529498362484723713-AbCd",
+                   "datePublished": datetime.fromtimestamp(FRESH, UTC).isoformat(),
+                   "description": "Looking for someone to build a website for my clinic",
+                   "author": {"name": "Sam Owner", "url": "https://www.linkedin.com/in/samowner"},
+                   "comments": [], "likeCount": 2, "commentCount": 0}]}  # fmt: skip
+
+
+def scw(platform: str, pid: str, url: str, published: int | None, text: str = "need a website",
+        **ext: Any) -> dict[str, Any]:  # fmt: skip
+    """One row of SocialCrawl's unified search response."""
+    return {"post": {"id": pid, "url": url, "content": {"text": text},
+                     "author": {"username": "owner", "display_name": "Owner"},
+                     "flags": {"deleted": False}, "ext": ext,
+                     "published_at": (datetime.fromtimestamp(published, UTC).isoformat()
+                                      if published else None)},
+            "computed": {"language": "en"}}  # fmt: skip
+
+
+def scw_body(platform: str, *rows: dict[str, Any], credits: int = 1) -> dict[str, Any]:
+    return {"success": True, "platform": platform, "credits_used": credits,
+            "data": {"items": list(rows), "next_cursor": None}}  # fmt: skip
+
+
+SCW_X = scw_body("twitter", scw("x", "2123", "https://x.com/plumberjoe/status/2123", FRESH))
 SC_THREADS = {"success": True, "credits_remaining": 1297, "credits_charged": 1,
               "posts": [{"pk": "3916", "code": "DZZ", "taken_at": FRESH,
                          "user": {"username": "scoops"}, "caption": {"text": "I need logo design"}}]}  # fmt: skip
@@ -110,7 +133,9 @@ async def test_ensembledata_tiktok_parsing_and_usage() -> None:
 async def test_scrapecreators_platforms() -> None:
     base = "https://api.scrapecreators.com/v1"
     respx.get(f"{base}/reddit/search").mock(return_value=httpx.Response(200, json=SC_REDDIT))
-    respx.get(f"{base}/twitter/search/posts").mock(return_value=httpx.Response(200, json=SC_X))
+    li = respx.get(f"{base}/linkedin/search/posts").mock(
+        return_value=httpx.Response(200, json=SC_LINKEDIN)
+    )
     respx.get(f"{base}/threads/search").mock(return_value=httpx.Response(200, json=SC_THREADS))
     respx.get(f"{base}/youtube/search").mock(return_value=httpx.Response(200, json=SC_YOUTUBE))
     ig = respx.get(f"{base}/instagram/search/hashtag").mock(
@@ -119,13 +144,18 @@ async def test_scrapecreators_platforms() -> None:
     sc = ScrapeCreators("sk")
     async with session_scope() as s:
         reddit = await sc.search(s, "reddit", "need a website", agent="d")
-        x = await sc.search(s, "x", "need a website", agent="d")
+        linkedin = await sc.search(s, "linkedin", "need a website", agent="d")
         threads = await sc.search(s, "threads", "need a logo", agent="d")
         yt = await sc.search(s, "youtube", "need a website", agent="d")
         insta = await sc.search(s, "instagram", "#need a website", agent="d")
     assert reddit[0].text == "Need a website for my cafe\n\nBudget $500"
     assert reddit[0].extra == {"subreddit": "smallbusiness"} and reddit[0].posted_at is not None
-    assert x[0].author == "plumberjoe" and x[0].posted_at == parse_time(FRESH)
+    assert (linkedin[0].platform, linkedin[0].id, linkedin[0].author) == (
+        "linkedin", "7529498362484723713", "Sam Owner"
+    )  # fmt: skip
+    assert linkedin[0].posted_at == parse_time(FRESH)
+    assert li.calls[0].request.url.params["date_posted"] == "last-day"
+    assert "x" not in ScrapeCreators.PATHS  # Google-indexed X search has no "latest" order
     assert threads[0].url == "https://www.threads.net/@scoops/post/DZZ"
     assert yt[0].author == "shopco" and yt[0].posted_at is not None
     assert insta == [] and ig.calls[0].request.url.params["hashtag"] == "needawebsite"
@@ -200,7 +230,9 @@ def test_integration_status_and_registration() -> None:
     assert not integration_status(_settings())["social_providers"].configured
     assert "social_providers" in SOURCES and SOURCES["social_providers"].default_enabled
     router = build_router(_settings(scrapecreators_api_key="k", ensembledata_api_token="t"))
-    assert set(router.platforms()) == {"tiktok", "reddit", "x", "threads", "youtube", "instagram"}
+    assert set(router.platforms()) == {
+        "tiktok", "reddit", "threads", "youtube", "instagram", "linkedin"
+    }  # fmt: skip
 
 
 @respx.mock
@@ -219,7 +251,7 @@ async def test_source_keeps_only_fresh_posts_and_rotates(monkeypatch: pytest.Mon
     async with session_scope() as s:
         rs = await runtime_settings.load(s)
         ctx = SourceContext(s, None, settings, rs, {"platforms_per_run": 2})  # type: ignore[arg-type]
-        assert src.platforms(ctx, build_router(settings)) == ["tiktok", "reddit"]  # never linkedin
+        assert src.platforms(ctx, build_router(settings)) == ["tiktok", "reddit", "linkedin"]
         leads = await src.fetch(ctx)
     ids = sorted(lead.source_item_id for lead in leads)
     assert ids == ["reddit:1abc", "tiktok:71"]  # tiktok:72 is 30 hours old
@@ -231,3 +263,58 @@ async def test_source_keeps_only_fresh_posts_and_rotates(monkeypatch: pytest.Mon
     async with session_scope() as s:
         ctx = SourceContext(s, None, off, rs, {})  # type: ignore[arg-type]
         assert await src.fetch(ctx) == []
+
+
+@respx.mock
+async def test_socialcrawl_x_latest_reddit_since_and_linkedin_credits() -> None:
+    base = "https://www.socialcrawl.dev/v1"
+    x = respx.get(f"{base}/twitter/search/tweets").mock(
+        return_value=httpx.Response(200, json=SCW_X)
+    )
+    reddit = respx.get(f"{base}/reddit/search").mock(
+        return_value=httpx.Response(200, json=scw_body("reddit", scw(
+            "reddit", "1y1ifsq", "https://www.reddit.com/r/smallbusiness/comments/1y1ifsq/x/",
+            FRESH, "Need a website for my cafe", subreddit="smallbusiness")))
+    )  # fmt: skip
+    li = respx.get(f"{base}/linkedin/search/posts").mock(
+        return_value=httpx.Response(200, json=scw_body("linkedin", scw(
+            "linkedin", "7529686502218502145",
+            "https://www.linkedin.com/feed/update/urn:li:activity:7529686502218502145", FRESH),
+            credits=5))
+    )  # fmt: skip
+    crawl = SocialCrawl("ck")
+    async with session_scope() as s:
+        xs = await crawl.search(s, "x", "need a website", agent="d")
+        rs = await crawl.search(s, "reddit", "need a website", agent="d")
+        ls = await crawl.search(s, "linkedin", "need a website", agent="d")
+    xp = x.calls[0].request.url.params
+    assert (xp["sort"], xp["max_age_days"]) == ("latest", "1")
+    assert xs[0].platform == "x" and xs[0].posted_at == parse_time(FRESH)
+    since = parse_time(reddit.calls[0].request.url.params["since"])
+    assert since is not None and abs((NOW - since) - timedelta(hours=8)) < timedelta(minutes=5)
+    assert rs[0].extra["subreddit"] == "smallbusiness" and rs[0].text.startswith("Need a website")
+    lp = li.calls[0].request.url.params
+    assert (lp["sort_by"], lp["date_posted"]) == ("date_posted", "past_24h")
+    assert ls[0].id == "7529686502218502145"
+    async with session_scope() as s:
+        units = (await s.execute(select(Cost.units).where(Cost.provider == "socialcrawl"))).all()
+    assert sorted(float(u) for (u,) in units) == [1, 1, 5]  # LinkedIn search costs 5 credits
+    assert PLATFORM_ORDER["x"] == ("socialcrawl",)
+    assert PLATFORM_ORDER["reddit"] == ("scrapecreators", "socialcrawl")
+
+
+@respx.mock
+async def test_reddit_falls_back_to_socialcrawl_on_connect_timeout() -> None:
+    assert TIMEOUT.connect == 20  # DNS + TCP + TLS to the providers needs more than 10 s
+    respx.get("https://api.scrapecreators.com/v1/reddit/search").mock(
+        side_effect=httpx.ConnectTimeout("connect timed out")
+    )
+    respx.get("https://www.socialcrawl.dev/v1/reddit/search").mock(
+        return_value=httpx.Response(200, json=scw_body("reddit", scw(
+            "reddit", "1abc", "https://www.reddit.com/r/smallbusiness/comments/1abc/x/", FRESH)))
+    )  # fmt: skip
+    router = SocialRouter([ScrapeCreators("s"), SocialCrawl("c")])
+    async with session_scope() as s:
+        posts = await router.search(s, "reddit", "need a website", agent="d")
+    await router.aclose()
+    assert [(p.provider, p.id) for p in posts] == [("socialcrawl", "1abc")]

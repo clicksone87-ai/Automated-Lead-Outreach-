@@ -318,7 +318,7 @@ SELLER = _rx(
     r"nossa agência",
 )
 
-# Job boards: every listing is a request, whatever its wording.
+# Freelance-platform listings: those platforms are worked outside this system.
 BOARD_URL = re.compile(
     r"(?:freelancer\.[a-z.]+/projects/|upwork\.com/(?:jobs|freelance-jobs)/|"
     r"peopleperhour\.com/freelance-jobs/|guru\.com/work/)",
@@ -333,18 +333,18 @@ class Verdict:
     needs_llm: bool = False
 
 
-def check_text(text: str, language: str | None, *, job_listing: bool = False) -> Verdict:
+def check_text(text: str, language: str | None) -> Verdict:
     """Is an explicit-request post worth the LLM? Rejects sellers and posts asking for nothing."""
     if not text.strip():
         return Verdict(False, "empty post")
     known = (language or "en") in DRAFTING_LANGUAGES
     if not known:
         return Verdict(True, "language without phrase lists: left to the LLM", needs_llm=True)
-    if not job_listing and SELLER.search(text) and not STRONG_BUYER.search(text):
+    if SELLER.search(text) and not STRONG_BUYER.search(text):
         return Verdict(False, "seller: someone advertising their own design/SEO services")
     if not SERVICE.search(text):
         return Verdict(False, "no logo, website, redesign or SEO mentioned")
-    if not job_listing and not REQUEST.search(text) and not STRONG_BUYER.search(text):
+    if not REQUEST.search(text) and not STRONG_BUYER.search(text):
         return Verdict(False, "mentions our services but asks for nothing")
     return Verdict(True, needs_llm=True)
 

@@ -8,7 +8,7 @@
 param(
   [Parameter(Position = 0)]
   [ValidateSet('up', 'down', 'build', 'logs', 'migrate', 'test', 'test-backend', 'test-dashboard',
-               'lint', 'seed', 'run-cycle', 'backup', 'check-providers', 'account-status', 'walkthrough', 'purge-demo', 'shell',
+               'lint', 'seed', 'run-cycle', 'backup', 'check-providers', 'account-status', 'walkthrough', 'purge-demo', 'clean-leads', 'shell',
                'help')]
   [string]$Target = 'help'
 )
@@ -50,8 +50,9 @@ switch ($Target) {
   'account-status' { Invoke-Api @('python', '-m', 'app.cli', 'account-status') }
   'walkthrough'    { & (Join-Path $PSScriptRoot 'backend/.venv/Scripts/python.exe') (Join-Path $PSScriptRoot 'scripts/walkthrough.py'); exit $LASTEXITCODE }
   'purge-demo'     { Invoke-Api @('python', '-m', 'app.cli', 'purge-demo') }
+  'clean-leads'    { Invoke-Api @('python', '-m', 'app.cli', 'clean-leads') }
   'shell'          { docker compose exec api bash }
   default          {
-    Write-Host 'Targets: up, down, build, logs, migrate, test, test-backend, test-dashboard, lint, seed, run-cycle, backup, check-providers, account-status, walkthrough, purge-demo, shell'
+    Write-Host 'Targets: up, down, build, logs, migrate, test, test-backend, test-dashboard, lint, seed, run-cycle, backup, check-providers, account-status, walkthrough, purge-demo, clean-leads, shell'
   }
 }

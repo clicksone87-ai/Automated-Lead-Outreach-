@@ -1,4 +1,9 @@
-"""Registry of discovery sources (each its own module, enable/disable in settings)."""
+"""Registry of discovery sources (each its own module, enable/disable in settings).
+
+Only sources listed here can be scheduled, run or shown on the Sources page. Retired keys
+(Apify X and Reddit, Freelancer.com, job-board alert emails) are absent on purpose: X and
+Reddit come from the social providers, and freelance platforms are handled outside this system.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +13,6 @@ from app.agents.discovery.proactive_triggers import (
     NoWebsiteSource,
     SiteHealthSource,
 )
-from app.agents.discovery.sources.boards import AlertEmailSource, FreelancerSource
 from app.agents.discovery.sources.mock_demo import MockDemoSource
 from app.agents.discovery.sources.reddit import RedditSource
 from app.agents.discovery.sources.registries import CompaniesHouseSource, OpenCorporatesSource
@@ -16,12 +20,7 @@ from app.agents.discovery.sources.rss import RssSource
 from app.agents.discovery.sources.scout import ScoutProfilesSource
 from app.agents.discovery.sources.search_api import SearchApiSource
 from app.agents.discovery.sources.social import MetaSource, XSource
-from app.agents.discovery.sources.social_apify import (
-    ApifyFacebookSource,
-    ApifyInstagramSource,
-    ApifyRedditSource,
-    ApifyXSource,
-)
+from app.agents.discovery.sources.social_apify import ApifyFacebookSource, ApifyInstagramSource
 from app.agents.discovery.sources.social_providers import SocialProvidersSource
 from app.agents.discovery.sources.web_directory import WebDirectorySource
 from app.config import get_settings
@@ -32,8 +31,6 @@ _ALL: list[DiscoverySource] = [
     RssSource(),
     CompaniesHouseSource(),
     OpenCorporatesSource(),
-    ApifyRedditSource(),
-    ApifyXSource(),
     ApifyInstagramSource(),
     ApifyFacebookSource(),
     SocialProvidersSource(),
@@ -41,8 +38,6 @@ _ALL: list[DiscoverySource] = [
     RedditSource(),
     XSource(),
     MetaSource(),
-    FreelancerSource(),
-    AlertEmailSource(),
     SiteHealthSource(),
     LocalSitesSource(),
     NoWebsiteSource(),

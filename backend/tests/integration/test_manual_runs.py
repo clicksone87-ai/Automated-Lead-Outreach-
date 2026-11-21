@@ -28,8 +28,9 @@ def _settings(**kw: Any) -> Settings:
 def test_run_needs_by_source() -> None:
     assert manual_runs.run_needs("rss", {}) == []
     assert manual_runs.run_needs("companies_house", {}) == []
-    x = manual_runs.run_needs("social_x", {"max_charge_usd": 0.02})
-    assert [(n.scope, n.amount) for n in x] == [("apify", 0.02), ("apify:social_x", 0.02)]
+    ig = manual_runs.run_needs("social_instagram", {"max_charge_usd": 0.02})
+    assert [(n.scope, n.amount) for n in ig] == [("apify", 0.02), ("apify:social_instagram", 0.02)]
+    assert manual_runs.run_needs("social_x", {}) == []  # retired: Apify no longer serves X
     fb = manual_runs.run_needs(
         "social_facebook", {"max_charge_usd": 0.05, "public_group_urls": ["g"]}
     )

@@ -62,10 +62,12 @@ def test_posts_asking_for_nothing_are_rejected() -> None:
     assert not check_text("   ", "en").passed
 
 
-def test_job_listings_skip_seller_and_request_wording() -> None:
-    text = "Website refresh for my contracting business; it should list my services and portfolio"
-    assert not check_text(text, "en").passed
-    assert check_text(text, "en", job_listing=True).passed
+def test_freelance_platform_listing_urls_are_recognised() -> None:
+    from app.agents.prefilter.rules import BOARD_URL  # noqa: PLC0415
+
+    assert BOARD_URL.search("https://www.upwork.com/jobs/~01abc")
+    assert BOARD_URL.search("https://www.freelancer.com/projects/web/clean-site")
+    assert not BOARD_URL.search("https://www.reddit.com/r/smallbusiness/comments/1abc/x/")
 
 
 def test_unknown_language_is_left_to_the_llm() -> None:
