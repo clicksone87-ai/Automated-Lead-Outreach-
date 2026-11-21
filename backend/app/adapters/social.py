@@ -1,28 +1,47 @@
 """Licensed social-data providers for PUBLIC posts: EnsembleData, ScrapeCreators, SocialCrawl
 and HikerAPI. Read-only keyword/hashtag search; nothing is ever posted.
 
-Every call is counted against the provider's daily cap (SOCIAL_PROVIDER_DAILY_CAP, costs table)
-before it is made. `SocialRouter` tries the providers that serve a platform in order and moves to
-the next one when a provider is out of quota or fails. Field paths were checked against live
-responses on 2026-11-21, except where a parser says UNVERIFIED.
+Every call is counted against the provider's daily cap (SOCIAL_PROVIDER_DAILY_CAP credits,
+costs table) before it is made. `SocialRouter` tries the providers that serve a platform in
+order and moves to the next one when a provider is out of quota or fails. Field paths were
+checked against live responses on 2026-11-21, except where a parser says UNVERIFIED.
+LinkedIn is read only through the providers' LinkedIn endpoints, never from linkedin.com.
 """
 
 from __future__ import annotations
 
 import logging
+import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from typing import Any, ClassVar
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.orchestrator import quota
 from app.orchestrator.budget import BudgetExceededError
 
 logger = logging.getLogger(__name__)
-TIMEOUT = httpx.Timeout(45, connect=10)
+# The connect phase covers DNS + TCP + TLS. ScrapeCreators sits behind AWS API Gateway in
+# us-west-2 with dual-stack DNS; from the containers its first connect has exceeded the old
+# 10 s limit (a live Reddit search failed with ConnectTimeout while the next call worked).
+TIMEOUT = httpx.Timeout(60, connect=20)
+# Connection failures happen before a request is sent, so they are safe to retry and are
+# never charged by the provider.
+CONNECT_RETRIES = 2
+
+
+def make_client() -> httpx.AsyncClient:
+    """HTTP client for the providers: IPv4 only (one A lookup, no stalls on an unroutable
+    IPv6 address) and retried connects."""
+    # The source address of outgoing connections (picks the IPv4 family), not a listener.
+    ipv4 = "0.0.0.0"  # noqa: S104
+    transport = httpx.AsyncHTTPTransport(local_address=ipv4, retries=CONNECT_RETRIES)
+    return httpx.AsyncClient(timeout=TIMEOUT, transport=transport)
 
 
 @dataclass(slots=True)
@@ -92,13 +111,16 @@ class _Provider:
 
     def __init__(self, api_key: str, client: httpx.AsyncClient | None = None) -> None:
         self._key = api_key
-        self._client = client or httpx.AsyncClient(timeout=TIMEOUT)
+        self._client = client or make_client()
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
 
     async def _get_json(
         self, session: AsyncSession, url: str, *, params: dict[str, Any], headers: dict[str, str],
-        agent: str, what: str,
+        agent: str, what: str, credits: int = 1,
     ) -> dict[str, Any]:  # fmt: skip
-        await quota.consume(session, self.name, agent=agent, description=what[:200])
+        await quota.consume(session, self.name, agent=agent, units=credits, description=what[:200])
         resp = await self._client.get(url, params=params, headers=headers)
         if resp.status_code == 404:
             return {}  # "no posts found" (not charged by the providers)
@@ -134,21 +156,29 @@ class EnsembleData(_Provider):
         return [p for i in items if isinstance(i, dict) and (p := _aweme(i, self.name))]
 
 
+_LI_ACTIVITY = re.compile(r"activity[:-](\d{10,})")
+
+
 class ScrapeCreators(_Provider):
-    """scrapecreators.com: `x-api-key` header, 1 credit per search."""
+    """scrapecreators.com: `x-api-key` header, 1 credit per search.
+
+    Its X search reads Google-indexed posts with no date or "latest" option (live: 10 posts,
+    none from the last 8 hours), so X goes to SocialCrawl instead. LinkedIn post search is
+    Google-indexed too and filtered to the last day.
+    """
 
     name: ClassVar[str] = "scrapecreators"
     platforms: ClassVar[frozenset[str]] = frozenset(
-        {"tiktok", "reddit", "x", "threads", "youtube", "instagram"}
+        {"tiktok", "reddit", "threads", "youtube", "instagram", "linkedin"}
     )
     BASE = "https://api.scrapecreators.com/v1"
     PATHS: ClassVar[dict[str, tuple[str, str, dict[str, str]]]] = {
         "tiktok": ("/tiktok/search/keyword", "query", {"trim": "true"}),
         "reddit": ("/reddit/search", "query", {"sort": "new", "timeframe": "day"}),
-        "x": ("/twitter/search/posts", "query", {}),
         "threads": ("/threads/search", "query", {}),
         "youtube": ("/youtube/search", "query", {"uploadDate": "today"}),
         "instagram": ("/instagram/search/hashtag", "hashtag", {"date_posted": "last-day"}),
+        "linkedin": ("/linkedin/search/posts", "query", {"date_posted": "last-day"}),
     }
 
     async def search(
@@ -180,16 +210,6 @@ class ScrapeCreators(_Provider):
                           parse_time(i.get("created_utc")), self.name,
                           {"subreddit": i.get("subreddit")})  # fmt: skip
 
-    def _x(self, i: dict[str, Any]) -> SocialPost | None:
-        tid, legacy = i.get("rest_id"), i.get("legacy") or {}
-        if not tid or legacy.get("retweeted_status_result"):
-            return None
-        handle = _get(i, "core", "user_results", "result", "core", "screen_name")
-        url = str(i.get("url") or f"https://x.com/{handle or 'i/web'}/status/{tid}")
-        return SocialPost("x", str(tid), url, str(legacy.get("full_text") or ""), handle,
-                          parse_time(legacy.get("created_at")), self.name,
-                          {"lang": legacy.get("lang")})  # fmt: skip
-
     def _threads(self, i: dict[str, Any]) -> SocialPost | None:
         code, user = i.get("code"), _get(i, "user", "username")
         if not code:
@@ -220,36 +240,70 @@ class ScrapeCreators(_Provider):
                           str(text or ""), _get(i, "owner", "username"),
                           parse_time(i.get("taken_at")), self.name)  # fmt: skip
 
+    def _linkedin(self, i: dict[str, Any]) -> SocialPost | None:
+        url = str(i.get("url") or "")
+        m = _LI_ACTIVITY.search(str(i.get("activityUrn") or "")) or _LI_ACTIVITY.search(url)
+        if not url or not m:
+            return None
+        author = i.get("author") or {}
+        return SocialPost("linkedin", m.group(1), url, str(i.get("description") or ""),
+                          author.get("name"), parse_time(i.get("datePublished")), self.name,
+                          {"author_url": author.get("url")})  # fmt: skip
+
+
+def _reddit_since() -> dict[str, str]:
+    # `since` makes SocialCrawl's Reddit search newest-first and stops at older posts.
+    since = datetime.now(UTC) - timedelta(hours=get_settings().social_max_post_age_hours)
+    return {"since": since.strftime("%Y-%m-%dT%H:%M:%SZ")}
+
 
 class SocialCrawl(_Provider):
-    """socialcrawl.dev: `x-api-key` header, unified post schema, 1 credit per search page."""
+    """socialcrawl.dev: `x-api-key` header, unified post schema, 1 credit per search page
+    (LinkedIn post search: 5 credits per page)."""
 
     name: ClassVar[str] = "socialcrawl"
-    platforms: ClassVar[frozenset[str]] = frozenset({"tiktok", "facebook"})
+    platforms: ClassVar[frozenset[str]] = frozenset(
+        {"tiktok", "facebook", "x", "reddit", "linkedin"}
+    )
     BASE = "https://www.socialcrawl.dev/v1"
-    PATHS: ClassVar[dict[str, tuple[str, dict[str, str]]]] = {
-        "tiktok": ("/tiktok/search", {"sort_by": "date-posted"}),
-        "facebook": ("/facebook/search/posts", {}),
-    }
+    #: platform -> (path, fixed params, credits per call)
+    PATHS: ClassVar[dict[str, tuple[str, dict[str, str], int]]] = {
+        "tiktok": ("/tiktok/search", {"sort_by": "date-posted"}, 1),
+        "facebook": ("/facebook/search/posts", {}, 1),
+        # Latest tweets first; rows older than a day are dropped by the provider.
+        "x": ("/twitter/search/tweets", {"sort": "latest", "max_age_days": "1"}, 1),
+        "reddit": ("/reddit/search", {}, 1),
+        "linkedin": (
+            "/linkedin/search/posts", {"sort_by": "date_posted", "date_posted": "past_24h"}, 5,
+        ),
+    }  # fmt: skip
+    DYNAMIC: ClassVar[dict[str, Callable[[], dict[str, str]]]] = {"reddit": _reddit_since}
 
     async def search(
         self, session: AsyncSession, platform: str, query: str, *, agent: str
     ) -> list[SocialPost]:
-        path, extra = self.PATHS[platform]
+        path, extra, credits = self.PATHS[platform]
+        dynamic = self.DYNAMIC.get(platform)
+        params = {"query": query, **extra, **(dynamic() if dynamic else {})}
         body = await self._get_json(
-            session, f"{self.BASE}{path}", params={"query": query, **extra},
-            headers={"x-api-key": self._key}, agent=agent, what=f"{platform}: {query}",
+            session, f"{self.BASE}{path}", params=params, headers={"x-api-key": self._key},
+            agent=agent, what=f"{platform}: {query}", credits=credits,
         )  # fmt: skip
         out = []
         for row in _get(body, "data", "items") or []:
             post = row.get("post") if isinstance(row, dict) else None
             if not isinstance(post, dict) or not post.get("id") or not post.get("url"):
                 continue
+            if _get(post, "flags", "deleted"):
+                continue
             author = _get(post, "author", "username") or _get(post, "author", "display_name")
+            extra_out: dict[str, Any] = {"language": _get(row, "computed", "language")}
+            if platform == "reddit":
+                extra_out["subreddit"] = _get(post, "ext", "subreddit")
             out.append(SocialPost(platform, str(post["id"]), str(post["url"]),
                                   str(_get(post, "content", "text") or ""), author,
                                   parse_time(post.get("published_at")), self.name,
-                                  {"language": _get(row, "computed", "language")}))  # fmt: skip
+                                  extra_out))  # fmt: skip
         return out
 
 
@@ -289,15 +343,17 @@ class HikerApi(_Provider):
         return out
 
 
-# Which providers serve each platform, best first (free daily units before one-time credits).
+# Which providers serve each platform, best first (free daily units and the large one-time
+# ScrapeCreators balance before SocialCrawl's small one; SocialCrawl alone has latest-first X).
 PLATFORM_ORDER: dict[str, tuple[str, ...]] = {
     "tiktok": ("ensembledata", "socialcrawl", "scrapecreators"),
-    "reddit": ("scrapecreators",),
-    "x": ("scrapecreators",),
+    "reddit": ("scrapecreators", "socialcrawl"),
+    "x": ("socialcrawl",),
     "threads": ("scrapecreators",),
     "youtube": ("scrapecreators",),
     "instagram": ("hikerapi", "scrapecreators"),
     "facebook": ("socialcrawl",),
+    "linkedin": ("scrapecreators", "socialcrawl"),
 }
 
 
@@ -311,6 +367,10 @@ class SocialRouter:
         return [
             pl for pl, order in PLATFORM_ORDER.items() if any(n in self.providers for n in order)
         ]
+
+    async def aclose(self) -> None:
+        for p in self.providers.values():
+            await p.aclose()
 
     async def search(
         self, session: AsyncSession, platform: str, query: str, *, agent: str
