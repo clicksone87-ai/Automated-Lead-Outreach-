@@ -157,8 +157,11 @@ async def test_worldwide_markets_park_only_excluded_countries() -> None:
     assert outcome.status != LeadStatus.PARKED_COUNTRY, outcome.reason
     parked = await _run(pk.id)
     assert not parked.proceed
-    assert parked.status == LeadStatus.PARKED_COUNTRY
-    assert parked.reason == "PK is an excluded market"
+    assert parked.status == LeadStatus.NOT_USEFUL
+    assert parked.reason == "not useful: excluded market (PK is an excluded market)"
+    async with session_scope() as s:
+        row = await s.get(Lead, pk.id)
+        assert row is not None and row.not_useful_reason == "excluded_market"
 
 
 async def test_unsupported_language_lead_parked_by_language() -> None:
@@ -214,9 +217,10 @@ async def test_seller_post_rejected_and_platform_identity_exact() -> None:
             source="reddit",
         )
     outcome = await _run(lead.id)
-    assert outcome.status == LeadStatus.REJECTED_LOW_INTENT
+    assert outcome.status == LeadStatus.NOT_USEFUL
     async with session_scope() as s:
         row = await s.get(Lead, lead.id)
+        assert row is not None and row.not_useful_reason == "low_intent"
         biz = await s.get(Business, row.business_id)  # type: ignore[union-attr, arg-type]
         assert (biz.registry_source, biz.registry_number) == ("handle:reddit", "designer_dave")  # type: ignore[union-attr]
 
@@ -247,7 +251,7 @@ async def test_fabricated_quotes_and_urls_are_discarded_and_intent_capped() -> N
             text="Do small shops even need a website these days? Curious, not hiring.",
         )
     outcome = await _run(lead.id, llm=_LyingLLM())
-    assert outcome.status == LeadStatus.REJECTED_LOW_INTENT
+    assert outcome.status == LeadStatus.NOT_USEFUL and "low intent" in outcome.reason
     async with session_scope() as s:
         brief = (await s.get(Brief, lead.id)).data  # type: ignore[union-attr]
         assert brief["evidence_quotes"] == []
@@ -273,7 +277,7 @@ async def test_irrelevant_post_never_reaches_the_llm() -> None:
         )
     _CountingLLM.calls = 0
     outcome = await _run(lead.id, llm=_CountingLLM())
-    assert outcome.status == LeadStatus.REJECTED_LOW_INTENT
+    assert outcome.status == LeadStatus.NOT_USEFUL and "low intent" in outcome.reason
     assert _CountingLLM.calls == 0
     async with session_scope() as s:
         brief = (await s.get(Brief, lead.id)).data  # type: ignore[union-attr]

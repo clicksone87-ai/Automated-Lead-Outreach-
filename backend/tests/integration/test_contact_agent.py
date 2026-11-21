@@ -135,10 +135,14 @@ async def test_never_guesses_an_address_when_site_publishes_none() -> None:
     verifier = FakeVerifier({})
     pages = {"https://acme-plumbing.com/": HOME, "https://acme-plumbing.com/about": ABOUT}
     outcome = await _run(lead_id, pages, verifier)
-    assert outcome.status == LeadStatus.NO_CONTACT_ROUTE
+    assert outcome.status == LeadStatus.NOT_USEFUL
     assert verifier.calls == []
     async with session_scope() as s:
         assert (await s.execute(select(func.count()).select_from(Contact))).scalar_one() == 0
+        lead = await s.get(Lead, lead_id)
+        assert lead is not None and lead.status == LeadStatus.NOT_USEFUL
+        assert lead.not_useful_reason == "no_contact"
+        assert lead.status_reason and lead.status_reason.startswith("not useful: no contact route")
 
 
 async def test_invalid_emails_are_never_used() -> None:
@@ -155,7 +159,7 @@ async def test_invalid_emails_are_never_used() -> None:
         "https://acme-plumbing.com/contact": contact_no_form,
     }
     outcome = await _run(lead_id, pages, verifier)
-    assert outcome.status == LeadStatus.NO_CONTACT_ROUTE
+    assert outcome.status == LeadStatus.NOT_USEFUL
     async with session_scope() as s:
         statuses = set((await s.execute(select(Contact.verification_status))).scalars())
         assert statuses == {"invalid", "unknown"}

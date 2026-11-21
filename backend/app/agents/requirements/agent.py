@@ -26,6 +26,8 @@ from app.policy.engine import PolicyEngine
 from app.services import runtime_settings
 from app.services.dedup import BusinessCandidate, normalize_domain, resolve_business
 from app.services.locale import timezone_for
+from app.services.not_useful import NotUsefulReason
+from app.services.not_useful_leads import stop
 
 SYSTEM = (
     "You qualify inbound sales leads for a small agency that sells logo design, new websites, "
@@ -322,11 +324,11 @@ class RequirementsAgent:
         ):
             if not country:
                 if low_intent:  # nothing to wait for: an unknown-country lead with no intent
-                    return AgentOutcome(False, LeadStatus.REJECTED_LOW_INTENT, intent_reason, out)
+                    return stop(lead, NotUsefulReason.LOW_INTENT, intent_reason, out)
                 why = "country unknown"
             elif rules.is_excluded(country):
-                return AgentOutcome(
-                    False, LeadStatus.PARKED_COUNTRY, f"{country} is an excluded market", out
+                return stop(
+                    lead, NotUsefulReason.EXCLUDED_MARKET, f"{country} is an excluded market", out
                 )
             elif not targeted:
                 why = f"{country} not a target country"
@@ -359,7 +361,7 @@ class RequirementsAgent:
         if not verdict.allowed:
             return AgentOutcome(False, LeadStatus.PARKED_COUNTRY, verdict.failures[0].reason, out)
         if low_intent:
-            return AgentOutcome(False, LeadStatus.REJECTED_LOW_INTENT, intent_reason, out)
+            return stop(lead, NotUsefulReason.LOW_INTENT, intent_reason, out)
         return None
 
     async def _resolve_business(

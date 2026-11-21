@@ -42,6 +42,8 @@ from app.orchestrator.agents import AgentContext, AgentOutcome, register
 from app.orchestrator.budget import BudgetExceededError
 from app.services import evidence
 from app.services.dedup import PLATFORM_DOMAINS, normalize_domain
+from app.services.not_useful import NotUsefulReason
+from app.services.not_useful_leads import stop
 
 logger = logging.getLogger(__name__)
 
@@ -104,8 +106,10 @@ class ContactEnrichmentAgent:
     async def run(self, ctx: AgentContext, lead_id: uuid.UUID) -> AgentOutcome:
         s = ctx.session
         lead = await s.get(Lead, lead_id)
-        if lead is None or lead.business_id is None:
-            return AgentOutcome(False, LeadStatus.NO_CONTACT_ROUTE, "lead has no business record")
+        if lead is None:
+            return AgentOutcome(False, None, "lead not found")
+        if lead.business_id is None:
+            return stop(lead, NotUsefulReason.NO_CONTACT, "lead has no business record")
         business = await s.get(Business, lead.business_id)
         assert business is not None
 
@@ -182,9 +186,9 @@ class ContactEnrichmentAgent:
                 "message on that channel",
                 output,
             )
-        return AgentOutcome(
-            False,
-            LeadStatus.NO_CONTACT_ROUTE,
+        return stop(
+            lead,
+            NotUsefulReason.NO_CONTACT,
             "no verified email, contact form or platform route found",
             output,
         )

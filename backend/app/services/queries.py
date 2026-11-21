@@ -75,6 +75,7 @@ from app.schemas import (
 )
 from app.services import manual_runs, runtime_settings
 from app.services.families import family_for
+from app.services.not_useful_leads import working
 
 STAGES: list[tuple[str, str, set[str]]] = [
     ("discovery", "Discovery", {LeadStatus.DISCOVERED}),
@@ -108,8 +109,9 @@ STOPPED = {
     LeadStatus.FAILED,
     LeadStatus.PAUSED_BUDGET,
     LeadStatus.CLOSED,
-    LeadStatus.NOT_USEFUL,
 }
+# "Not useful" leads are not "stopped work": they have their own tab and stay out of every
+# working view and count (not_useful_leads.working()).
 AGENTS = ("discovery", *PIPELINE_ORDER)
 
 
@@ -289,7 +291,11 @@ async def agent_statuses(session: AsyncSession) -> list[AgentStatus]:
 
 async def overview(session: AsyncSession) -> OverviewOut:
     counts = dict(
-        (await session.execute(select(Lead.status, func.count()).group_by(Lead.status))).all()
+        (
+            await session.execute(
+                select(Lead.status, func.count()).where(working()).group_by(Lead.status)
+            )
+        ).all()
     )
     stages: list[StageCount] = []
     cumulative = 0
@@ -307,19 +313,29 @@ async def overview(session: AsyncSession) -> OverviewOut:
         await session.execute(
             select(func.count())
             .select_from(Lead)
-            .where(Lead.created_at >= now.replace(hour=0, minute=0, second=0, microsecond=0))
+            .where(
+                working(),
+                Lead.created_at >= now.replace(hour=0, minute=0, second=0, microsecond=0),
+            )
         )
     ).scalar_one()
     leads_7d = (
         await session.execute(
-            select(func.count()).select_from(Lead).where(Lead.created_at >= now - timedelta(days=7))
+            select(func.count())
+            .select_from(Lead)
+            .where(working(), Lead.created_at >= now - timedelta(days=7))
         )
     ).scalar_one()
     awaiting = (
         await session.execute(
             select(func.count())
             .select_from(Proposal)
-            .where(Proposal.approval_status == ApprovalStatus.PENDING)
+            .join(Lead, Lead.id == Proposal.lead_id)
+            .where(
+                Proposal.approval_status == ApprovalStatus.PENDING,
+                Proposal.to_email.is_not(None),  # manual-route drafts live in Manual outreach
+                working(),
+            )
         )
     ).scalar_one()
     inbox = (
@@ -435,7 +451,11 @@ def summarize_lead_family_tiers(
 
 
 async def lead_family_tier_counts(session: AsyncSession) -> list[LeadFamilyTierCounts]:
-    rows = (await session.execute(select(Lead.source_family, Lead.source, Lead.intent_score))).all()
+    rows = (
+        await session.execute(
+            select(Lead.source_family, Lead.source, Lead.intent_score).where(working())
+        )
+    ).all()
     return summarize_lead_family_tiers(list(rows))
 
 
@@ -448,6 +468,8 @@ async def list_leads(
     **filters: Any,
 ) -> LeadPage:
     base = select(Lead, Business.name).outerjoin(Business, Lead.business_id == Business.id)
+    if LeadStatus.NOT_USEFUL not in (filters.get("status") or []):
+        base = base.where(working())  # only an explicit status filter shows them here
     base = _lead_filters(base, **filters)
     total = (
         await session.execute(select(func.count()).select_from(base.order_by(None).subquery()))

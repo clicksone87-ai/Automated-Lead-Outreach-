@@ -20,6 +20,8 @@ from app.orchestrator.agents import AgentContext, AgentOutcome, register
 from app.policy.country_rules import get_rules
 from app.services import runtime_settings
 from app.services.families import family_for
+from app.services.not_useful import NotUsefulReason
+from app.services.not_useful_leads import stop
 
 JOB_BOARD_SOURCES = frozenset({"freelancer", "alert_emails"})
 
@@ -36,8 +38,8 @@ class PrefilterAgent:
         rs = await runtime_settings.load(s)
 
         if lead.country and get_rules().is_excluded(lead.country):
-            return self._stop(
-                lead, LeadStatus.PARKED_COUNTRY, f"{lead.country} is an excluded market"
+            return self._not_useful(
+                lead, NotUsefulReason.EXCLUDED_MARKET, f"{lead.country} is an excluded market"
             )
         if (
             lead.country
@@ -65,13 +67,13 @@ class PrefilterAgent:
             },
         )
         if stale:
-            return self._stop(lead, LeadStatus.REJECTED_LOW_INTENT, stale)
+            return self._not_useful(lead, NotUsefulReason.OLDER_THAN_8H, stale)
 
         text = "\n".join(filter(None, [lead.title, lead.raw_text]))
         job_listing = lead.source in JOB_BOARD_SOURCES or bool(BOARD_URL.search(lead.source_url))
         verdict = check_text(text, lead.language, job_listing=job_listing)
         if not verdict.passed:
-            return self._stop(lead, LeadStatus.REJECTED_LOW_INTENT, verdict.reason)
+            return self._not_useful(lead, NotUsefulReason.LOW_INTENT, verdict.reason)
 
         if await self._repeated_text(ctx, lead):
             return self._stop(
@@ -82,9 +84,14 @@ class PrefilterAgent:
     @staticmethod
     def _stop(lead: Lead, status: LeadStatus, reason: str) -> AgentOutcome:
         lead.prefilter_reason = reason
-        if status == LeadStatus.REJECTED_LOW_INTENT:
-            lead.intent_score = 0  # counted as low intent, never as "not scored yet"
         return AgentOutcome(False, status, f"prefilter: {reason}", {"rule": reason})
+
+    @staticmethod
+    def _not_useful(lead: Lead, why: NotUsefulReason, reason: str) -> AgentOutcome:
+        lead.prefilter_reason = reason
+        if why != NotUsefulReason.EXCLUDED_MARKET:
+            lead.intent_score = 0  # counted as low intent, never as "not scored yet"
+        return stop(lead, why, f"prefilter: {reason}", {"rule": reason})
 
     @staticmethod
     async def _repeated_text(ctx: AgentContext, lead: Lead) -> bool:

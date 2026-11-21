@@ -47,6 +47,8 @@ from app.orchestrator.agents import AgentContext, AgentOutcome, register
 from app.orchestrator.errors import TransientAgentError
 from app.policy.engine import PolicyEngine
 from app.services import runtime_settings
+from app.services.not_useful import NotUsefulReason
+from app.services.not_useful_leads import stop
 
 logger = logging.getLogger(__name__)
 TEMPLATE = "trades"
@@ -74,9 +76,7 @@ class WebsiteBuilderAgent:
         if "website_builder" not in brief.get("agents_to_run", []):
             return AgentOutcome(True, None, "website not needed for this lead")
         if not lead.pipeline_state.get("contact_id"):
-            return AgentOutcome(
-                False, LeadStatus.NO_CONTACT_ROUTE, "no contact route: build skipped"
-            )
+            return stop(lead, NotUsefulReason.NO_CONTACT, "no contact route: build skipped")
         verdict = await PolicyEngine(s).evaluate_drafting(lead)
         if not verdict.allowed:
             return AgentOutcome(False, None, f"policy: {verdict.failures[0].reason}")

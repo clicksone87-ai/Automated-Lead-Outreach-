@@ -61,7 +61,7 @@ async def test_buyer_passes() -> None:
 async def test_seller_is_rejected_with_zero_intent() -> None:
     ok, lead = await _run(await _lead("I design websites for local businesses, DM me for a quote"))
     assert not ok
-    assert lead.status == LeadStatus.REJECTED_LOW_INTENT
+    assert lead.status == LeadStatus.NOT_USEFUL and lead.not_useful_reason == "low_intent"
     assert lead.intent_score == 0 and lead.prefilter_reason and "seller" in lead.prefilter_reason
 
 
@@ -69,6 +69,7 @@ async def test_stale_social_post_is_rejected() -> None:
     lid = await _lead("Need a new logo for my cafe", posted_at=NOW - timedelta(hours=40))
     ok, lead = await _run(lid)
     assert not ok and "h old" in str(lead.prefilter_reason)
+    assert lead.status == LeadStatus.NOT_USEFUL and lead.not_useful_reason == "older_than_8h"
 
 
 async def test_repeated_text_keeps_only_the_first_lead() -> None:
@@ -82,7 +83,8 @@ async def test_repeated_text_keeps_only_the_first_lead() -> None:
 
 async def test_excluded_market_is_parked_worldwide_otherwise_and_triggers_pass() -> None:
     ok, lead = await _run(await _lead("Need a website for my shop", country="PK"))
-    assert not ok and lead.status == LeadStatus.PARKED_COUNTRY
+    assert not ok and lead.status == LeadStatus.NOT_USEFUL
+    assert lead.not_useful_reason == "excluded_market"
     assert lead.prefilter_reason == "PK is an excluded market"
     ok, _ = await _run(await _lead("Need a website for my bakery, budget $500", country="BR"))
     assert ok  # every other country is a market

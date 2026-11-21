@@ -33,6 +33,7 @@ from app.db.models import (
 from app.orchestrator.queue import enqueue_pipeline
 from app.services import activity, autonomy
 from app.services.manual_outreach import list_queue, set_status, sync_queue
+from app.services.not_useful_leads import working
 from app.services.outreach_jobs import suppress
 from app.services.sending import MarkSentError, mark_sent
 from app.services.unsubscribe import read_token
@@ -157,7 +158,12 @@ async def approvals(session: SessionDep, state: str = "pending") -> list[dict[st
             select(Proposal, Lead, Business)
             .join(Lead, Lead.id == Proposal.lead_id)
             .outerjoin(Business, Business.id == Lead.business_id)
-            .where(Proposal.approval_status == state)
+            .where(
+                Proposal.approval_status == state,
+                # Track A only: drafts for a manual route are worked in Manual outreach.
+                Proposal.to_email.is_not(None),
+                working(),
+            )
             .order_by(Proposal.created_at)
             .limit(100)
         )

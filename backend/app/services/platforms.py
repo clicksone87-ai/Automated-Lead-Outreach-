@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Brief, Lead, RunStatus, Source, SourceRun
 from app.schemas import PlatformReport, PlatformStat
+from app.services.not_useful_leads import working
 
 QUALIFIED_MIN, HIGH_MIN = 60, 75
 
@@ -45,14 +46,16 @@ async def platform_report(
     lead_sources = [k for k in keys if ":" not in k] + [PROVIDERS_SOURCE]
 
     seller = Brief.data["intent"]["signals"].has_key("seller_not_buyer")
+    # Lead counts are working leads only; "sellers filtered" counts what was dropped on purpose.
+    live = working()
     lead_rows = (
         await session.execute(
             select(
                 _LEAD_KEY,
-                func.count(),
-                func.count().filter(Lead.created_at >= now - timedelta(hours=recent_hours)),
-                func.count().filter(Lead.intent_score >= QUALIFIED_MIN),
-                func.count().filter(Lead.intent_score >= HIGH_MIN),
+                func.count().filter(live),
+                func.count().filter(live, Lead.created_at >= now - timedelta(hours=recent_hours)),
+                func.count().filter(live, Lead.intent_score >= QUALIFIED_MIN),
+                func.count().filter(live, Lead.intent_score >= HIGH_MIN),
                 func.count().filter(seller),
             )
             .outerjoin(Brief, Brief.lead_id == Lead.id)
@@ -66,7 +69,7 @@ async def platform_report(
     daily_rows = (
         await session.execute(
             select(_LEAD_KEY, day, func.count())
-            .where(Lead.source.in_(lead_sources), Lead.created_at >= day0)
+            .where(Lead.source.in_(lead_sources), Lead.created_at >= day0, working())
             .group_by(_LEAD_KEY, day)
         )
     ).all()

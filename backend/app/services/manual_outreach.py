@@ -20,6 +20,7 @@ from app.db.models import (
     ManualOutreachStatus,
     Proposal,
 )
+from app.services.not_useful_leads import working
 
 
 def _track_b_drafts(proposal: Proposal) -> dict[str, Any] | None:
@@ -103,7 +104,7 @@ async def list_queue(session: AsyncSession, status: str = "pending") -> list[dic
             select(ManualOutreach, Lead, Business)
             .join(Lead, Lead.id == ManualOutreach.lead_id)
             .outerjoin(Business, Business.id == Lead.business_id)
-            .where(ManualOutreach.status == status)
+            .where(ManualOutreach.status == status, working())
             .order_by(ManualOutreach.created_at.asc())
         )
     ).all()
