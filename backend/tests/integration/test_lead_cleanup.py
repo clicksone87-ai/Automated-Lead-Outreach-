@@ -76,13 +76,19 @@ async def test_cleanup_moves_old_social_and_freelance_leads_once() -> None:
     await _seed()
     async with session_scope() as s:
         dry = await lead_cleanup.clean_leads(s, dry_run=True)
-    assert (dry.older_than_8h, dry.freelance, dry.kept_acted_on) == (4, 3, 1)
+    # "already" was filed as no contact; freelance is a source rule and comes first.
+    assert (dry.older_than_8h, dry.freelance, dry.kept_acted_on, dry.relabelled) == (4, 4, 1, 1)
     assert all(status != "not_useful" for name, (status, _, _) in (await _state()).items()
                if name != "already")  # fmt: skip
 
     async with session_scope() as s:
         result = await lead_cleanup.clean_leads(s)
-    assert (result.older_than_8h, result.freelance, result.kept_acted_on) == (4, 3, 1)
+    assert (result.older_than_8h, result.freelance, result.kept_acted_on, result.relabelled) == (
+        4,
+        4,
+        1,
+        1,
+    )
     assert result.by_source["social_x:older_than_8h"] == 1
     state = await _state()
     for name, *_, expected in FIXTURES:
@@ -92,13 +98,42 @@ async def test_cleanup_moves_old_social_and_freelance_leads_once() -> None:
         else:
             assert (status, reason) == (LeadStatus.NOT_USEFUL, expected), name
     assert state["old_x"][2] == "not useful: older than 8 h (post was 30 h old)"
+    assert state["already"][1] == "freelance"  # a source rule beats an earlier weaker reason
     assert state["undated_reddit"][2] == "not useful: older than 8 h (post has no timestamp)"
     assert state["freelancer"][2] == "not useful: freelance platform (from freelancer)"
     assert state["scout"][0] == LeadStatus.DISCOVERED  # a profile, not a post
     assert state["old_but_sent"][0] == LeadStatus.SENT  # outreach history is kept
-    assert state["already"][1] == "no_contact"  # an earlier reason is never overwritten
 
     async with session_scope() as s:  # idempotent: nothing left to move
         again = await lead_cleanup.clean_leads(s)
     assert (again.older_than_8h, again.freelance) == (0, 0)
     assert await _state() == state
+
+
+async def test_stale_posts_filed_as_low_intent_are_relabelled_by_age() -> None:
+    from datetime import UTC, datetime, timedelta  # noqa: PLC0415
+
+    from app.services import not_useful  # noqa: PLC0415
+    from app.services.not_useful import NotUsefulReason  # noqa: PLC0415
+
+    now = datetime.now(UTC)
+    async with session_scope() as s:
+        stale = Lead(source="social_reddit", source_family="social", source_url="https://www.reddit.com/r/x/comments/1/a/",
+                     source_item_id="r1", trigger_type="explicit_request", pipeline_state={},
+                     posted_at=now - timedelta(hours=30), created_at=now)  # fmt: skip
+        fresh = Lead(source="social_reddit", source_family="social", source_url="https://www.reddit.com/r/x/comments/2/b/",
+                     source_item_id="r2", trigger_type="explicit_request", pipeline_state={},
+                     posted_at=now - timedelta(hours=2), created_at=now)  # fmt: skip
+        s.add_all([stale, fresh])
+        await s.flush()
+        not_useful.mark(stale, NotUsefulReason.LOW_INTENT)
+        not_useful.mark(fresh, NotUsefulReason.LOW_INTENT)
+    async with session_scope() as s:
+        first = await lead_cleanup.clean_leads(s)
+    async with session_scope() as s:
+        again = await lead_cleanup.clean_leads(s)
+        rows = {lead.source_item_id: lead for lead in (await s.execute(select(Lead))).scalars()}
+    assert first.relabelled == 1 and first.older_than_8h == 1
+    assert again.relabelled == 0 and again.older_than_8h == 0  # idempotent
+    assert rows["r1"].not_useful_reason == "older_than_8h"
+    assert rows["r2"].not_useful_reason == "low_intent"  # fresh but low intent stays low intent

@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.discovery.freshness import is_social_post, max_post_age
@@ -43,6 +43,7 @@ class CleanupResult:
     older_than_8h: int = 0
     freelance: int = 0
     kept_acted_on: int = 0
+    relabelled: int = 0  # already "Not useful", now under the rule that applies first
     by_source: Counter[str] = field(default_factory=Counter)
 
     def as_dict(self) -> dict[str, object]:
@@ -51,6 +52,7 @@ class CleanupResult:
             "older_than_8h": self.older_than_8h,
             "freelance": self.freelance,
             "kept_acted_on": self.kept_acted_on,
+            "relabelled": self.relabelled,
             "by_source": dict(self.by_source),
         }
 
@@ -74,8 +76,19 @@ async def clean_leads(
 ) -> CleanupResult:
     """Move every matching lead to "Not useful"; with `dry_run`, only count them."""
     result = CleanupResult()
+    # Age and freelance are source rules checked before wording or contact: a stale post that
+    # was also filed as "low intent" or "no contact" belongs under its age.
+    weaker = [NotUsefulReason.LOW_INTENT.value, NotUsefulReason.NO_CONTACT.value]
     rows = await session.scalars(
-        select(Lead).where(Lead.status != LeadStatus.NOT_USEFUL).order_by(Lead.created_at)
+        select(Lead)
+        .where(
+            or_(
+                Lead.status != LeadStatus.NOT_USEFUL,
+                Lead.not_useful_reason.is_(None),
+                Lead.not_useful_reason.in_(weaker),
+            )
+        )
+        .order_by(Lead.created_at)
     )
     for lead in rows:
         result.scanned += 1
@@ -86,6 +99,10 @@ async def clean_leads(
         if lead.status in ACTED_ON:
             result.kept_acted_on += 1
             continue
+        if lead.status == LeadStatus.NOT_USEFUL:
+            if lead.not_useful_reason == reason.value:
+                continue
+            result.relabelled += 1
         if reason == NotUsefulReason.FREELANCE:
             result.freelance += 1
         else:
