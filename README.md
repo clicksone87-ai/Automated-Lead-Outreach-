@@ -16,9 +16,10 @@ every endpoint and external service is listed in [API and endpoints](docs/API_AN
 
 - **Discovery** from a search router with free caps and fallback (Serper, SerpAPI,
   ScrapingDog, Searlo, Tavily, Exa), public social posts from the last 8 hours via licensed
-  providers (EnsembleData, ScrapeCreators, SocialCrawl, HikerAPI, Apify) on TikTok, Reddit, X,
-  Threads, YouTube, Instagram and Facebook, Companies House, freelance boards and alert emails,
-  plus proactive triggers for broken or outdated local business sites.
+  providers (EnsembleData, ScrapeCreators, SocialCrawl, HikerAPI; Apify for Facebook and
+  Instagram) on TikTok, Reddit, X, Threads, YouTube, Instagram, Facebook and LinkedIn, Scout
+  profiles without a website, Companies House, plus proactive triggers for broken or outdated
+  local business sites. Freelance platforms are handled outside this system.
 - **Business search** for businesses with no or an outdated website, by city and category,
   from OpenStreetMap (© OpenStreetMap contributors) and free registries (FR, NO, GB).
 - **Qualification**: intent scoring (LLM for explicit requests plus rule-based signals),
