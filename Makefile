@@ -2,7 +2,7 @@
 COMPOSE ?= docker compose
 API = $(COMPOSE) exec -T api
 
-.PHONY: up down build logs migrate test test-backend test-dashboard lint seed run-cycle backup check-providers purge-demo shell
+.PHONY: up down build logs migrate test test-backend test-dashboard lint seed run-cycle backup check-providers account-status walkthrough purge-demo shell
 
 up:
 	$(COMPOSE) up -d --build
@@ -43,6 +43,13 @@ backup:
 
 check-providers:
 	$(API) python -m app.cli check-providers
+
+account-status:
+	$(API) python -m app.cli account-status
+
+# Every dashboard page in Chromium; fails on console errors, failed API calls or exceptions.
+walkthrough:
+	backend/.venv/bin/python scripts/walkthrough.py || python scripts/walkthrough.py
 
 purge-demo:
 	$(API) python -m app.cli purge-demo
