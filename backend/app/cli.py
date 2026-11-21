@@ -1,4 +1,4 @@
-"""Command line: python -m app.cli {seed|run-cycle|run-source KEY|run-lead ID|backup|check-providers|purge-demo}."""
+"""Command line: python -m app.cli {seed|run-cycle|run-source KEY|run-lead ID|backup|check-providers|purge-demo|clean-leads [--dry-run]}."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from app.db.models import Lead, LeadStatus, Source
 from app.db.session import session_scope
 from app.logging_setup import configure_logging
 from app.orchestrator import pipeline
-from app.services import backup, provider_check, seed
+from app.services import backup, lead_cleanup, provider_check, seed
 
 
 async def _seed() -> dict[str, object]:
@@ -157,6 +157,13 @@ async def _purge_demo() -> dict[str, object]:
         return dict(await seed.purge_demo_data(session))
 
 
+async def _clean_leads(dry_run: bool) -> dict[str, object]:
+    """Move old or undated social posts and freelance-platform leads to "Not useful"."""
+    async with session_scope() as session:
+        result = await lead_cleanup.clean_leads(session, get_settings(), dry_run=dry_run)
+    return {"dry_run": dry_run, **result.as_dict()}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="app.cli")
     parser.add_argument(
@@ -170,9 +177,13 @@ def main(argv: list[str] | None = None) -> int:
             "backup",
             "check-providers",
             "purge-demo",
+            "clean-leads",
         ],
     )
     parser.add_argument("target", nargs="?", help="source key (run-source) or lead id (run-lead)")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="clean-leads: count the leads, change nothing"
+    )
     args = parser.parse_args(argv)
     if args.command in ("run-source", "run-lead") and not args.target:
         parser.error(f"{args.command} needs a target")
@@ -182,6 +193,8 @@ def main(argv: list[str] | None = None) -> int:
         runner: Any = lambda: _run_one_source(args.target)  # noqa: E731
     elif args.command == "run-lead":
         runner = lambda: _run_one_lead(args.target)  # noqa: E731
+    elif args.command == "clean-leads":
+        runner = lambda: _clean_leads(args.dry_run)  # noqa: E731
     else:
         runner = {
             "seed": _seed,
