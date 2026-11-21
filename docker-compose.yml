@@ -167,6 +167,8 @@ services:
     image: caddy:2.8-alpine
     ports:
       - "127.0.0.1:8080:8080"
+      # preview-only site for a Cloudflare Tunnel (static files under /p/<id>/, nothing else)
+      - "127.0.0.1:8090:8090"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./data/previews:/srv/previews:ro

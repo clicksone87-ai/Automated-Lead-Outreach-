@@ -23,3 +23,52 @@
 		respond "Not found" 404
 	}
 }
+
+# Preview-only port for a Cloudflare Tunnel: http://127.0.0.1:8090/p/<preview_id>/
+# Serves the static preview files and nothing else: no API, no dashboard, no proxying, no
+# directory listings. PUBLIC_PREVIEW_BASE_URL points at the tunnel hostname of this port.
+:8090 {
+	header {
+		X-Robots-Tag "noindex, nofollow, noarchive"
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
+		Cache-Control "private, max-age=300"
+		-Server
+	}
+
+	@write not method GET HEAD
+	handle @write {
+		respond "Method not allowed" 405
+	}
+
+	# Preview pages link to root-relative paths (/styles.css, /design/x/). A request made from
+	# a preview page carries its address in Referer, so it is sent back under that preview.
+	@from_preview {
+		not path /p/*
+		header_regexp ref Referer ^https?://[^/]+/p/([a-f0-9]{32})/
+	}
+	handle @from_preview {
+		redir * /p/{re.ref.1}{uri} 302
+	}
+
+	@bare path_regexp bare ^/p/([a-f0-9]{32})$
+	handle @bare {
+		redir * /p/{re.bare.1}/ 308
+	}
+
+	@preview path_regexp preview ^/p/([a-f0-9]{32})(/.*)$
+	handle @preview {
+		root * /srv/previews/{re.preview.1}/site
+		rewrite * {re.preview.2}
+		try_files {path} {path}/index.html {path}.html
+		file_server {
+			hide .*
+		}
+	}
+
+	handle {
+		respond "Not found" 404
+	}
+}
