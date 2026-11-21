@@ -43,19 +43,20 @@ def test_spanish_country_word_detected() -> None:
 def test_social_posts_old_fresh_and_undated_are_classified() -> None:
     from datetime import UTC, datetime, timedelta  # noqa: PLC0415
 
-    from app.agents.discovery.sources.social_apify import _is_recent, max_post_age  # noqa: PLC0415
+    from app.agents.discovery.freshness import is_fresh_post, max_post_age  # noqa: PLC0415
 
     now = datetime.now(UTC)
     assert timedelta(hours=8) == max_post_age()  # SOCIAL_MAX_POST_AGE_HOURS default
-    assert _is_recent(now - timedelta(hours=7, minutes=59))
-    assert not _is_recent(now - timedelta(hours=8, minutes=1))
-    assert not _is_recent(None)
+    assert is_fresh_post(now - timedelta(hours=7, minutes=59))
+    assert not is_fresh_post(now - timedelta(hours=8, minutes=1))
+    assert not is_fresh_post(None)
 
 
 def test_saved_social_fixture_freshness_for_four_platforms() -> None:
     from datetime import UTC, datetime, timedelta  # noqa: PLC0415
 
-    from app.agents.discovery.sources.social_apify import _is_recent, _parse_dt  # noqa: PLC0415
+    from app.adapters.social import parse_time  # noqa: PLC0415
+    from app.agents.discovery.freshness import is_fresh_post  # noqa: PLC0415
 
     now = datetime.now(UTC)
     fixtures = {
@@ -64,8 +65,8 @@ def test_saved_social_fixture_freshness_for_four_platforms() -> None:
         "facebook": None,
         "reddit": int((now - timedelta(hours=7)).timestamp()),
     }
-    parsed = {platform: _parse_dt(value) for platform, value in fixtures.items()}
-    assert _is_recent(parsed["x"])
-    assert not _is_recent(parsed["instagram"])
-    assert not _is_recent(parsed["facebook"])
-    assert _is_recent(parsed["reddit"])
+    parsed = {platform: parse_time(value) for platform, value in fixtures.items()}
+    assert is_fresh_post(parsed["x"])
+    assert not is_fresh_post(parsed["instagram"])
+    assert not is_fresh_post(parsed["facebook"])
+    assert is_fresh_post(parsed["reddit"])
