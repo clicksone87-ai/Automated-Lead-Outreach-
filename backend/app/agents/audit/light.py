@@ -204,7 +204,9 @@ class LightAuditAgent(AuditAgent):
         ).scalar_one_or_none()
         if audit is None:
             ctx.session.add(Audit(lead_id=lead_id, **values))
-        else:
+        elif audit.depth != "full":
+            # A full audit (screenshots, report PDF, deeper findings) is never replaced by a
+            # light one: overwriting it used to drop the report PDF from proposals.
             for k, v in values.items():
                 setattr(audit, k, v)
         await ctx.session.flush()
@@ -214,7 +216,7 @@ class LightAuditAgent(AuditAgent):
         audit = (
             await ctx.session.execute(select(Audit).where(Audit.lead_id == lead_id))
         ).scalar_one_or_none()
-        if audit is not None:
+        if audit is not None and audit.depth != "full":
             audit.depth = "light"
 
 

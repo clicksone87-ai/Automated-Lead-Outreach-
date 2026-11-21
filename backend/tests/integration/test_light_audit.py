@@ -96,3 +96,25 @@ def test_signal_findings_and_script_rendered_pages() -> None:
     spa = "<html><body><div id=root></div>" + "<script src=a.js></script>" * 3 + "</body></html>"
     assert looks_script_rendered(checks.page_facts(spa, "https://x.test/"), spa)
     assert not looks_script_rendered(checks.page_facts(HOME, SITE), HOME)
+
+
+async def test_light_audit_never_overwrites_a_full_audit() -> None:
+    """A light pass after a full audit used to replace it and drop the report PDF from proposals."""
+    settings = Settings(_env_file=None, demo_mode=True, data_dir=Path("./.test-data"))  # type: ignore[call-arg]
+    adapters = build_adapters(settings)
+    adapters.fetcher = _fetcher()
+    lead_id = await _lead()
+    async with session_scope() as s:
+        s.add(Audit(lead_id=lead_id, url=SITE, depth="full", report_pdf_path="audits/x/report.pdf",
+                    findings=[{"id": "f1", "check": "full_only"}], screenshots={"desktop": "d.png"}))  # fmt: skip
+    async with session_scope() as s:
+        outcome = await runs.execute(
+            AgentContext(s, adapters, settings), LightAuditAgent(lambda: None), lead_id
+        )
+    assert outcome.proceed
+    async with session_scope() as s:
+        audit = (await s.execute(select(Audit).where(Audit.lead_id == lead_id))).scalar_one()
+    assert audit.depth == "full" and audit.report_pdf_path == "audits/x/report.pdf"
+    assert audit.findings == [{"id": "f1", "check": "full_only"}] and audit.screenshots == {
+        "desktop": "d.png"
+    }
