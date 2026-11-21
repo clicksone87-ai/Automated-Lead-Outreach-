@@ -127,7 +127,11 @@ endpoint names, environment variable **names** and free-tier caps only, never ke
 
 | Method | Path | Summary |
 |---|---|---|
-| GET | `/api/manual-outreach` | Manual Outreach |
+| GET | `/api/manual-outreach` | Manual Outreach (`state`: pending, done or skipped; each item carries `step`, `assets_suggested`, `assets_progress`, `attachments`) |
+| POST | `/api/manual-outreach/{item_id}/confirm-contact` | The contact route works |
+| POST | `/api/manual-outreach/{item_id}/contact-failed` | The route does not work: item skipped, lead moves to Not useful (`no_contact`) |
+| POST | `/api/manual-outreach/{item_id}/prepare-assets` | Queue `{"logo": bool, "website": bool}` on the heavy lane (202, never blocks); the message is redrafted with them |
+| POST | `/api/manual-outreach/{item_id}/mark-sent` | Sent by hand on the platform: recorded, lead `sent`, cooldown starts |
 | POST | `/api/manual-outreach/{item_id}/done` | Manual Outreach Done |
 | POST | `/api/manual-outreach/{item_id}/skip` | Manual Outreach Skip |
 
@@ -143,6 +147,17 @@ endpoint names, environment variable **names** and free-tier caps only, never ke
 | Method | Path | Summary |
 |---|---|---|
 | GET | `/api/monitoring` | Monitoring |
+
+### not-useful
+
+| Method | Path | Summary |
+|---|---|---|
+| GET | `/api/not-useful` | Leads that will never be worked (`reason`, `q`, `page`, `page_size`) |
+| GET | `/api/not-useful/counts` | Per-reason counts from the database |
+
+Not-useful leads are left out of every working view and count: leads list (unless
+`status=not_useful` is asked for), lead counts, overview, approvals, manual outreach and
+reports.
 
 ### overview
 
