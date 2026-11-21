@@ -24,6 +24,11 @@ function safeGmailHref(url: string | null): string | null {
   }
 }
 
+function formatMb(bytes: number): string {
+  const mb = bytes / 1_000_000;
+  return mb >= 0.1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1000))} KB`;
+}
+
 function OutboxCard({ item }: { item: GmailOutboxItem }) {
   const markSent = useMarkSent();
   const href = safeGmailHref(item.open_url);
@@ -46,6 +51,19 @@ function OutboxCard({ item }: { item: GmailOutboxItem }) {
           {item.body_text}
         </p>
       ) : null}
+      <p className="mb-2 flex items-center gap-1 text-xs text-muted-foreground">
+        <Paperclip className="size-3" aria-hidden />
+        {item.attachment_count === 0
+          ? "No attachments"
+          : `${item.attachment_count} ${item.attachment_count === 1 ? "attachment" : "attachments"} · ${formatMb(item.attachment_bytes)}`}
+      </p>
+      {item.attachment_actions.length > 0 && (
+        <ul className="mb-2 list-disc pl-5 text-xs text-muted-foreground" aria-label="Attachment size changes">
+          {item.attachment_actions.map((action) => (
+            <li key={action}>{action}</li>
+          ))}
+        </ul>
+      )}
       {item.attachments.length > 0 && (
         <ul className="mb-3 flex flex-wrap gap-2" aria-label="Attachments">
           {item.attachments.map((a) => (
@@ -56,6 +74,7 @@ function OutboxCard({ item }: { item: GmailOutboxItem }) {
                 className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-muted"
               >
                 <Paperclip className="size-3" aria-hidden /> {a.filename ?? "file"}
+                {a.bytes != null ? <span className="text-muted-foreground">({formatMb(a.bytes)})</span> : null}
               </a>
             </li>
           ))}

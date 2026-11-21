@@ -346,6 +346,10 @@ async def test_outbox_api_compose_link_and_mark_sent(
         assert item["attachments"] and all(
             a["url"].startswith("/api/files/") for a in item["attachments"]
         )
+        assert item["attachment_count"] == len(item["attachments"]) == 4
+        assert item["attachment_bytes"] == sum(a["bytes"] for a in item["attachments"]) > 0
+        assert item["attachment_mb"] == round(item["attachment_bytes"] / 1_000_000, 2)
+        assert item["attachment_actions"] == []  # small files: nothing had to change
         done = await client.post(
             f"/api/messages/{item['message_id']}/mark-sent", json={"by": "owner"}
         )
