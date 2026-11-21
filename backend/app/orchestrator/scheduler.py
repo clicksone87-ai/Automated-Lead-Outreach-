@@ -54,6 +54,13 @@ async def fast_sweep(ctx: dict[str, Any]) -> int:
     return await lanes.enqueue_fast(due)
 
 
+async def draft_sweep(ctx: dict[str, Any]) -> int:
+    """Resume reachable leads with a known need that stopped before their draft."""
+    async with session_scope() as session:
+        due = await lanes.due_for_drafts(session)
+    return await lanes.enqueue_drafts(due)
+
+
 async def heavy_picker(ctx: dict[str, Any]) -> int:
     """Send today's best fast-lane leads to the heavy lane, within the daily limit and the
     Gemini quota left."""
@@ -149,6 +156,7 @@ class SchedulerSettings:
         cron(tick_sources, minute=set(range(60)), run_at_startup=True),
         cron(fast_sweep, minute=set(range(1, 60, 5))),
         cron(heavy_picker, minute={4, 19, 34, 49}),
+        cron(draft_sweep, minute={9, 24, 39, 54}),
         cron(reddit_deletion_sync, hour={4}, minute={7}),
         cron(daily_backup, hour={3}, minute={15}),
         cron(send_due, minute=set(range(0, 60, 5))),

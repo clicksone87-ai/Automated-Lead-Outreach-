@@ -35,6 +35,7 @@ from app.db.models import (
     Business,
     Lead,
     LeadStatus,
+    ManualOutreach,
     Message,
     Proposal,
     RunStatus,
@@ -45,7 +46,7 @@ from app.orchestrator import pipeline
 from app.orchestrator.agents import PIPELINE_ORDER, load_agents
 from app.orchestrator.budget import BudgetExceededError
 from app.orchestrator.errors import TransientAgentError
-from app.orchestrator.pipeline import PipelineState
+from app.orchestrator.pipeline import ForceHook, PipelineState
 from app.orchestrator.runs import last_success
 from app.orchestrator.steps import (
     FAST_LANE,
@@ -82,8 +83,9 @@ def chunks(items: Sequence[uuid.UUID], size: int) -> Iterable[list[uuid.UUID]]:
 
 async def _proposal_needs_assets(session: AsyncSession, lead_id: uuid.UUID) -> bool:
     """Heavy lane: redraft the proposal so it carries the assets, but only a fast-lane draft
-    that is still waiting for a human (not approved, not sent, no assets yet). The Proposal
-    agent marks the replaced draft as superseded."""
+    that is still waiting for a human (not approved, not sent, no assets yet, or assets a
+    person asked for again in Manual outreach after it was written). The Proposal agent marks
+    the replaced draft as superseded."""
     latest = (
         await session.execute(
             select(Proposal)
@@ -92,11 +94,12 @@ async def _proposal_needs_assets(session: AsyncSession, lead_id: uuid.UUID) -> b
             .limit(1)
         )
     ).scalar_one_or_none()
-    if (
-        latest is None
-        or latest.attachments
-        or latest.approval_status not in (ApprovalStatus.PENDING, ApprovalStatus.DRAFT)
+    if latest is None or latest.approval_status not in (
+        ApprovalStatus.PENDING,
+        ApprovalStatus.DRAFT,
     ):
+        return False
+    if latest.attachments and not await _assets_asked_after(session, lead_id, latest.created_at):
         return False
     sent = (
         await session.execute(
@@ -104,6 +107,23 @@ async def _proposal_needs_assets(session: AsyncSession, lead_id: uuid.UUID) -> b
         )
     ).scalar_one()
     return not sent
+
+
+async def _assets_asked_after(session: AsyncSession, lead_id: uuid.UUID, since: datetime) -> bool:
+    asked = (
+        await session.execute(
+            select(ManualOutreach.assets_requested).where(
+                ManualOutreach.lead_id == lead_id, ManualOutreach.assets_requested.is_not(None)
+            )
+        )
+    ).scalars()
+    for request in asked:
+        try:
+            if datetime.fromisoformat(str((request or {}).get("at"))) > since:
+                return True
+        except ValueError:
+            continue
+    return False
 
 
 async def _qa_needs_rerun(session: AsyncSession, lead_id: uuid.UUID) -> bool:
@@ -119,7 +139,27 @@ async def _qa_needs_rerun(session: AsyncSession, lead_id: uuid.UUID) -> bool:
     return False
 
 
-HEAVY_FORCE = {"proposal": _proposal_needs_assets, "quality_check": _qa_needs_rerun}
+def _now_wanted(step: str) -> ForceHook:
+    """A producer that last ran when the brief did not ask for it ("… not needed for this
+    lead") runs again once a person has asked for that asset."""
+
+    async def hook(session: AsyncSession, lead_id: uuid.UUID) -> bool:
+        done = await last_success(session, step, lead_id)
+        if done is None or not str(done.output.get("reason", "")).endswith(
+            "not needed for this lead"
+        ):
+            return False
+        brief = await session.get(Brief, lead_id)
+        return brief is not None and step in brief.data.get("agents_to_run", [])
+
+    return hook
+
+
+HEAVY_FORCE: dict[str, ForceHook] = {
+    "proposal": _proposal_needs_assets,
+    "quality_check": _qa_needs_rerun,
+    **{step: _now_wanted(step) for step in ("audit", "branding", "website_builder")},
+}
 
 
 # ── heavy-lane state on the lead (read by the dashboard) ────────────────────
@@ -523,10 +563,39 @@ async def send_to_heavy(lead_ids: Sequence[uuid.UUID], *, requested_by: str) -> 
     return queued
 
 
-async def request_assets(session: AsyncSession, lead_id: uuid.UUID) -> Lead:
+ASSET_KINDS = ("logo", "website")
+
+
+def steps_for_kinds(kinds: Iterable[str], *, has_site: bool) -> list[str]:
+    """Heavy steps for a person's choice: a logo is branding; a website preview is the builder,
+    with the full audit when they already have a site (the before/after)."""
+    chosen = set(kinds)
+    steps = []
+    if "website" in chosen and has_site:
+        steps.append("audit")
+    if "logo" in chosen:
+        steps.append("branding")
+    if "website" in chosen:
+        steps.append("website_builder")
+    return [*steps, "quality_check"] if steps else []
+
+
+def suggested_kinds(services: Iterable[str]) -> list[str]:
+    """What the lead asked for, as asset kinds (SEO and redesign are shown as a website)."""
+    wanted = set(services)
+    kinds = ["logo"] if "logo" in wanted else []
+    if wanted & {"website", "redesign", "seo"}:
+        kinds.append("website")
+    return kinds
+
+
+async def request_assets(
+    session: AsyncSession, lead_id: uuid.UUID, kinds: Iterable[str] | None = None
+) -> Lead:
     """The dashboard's "Generate assets" button. A person chose this lead, so the daily
     heavy-lane limit does not apply (free-tier caps still do), and a lead whose brief needs no
-    logo or preview (e.g. SEO only) gets them added: logo, website, and an audit if it has a site."""
+    logo or preview (e.g. SEO only) gets them added: logo, website, and an audit if it has a site.
+    With `kinds` (Manual outreach's "Prepare assets") exactly the chosen assets are made."""
     lead = await session.get(Lead, lead_id)
     if lead is None:
         raise KeyError(lead_id)
@@ -540,16 +609,25 @@ async def request_assets(session: AsyncSession, lead_id: uuid.UUID) -> Lead:
         LeadStatus.AWAITING_SEND,
         LeadStatus.SENT,
         LeadStatus.REPLIED,
+        LeadStatus.NOT_USEFUL,
     ):
         raise AssetsRequestError(f"lead is {lead.status}")
     if heavy_in_progress((lead.lane_timings or {}).get("heavy") or {}):
         raise AssetsRequestError("assets are already being generated")
     business = await session.get(Business, lead.business_id) if lead.business_id else None
-    wanted = list(EXTRA_ON_REQUEST)
-    if business is not None and (business.domain or business.has_website):
-        wanted.insert(0, "audit")
+    has_site = business is not None and bool(business.domain or business.has_website)
     agents = list(brief.data.get("agents_to_run", []))
-    agents += [step for step in wanted if step not in agents]
+    if kinds is not None:
+        chosen = steps_for_kinds(kinds, has_site=has_site)
+        if not chosen:
+            raise AssetsRequestError(f"choose at least one of: {', '.join(ASSET_KINDS)}")
+        # Only what the person chose: heavy steps they did not pick are dropped from the brief.
+        agents = [s for s in agents if s not in HEAVY_STEPS] + chosen
+    else:
+        wanted = list(EXTRA_ON_REQUEST)
+        if has_site:
+            wanted.insert(0, "audit")
+        agents += [step for step in wanted if step not in agents]
     brief.data = {**brief.data, "agents_to_run": [s for s in PIPELINE_ORDER if s in agents]}
     set_state(lead, "queued", "requested from the dashboard", requested=True)
     await session.flush()
@@ -612,6 +690,91 @@ def is_due(status: str, timings: dict[str, Any], updated_at: datetime, now: date
     if f.get("queued"):
         return now - datetime.fromisoformat(f["queued"]) >= STUCK_AFTER  # job lost
     return status == LeadStatus.DISCOVERED
+
+
+# ── drafts sweep: every reachable lead with a known need gets its drafts ────
+#
+# The fast lane drafts as it goes, but a lead can stop short of the proposal and never come
+# back: its fast run ended on an error or a missing key (finished, so the fast sweep skips
+# it), it is older than the fast sweep's 7-day window, or it was sent to the heavy lane and
+# that run failed or its job was lost. This sweep resumes them.
+
+DRAFT_STATUSES = (
+    LeadStatus.QUALIFIED,
+    LeadStatus.CONTACT_FOUND,
+    LeadStatus.AUDITED,
+    LeadStatus.BRANDED,
+    LeadStatus.BUILT,
+    LeadStatus.QA_PASSED,
+    LeadStatus.PAUSED_BUDGET,
+)
+DRAFT_RETRY = timedelta(hours=1)  # one proposal attempt per lead per hour
+DRAFT_MAX_ATTEMPTS = 5  # then a person decides (lead page: Rerun)
+
+
+def _lane_busy(timings: dict[str, Any] | None, now: datetime) -> bool:
+    """The lead's own lane is still on it: fast lane queued/running or waiting for its retry,
+    or a live heavy job (it ends with its own proposal; resuming the lead now would queue a
+    second heavy job). A heavy job that was deferred or went stale no longer counts."""
+    f = (timings or {}).get("fast") or {}
+    if f.get("retry_after") and datetime.fromisoformat(f["retry_after"]) > now:
+        return True
+    if not f.get("finished"):
+        mark_at = f.get("started") or f.get("queued")
+        if mark_at and now - datetime.fromisoformat(mark_at) < STUCK_AFTER:
+            return True
+    return heavy_in_progress((timings or {}).get("heavy") or {}, now)
+
+
+async def due_for_drafts(
+    session: AsyncSession, *, now: datetime | None = None, limit: int = 50
+) -> list[uuid.UUID]:
+    """Leads with a contact route and a known requirement that have no draft yet and whose
+    own lane is not working on them; highest intent first."""
+    now = now or datetime.now(UTC)
+    proposal_runs = select(AgentRun.id).where(
+        AgentRun.lead_id == Lead.id, AgentRun.agent == "proposal"
+    )
+    attempts = (
+        select(func.count())
+        .where(AgentRun.lead_id == Lead.id, AgentRun.agent == "proposal")
+        .scalar_subquery()
+    )
+    rows = (
+        await session.execute(
+            select(Lead.id, Lead.status, Lead.lane_timings, Lead.updated_at)
+            .where(
+                Lead.status.in_([str(x) for x in DRAFT_STATUSES]),
+                Lead.pipeline_state["contact_id"].astext.is_not(None),
+                func.coalesce(func.cardinality(Lead.service_needed), 0) > 0,
+                ~select(Proposal.id).where(Proposal.lead_id == Lead.id).exists(),
+                ~proposal_runs.where(AgentRun.status == RunStatus.SUCCEEDED).exists(),
+                ~proposal_runs.where(AgentRun.started_at >= now - DRAFT_RETRY).exists(),
+                attempts < DRAFT_MAX_ATTEMPTS,
+            )
+            .order_by(Lead.intent_score.desc().nulls_last(), Lead.created_at.desc())
+            .limit(limit * 3)
+        )
+    ).all()
+    due = [
+        lid
+        for lid, status, timings, updated in rows
+        if not _lane_busy(timings, now)
+        and (status != LeadStatus.PAUSED_BUDGET or now - updated >= PAUSED_RETRY)
+    ]
+    return due[:limit]
+
+
+async def enqueue_drafts(lead_ids: Sequence[uuid.UUID]) -> int:
+    """Resume each lead (fast steps only; finished ones are skipped, so it goes on to the
+    proposal). Heavy work never runs inline here."""
+    from app.orchestrator.queue import enqueue_pipeline  # noqa: PLC0415
+
+    queued = 0
+    for lead_id in lead_ids:
+        if await enqueue_pipeline(lead_id):
+            queued += 1
+    return queued
 
 
 async def due_for_fast_lane(session: AsyncSession, *, limit: int = 200) -> list[uuid.UUID]:
