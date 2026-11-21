@@ -76,16 +76,47 @@ export interface SuppressionItem {
   created_at: string;
 }
 
+export type AssetKind = "logo" | "website";
+
+/** What the person does next on a manual outreach item (set by the API). */
+export type ManualStep =
+  | "confirm_contact"
+  | "prepare_assets"
+  | "preparing_assets"
+  | "ready_to_send"
+  | "assets_failed"
+  | "sent"
+  | "done"
+  | "skipped";
+
+export interface AssetsProgress {
+  status: string;
+  reason: string;
+  steps: { step: string; state: "waiting" | "running" | "done" | "failed" | "skipped" }[];
+}
+
 export interface ManualOutreachItem {
   id: string;
   lead_id: string;
   business_name: string | null;
+  lead_status: string;
+  country: string | null;
+  services: string[];
   channel: string;
   post_link: string | null;
   comment: string;
   dm: string;
   contact_form: string;
   status: string;
+  step: ManualStep;
+  contact_confirmed_at: string | null;
+  contact_confirmed_by: string | null;
+  assets_suggested: AssetKind[];
+  assets_requested: { kinds: AssetKind[]; steps: string[]; at: string; by: string } | null;
+  assets_progress: AssetsProgress | null;
+  attachments: { kind: string | null; filename: string | null; url: string }[];
+  sent_at: string | null;
+  sent_by: string | null;
   done_at: string | null;
   done_by: string | null;
   created_at: string;
@@ -106,7 +137,7 @@ export interface AutonomyStatus {
   sandbox_only: boolean;
 }
 
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
+export async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const token = process.env.NEXT_PUBLIC_API_TOKEN;
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
@@ -146,7 +177,7 @@ export function useSuppressions() {
 export function useManualOutreach(status = "pending") {
   return useQuery({
     queryKey: ["manual-outreach", status],
-    queryFn: () => call<ManualOutreachItem[]>(`/api/manual-outreach?status=${status}`),
+    queryFn: () => call<ManualOutreachItem[]>(`/api/manual-outreach?state=${status}`),
     ...LIVE,
   });
 }
@@ -181,6 +212,54 @@ export function useManualOutreachSkip() {
     },
     onError: (e: Error) => toast.error("Could not update manual outreach", { description: e.message }),
   });
+}
+
+function useManualStep<V>(
+  path: (vars: V) => string,
+  body: (vars: V) => Record<string, unknown>,
+  success: string,
+) {
+  const done = useInvalidate([["manual-outreach"], ["overview"], ["leads"], ["not-useful"]]);
+  return useMutation({
+    mutationFn: (vars: V) =>
+      call<ManualOutreachItem>(path(vars), {
+        method: "POST",
+        body: JSON.stringify({ done_by: "dashboard", ...body(vars) }),
+      }),
+    onSuccess: () => {
+      toast.success(success);
+      done();
+    },
+    onError: (e: Error) => toast.error("Could not update manual outreach", { description: e.message }),
+  });
+}
+
+export function useConfirmContact() {
+  return useManualStep((id: string) => `/api/manual-outreach/${id}/confirm-contact`, () => ({}), "Contact confirmed");
+}
+
+export function useContactFailed() {
+  return useManualStep(
+    (id: string) => `/api/manual-outreach/${id}/contact-failed`,
+    () => ({}),
+    "Moved to Not useful: the contact did not work",
+  );
+}
+
+export function usePrepareAssets() {
+  return useManualStep(
+    ({ id }: { id: string; kinds: AssetKind[] }) => `/api/manual-outreach/${id}/prepare-assets`,
+    ({ kinds }) => ({ logo: kinds.includes("logo"), website: kinds.includes("website") }),
+    "Assets queued; the message is redrafted when they are ready",
+  );
+}
+
+export function useManualMarkSent() {
+  return useManualStep(
+    (id: string) => `/api/manual-outreach/${id}/mark-sent`,
+    () => ({}),
+    "Marked as sent; the cooldown for this business has started",
+  );
 }
 
 export interface GmailOutboxItem {

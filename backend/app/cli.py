@@ -1,4 +1,4 @@
-"""Command line: python -m app.cli {seed|run-cycle|run-source KEY|run-lead ID|backup|check-providers|purge-demo|clean-leads [--dry-run]}."""
+"""Command line: python -m app.cli {seed|run-cycle|run-source KEY|run-lead ID|backup|check-providers|account-status|purge-demo|clean-leads [--dry-run]|map-not-useful|geonames-refresh|osm-sweep [N]}."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from app.db.models import Lead, LeadStatus, Source
 from app.db.session import session_scope
 from app.logging_setup import configure_logging
 from app.orchestrator import pipeline
-from app.services import backup, lead_cleanup, provider_check, seed
+from app.services import backup, lead_cleanup, not_useful_leads, provider_check, seed
 
 
 async def _seed() -> dict[str, object]:
@@ -204,6 +204,13 @@ async def _clean_leads(dry_run: bool) -> dict[str, object]:
     return {"dry_run": dry_run, **result.as_dict()}
 
 
+async def _map_not_useful() -> dict[str, object]:
+    """Move leads stopped under the old never-useful statuses into "Not useful" (idempotent)."""
+    async with session_scope() as session:
+        moved = await not_useful_leads.map_existing(session, get_settings().excluded_country_set)
+    return {"moved": moved, "total": sum(moved.values())}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="app.cli")
     parser.add_argument(
@@ -221,6 +228,7 @@ def main(argv: list[str] | None = None) -> int:
             "geonames-refresh",
             "osm-sweep",
             "clean-leads",
+            "map-not-useful",
         ],
     )
     parser.add_argument(
@@ -254,6 +262,7 @@ def main(argv: list[str] | None = None) -> int:
             "account-status": _account_status,
             "purge-demo": _purge_demo,
             "geonames-refresh": _geonames_refresh,
+            "map-not-useful": _map_not_useful,
         }[args.command]
     if sys.platform == "win32":
         # psycopg async needs the selector loop on Windows (containers are Linux); the

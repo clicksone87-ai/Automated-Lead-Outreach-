@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Business, Lead, LeadStatus, Message, Proposal, Reply, ReplyClass, Report
 from app.services import runtime_settings
+from app.services.not_useful_leads import working
 
 MIN_SAMPLE = 20
 STEP = 0.1
@@ -35,7 +36,11 @@ async def build_report(
 ) -> dict[str, Any]:
     now = now or datetime.now(UTC)
     since = now - timedelta(days=days)
-    leads = (await session.execute(select(Lead).where(Lead.created_at >= since))).scalars().all()
+    leads = (
+        (await session.execute(select(Lead).where(Lead.created_at >= since, working())))
+        .scalars()
+        .all()
+    )
     industries = {
         b.id: b.industry
         for b in (await session.execute(select(Business).where(Business.id.in_([lead.business_id for lead in leads if lead.business_id])))).scalars()

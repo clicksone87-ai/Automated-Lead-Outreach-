@@ -584,6 +584,14 @@ class ManualOutreach(Base):
     )
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     done_by: Mapped[str | None] = mapped_column(String(100))
+    # A person checked that this route reaches the lead (account exists, DMs/comments open).
+    contact_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    contact_confirmed_by: Mapped[str | None] = mapped_column(String(100))
+    # {"kinds": ["logo", "website"], "steps": [...heavy steps...], "at": iso, "by": str}
+    assets_requested: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # The person sent the message on the platform (starts the cooldown, like Gmail's send).
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sent_by: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _updated()
 

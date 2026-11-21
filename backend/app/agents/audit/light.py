@@ -35,6 +35,8 @@ from app.orchestrator.agents import AgentContext, AgentOutcome, register
 from app.orchestrator.budget import BudgetExceededError
 from app.policy.engine import PolicyEngine
 from app.services import evidence
+from app.services.not_useful import NotUsefulReason
+from app.services.not_useful_leads import stop
 
 logger = logging.getLogger(__name__)
 LINK_LIMIT = 12  # same-host requests are spaced 2 s apart by the safe fetcher
@@ -89,9 +91,7 @@ class LightAuditAgent(AuditAgent):
         if "audit" not in brief.get("agents_to_run", []):
             return AgentOutcome(True, None, "audit not needed for this lead")
         if not lead.pipeline_state.get("contact_id"):
-            return AgentOutcome(
-                False, LeadStatus.NO_CONTACT_ROUTE, "no contact route: audit skipped"
-            )
+            return stop(lead, NotUsefulReason.NO_CONTACT, "no contact route: audit skipped")
         verdict = await PolicyEngine(s).evaluate_drafting(lead)
         if not verdict.allowed:
             return AgentOutcome(False, None, f"policy: {verdict.failures[0].reason}")

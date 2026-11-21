@@ -79,6 +79,25 @@ stops the fast lane. Gemini's daily cap is split per lane (scoring, fast, heavy,
 can never starve scoring. The Overview's **Speed** panel shows median and p90 time per lane and
 per step against the targets (fast < 3 min, heavy < 10 min).
 
+Every lead with a contact route and a known need gets drafts, not only the top leads. A
+**drafts sweep** (every 15 minutes) resumes reachable leads that stopped before their draft
+(a fast run that ended on an error or a missing key, a lead older than the fast sweep's 7 days,
+a heavy run that failed or whose job was lost); at most one attempt per lead per hour and five
+in all. A verified email becomes a Track A proposal in the **Approval queue** (a person always
+approves at Stage 1); a DM, comment or contact-form route becomes Track B drafts in **Manual
+outreach**, where a person confirms the contact works (or marks it as not working), optionally
+clicks **Prepare assets** (logo, website preview or both; the lead's requirement is
+preselected; built on the heavy queue and the message is redrafted with them), sends the
+message on the platform and clicks **Mark as sent** (starts the cooldown).
+
+Leads with no contact route, low intent, an excluded market, a post older than 8 hours or a
+freelance-platform origin go to **Not useful** with the reason; they never appear in any other
+page or count. Parked languages, other parked countries, cooldown, duplicates and suppressed
+businesses keep their own statuses, because they can still change or are tracked elsewhere.
+Leads stopped under the old statuses are moved by the migration `a6d2861ea1b3`; the same
+mapping can be run again at any time with `docker compose exec api python -m app.cli
+map-not-useful` (idempotent).
+
 Manual **Run now** on a source that spends a limited free tier (Apify, Serper) asks for
 confirmation, is limited to one run per source per hour, and is refused when the free cap
 cannot cover the run. Serper credits are one-time, so a daily ceiling

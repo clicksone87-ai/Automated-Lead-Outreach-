@@ -294,7 +294,10 @@ async def test_robots_disallow_is_respected() -> None:
 async def test_gating_contact_route_and_brief() -> None:
     no_contact = await _lead(contact=False, website=None, competitor_audit=False)
     outcome = await _run(no_contact)
-    assert not outcome.proceed and outcome.status == LeadStatus.NO_CONTACT_ROUTE
+    assert not outcome.proceed and outcome.status == LeadStatus.NOT_USEFUL
+    async with session_scope() as s:
+        lead = await s.get(Lead, no_contact)
+        assert lead is not None and lead.not_useful_reason == "no_contact"
 
     not_needed = await _lead(agents=["contact_enrichment", "audit", "proposal"])
     outcome = await _run(not_needed)

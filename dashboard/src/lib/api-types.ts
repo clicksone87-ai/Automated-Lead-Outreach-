@@ -481,6 +481,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/manual-outreach/{item_id}/confirm-contact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Manual Outreach Confirm Contact
+         * @description A person checked that this route reaches the lead.
+         */
+        post: operations["manual_outreach_confirm_contact_api_manual_outreach__item_id__confirm_contact_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manual-outreach/{item_id}/contact-failed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Manual Outreach Contact Failed
+         * @description The route does not reach the lead: skipped, and the lead moves to "Not useful".
+         */
+        post: operations["manual_outreach_contact_failed_api_manual_outreach__item_id__contact_failed_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manual-outreach/{item_id}/prepare-assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Manual Outreach Prepare Assets
+         * @description Queue the chosen assets (logo, website preview or both) on the heavy lane; the message
+         *     is redrafted with them when they are ready. Returns at once.
+         */
+        post: operations["manual_outreach_prepare_assets_api_manual_outreach__item_id__prepare_assets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manual-outreach/{item_id}/mark-sent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Manual Outreach Mark Sent
+         * @description The person sent the message on the platform: recorded, and the cooldown starts.
+         */
+        post: operations["manual_outreach_mark_sent_api_manual_outreach__item_id__mark_sent_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/approvals": {
         parameters: {
             query?: never;
@@ -801,6 +882,61 @@ export interface paths {
         };
         /** Job */
         get: operations["job_api_discovery_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discovery/sweep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sweep
+         * @description Today's countries and cities (done / failed / pending), businesses per country this
+         *     week, and the GeoNames and OpenStreetMap attributions.
+         */
+        get: operations["sweep_api_discovery_sweep_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/not-useful": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Not Useful */
+        get: operations["not_useful_api_not_useful_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/not-useful/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Not Useful Counts */
+        get: operations["not_useful_counts_api_not_useful_counts_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1430,6 +1566,64 @@ export interface components {
              */
             by: string;
         };
+        /** NotUsefulCounts */
+        NotUsefulCounts: {
+            /** Total */
+            total: number;
+            /** Reasons */
+            reasons: components["schemas"]["ReasonCount"][];
+        };
+        /** NotUsefulPage */
+        NotUsefulPage: {
+            /** Items */
+            items: components["schemas"]["NotUsefulRow"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** NotUsefulRow */
+        NotUsefulRow: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string | null;
+            /** Business Name */
+            business_name?: string | null;
+            /** Source */
+            source: string;
+            /** Source Url */
+            source_url: string;
+            /** Country */
+            country: string | null;
+            /** Language */
+            language: string | null;
+            /** Service Needed */
+            service_needed: string[];
+            /** Intent Score */
+            intent_score: number | null;
+            /** Reason */
+            reason: string | null;
+            /** Reason Label */
+            reason_label: string | null;
+            /** Status Reason */
+            status_reason: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** OverviewOut */
         OverviewOut: {
             /** Stages */
@@ -1520,6 +1714,24 @@ export interface components {
              */
             created_at: string;
         };
+        /** PrepareAssetsIn */
+        PrepareAssetsIn: {
+            /**
+             * Logo
+             * @default false
+             */
+            logo: boolean;
+            /**
+             * Website
+             * @default false
+             */
+            website: boolean;
+            /**
+             * Done By
+             * @default dashboard
+             */
+            done_by: string;
+        };
         /**
          * ProviderRouteOut
          * @description One provider in a fallback chain (search router or LLM): usage vs cap and last error.
@@ -1566,6 +1778,15 @@ export interface components {
             used: number;
             /** Remaining */
             remaining: number;
+        };
+        /** ReasonCount */
+        ReasonCount: {
+            /** Reason */
+            reason: string;
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
         };
         /** RejectIn */
         RejectIn: {
@@ -2709,6 +2930,162 @@ export interface operations {
             };
         };
     };
+    manual_outreach_confirm_contact_api_manual_outreach__item_id__confirm_contact_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualOutreachActionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    manual_outreach_contact_failed_api_manual_outreach__item_id__contact_failed_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualOutreachActionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    manual_outreach_prepare_assets_api_manual_outreach__item_id__prepare_assets_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrepareAssetsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    manual_outreach_mark_sent_api_manual_outreach__item_id__mark_sent_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualOutreachActionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     approvals_api_approvals_get: {
         parameters: {
             query?: {
@@ -3443,6 +3820,106 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sweep_api_discovery_sweep_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    not_useful_api_not_useful_get: {
+        parameters: {
+            query?: {
+                reason?: string | null;
+                q?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotUsefulPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    not_useful_counts_api_not_useful_counts_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotUsefulCounts"];
                 };
             };
             /** @description Validation Error */

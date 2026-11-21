@@ -30,15 +30,18 @@ from app.db.models import (
     Reply,
     Suppression,
 )
+from app.orchestrator import lanes
 from app.orchestrator.queue import enqueue_pipeline
 from app.services import activity, autonomy
 from app.services import attachments as attachment_policy
+from app.services import manual_outreach as manual
 from app.services.email_links import (
     preview_id_for,
     preview_public_url,
     sender_props,
 )
-from app.services.manual_outreach import list_queue, set_status, sync_queue
+from app.services.manual_outreach import ManualOutreachError, list_queue, set_status, sync_queue
+from app.services.not_useful_leads import working
 from app.services.outreach_jobs import suppress
 from app.services.sending import MarkSentError, mark_sent
 from app.services.unsubscribe import make_token, read_token, unsubscribe_link
@@ -83,6 +86,12 @@ class StageIn(BaseModel):
 
 
 class ManualOutreachActionIn(BaseModel):
+    done_by: str = Field(default="dashboard", max_length=100)
+
+
+class PrepareAssetsIn(BaseModel):
+    logo: bool = False
+    website: bool = False
     done_by: str = Field(default="dashboard", max_length=100)
 
 
@@ -156,6 +165,68 @@ async def manual_outreach_skip(
     return result
 
 
+def _found(result: dict[str, Any] | None) -> dict[str, Any]:
+    if result is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "manual outreach item not found")
+    return result
+
+
+@router.post("/manual-outreach/{item_id}/confirm-contact")
+async def manual_outreach_confirm_contact(
+    item_id: uuid.UUID, body: ManualOutreachActionIn, session: SessionDep
+) -> dict[str, Any]:
+    """A person checked that this route reaches the lead."""
+    try:
+        result = _found(await manual.confirm_contact(session, item_id, body.done_by))
+    except ManualOutreachError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await session.commit()
+    return result
+
+
+@router.post("/manual-outreach/{item_id}/contact-failed")
+async def manual_outreach_contact_failed(
+    item_id: uuid.UUID, body: ManualOutreachActionIn, session: SessionDep
+) -> dict[str, Any]:
+    """The route does not reach the lead: skipped, and the lead moves to "Not useful"."""
+    try:
+        result = _found(await manual.contact_failed(session, item_id, body.done_by))
+    except ManualOutreachError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await session.commit()
+    return result
+
+
+@router.post("/manual-outreach/{item_id}/prepare-assets", status_code=status.HTTP_202_ACCEPTED)
+async def manual_outreach_prepare_assets(
+    item_id: uuid.UUID, body: PrepareAssetsIn, session: SessionDep
+) -> dict[str, Any]:
+    """Queue the chosen assets (logo, website preview or both) on the heavy lane; the message
+    is redrafted with them when they are ready. Returns at once."""
+    kinds = [k for k, on in (("logo", body.logo), ("website", body.website)) if on]
+    try:
+        result = _found(await manual.prepare_assets(session, item_id, kinds, body.done_by))
+    except ManualOutreachError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await session.commit()  # the heavy worker must see the updated brief
+    lead_id = uuid.UUID(str(result["lead_id"]))
+    queued = await lanes.send_to_heavy([lead_id], requested_by="manual_outreach") == 1
+    return {**result, "queued": queued}
+
+
+@router.post("/manual-outreach/{item_id}/mark-sent")
+async def manual_outreach_mark_sent(
+    item_id: uuid.UUID, body: ManualOutreachActionIn, session: SessionDep
+) -> dict[str, Any]:
+    """The person sent the message on the platform: recorded, and the cooldown starts."""
+    try:
+        result = _found(await manual.mark_sent(session, item_id, body.done_by))
+    except ManualOutreachError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await session.commit()
+    return result
+
+
 @router.get("/approvals")
 async def approvals(session: SessionDep, state: str = "pending") -> list[dict[str, Any]]:
     rows = (
@@ -163,7 +234,12 @@ async def approvals(session: SessionDep, state: str = "pending") -> list[dict[st
             select(Proposal, Lead, Business)
             .join(Lead, Lead.id == Proposal.lead_id)
             .outerjoin(Business, Business.id == Lead.business_id)
-            .where(Proposal.approval_status == state)
+            .where(
+                Proposal.approval_status == state,
+                # Track A only: drafts for a manual route are worked in Manual outreach.
+                Proposal.to_email.is_not(None),
+                working(),
+            )
             .order_by(Proposal.created_at)
             .limit(100)
         )

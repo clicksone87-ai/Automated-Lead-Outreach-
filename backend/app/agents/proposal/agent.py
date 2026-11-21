@@ -36,6 +36,8 @@ from app.services import attachments as attachment_policy
 from app.services import runtime_settings
 from app.services.email_links import preview_id_for, preview_public_url, sender_props
 from app.services.manual_outreach import sync_queue
+from app.services.not_useful import NotUsefulReason
+from app.services.not_useful_leads import stop
 from app.services.unsubscribe import make_token, unsubscribe_link
 
 logger = logging.getLogger(__name__)
@@ -167,7 +169,7 @@ class ProposalAgent:
             return AgentOutcome(True, None, "no proposal for this lead")
         contact_id = lead.pipeline_state.get("contact_id")
         if not contact_id:
-            return AgentOutcome(False, LeadStatus.NO_CONTACT_ROUTE, "no contact route")
+            return stop(lead, NotUsefulReason.NO_CONTACT, "no contact route")
         verdict = await PolicyEngine(s).evaluate_drafting(lead)
         if not verdict.allowed:
             return AgentOutcome(False, None, f"policy: {verdict.failures[0].reason}")

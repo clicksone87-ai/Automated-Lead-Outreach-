@@ -20,9 +20,10 @@ from app.agents.prefilter.rules import BOARD_URL, check_text, stale_reason
 from app.db.models import Evidence, EvidenceKind, Lead, LeadStatus, TriggerType
 from app.orchestrator.agents import AgentContext, AgentOutcome, register
 from app.policy.country_rules import get_rules
-from app.services import not_useful, runtime_settings
+from app.services import runtime_settings
 from app.services.families import SOCIAL, family_for
 from app.services.not_useful import NotUsefulReason
+from app.services.not_useful_leads import stop
 
 
 class PrefilterAgent:
@@ -37,8 +38,8 @@ class PrefilterAgent:
         rs = await runtime_settings.load(s)
 
         if lead.country and get_rules().is_excluded(lead.country):
-            return self._stop(
-                lead, LeadStatus.PARKED_COUNTRY, f"{lead.country} is an excluded market"
+            return self._not_useful(
+                lead, NotUsefulReason.EXCLUDED_MARKET, f"{lead.country} is an excluded market"
             )
         if (
             lead.country
@@ -73,12 +74,12 @@ class PrefilterAgent:
         if stale and family == SOCIAL:
             return self._not_useful(lead, NotUsefulReason.OLDER_THAN_8H, stale)
         if stale:
-            return self._stop(lead, LeadStatus.REJECTED_LOW_INTENT, stale)
+            return self._not_useful(lead, NotUsefulReason.OLDER_THAN_8H, stale)
 
         text = "\n".join(filter(None, [lead.title, lead.raw_text]))
         verdict = check_text(text, lead.language)
         if not verdict.passed:
-            return self._stop(lead, LeadStatus.REJECTED_LOW_INTENT, verdict.reason)
+            return self._not_useful(lead, NotUsefulReason.LOW_INTENT, verdict.reason)
 
         if await self._repeated_text(ctx, lead):
             return self._stop(
@@ -89,17 +90,14 @@ class PrefilterAgent:
     @staticmethod
     def _stop(lead: Lead, status: LeadStatus, reason: str) -> AgentOutcome:
         lead.prefilter_reason = reason
-        if status == LeadStatus.REJECTED_LOW_INTENT:
-            lead.intent_score = 0  # counted as low intent, never as "not scored yet"
         return AgentOutcome(False, status, f"prefilter: {reason}", {"rule": reason})
 
     @staticmethod
-    def _not_useful(lead: Lead, reason: NotUsefulReason, detail: str) -> AgentOutcome:
-        lead.prefilter_reason = detail
-        not_useful.mark(lead, reason, detail)
-        return AgentOutcome(
-            False, LeadStatus.NOT_USEFUL, lead.status_reason or detail, {"rule": detail}
-        )
+    def _not_useful(lead: Lead, why: NotUsefulReason, reason: str) -> AgentOutcome:
+        lead.prefilter_reason = reason
+        if why != NotUsefulReason.EXCLUDED_MARKET:
+            lead.intent_score = 0  # counted as low intent, never as "not scored yet"
+        return stop(lead, why, f"prefilter: {reason}", {"rule": reason})
 
     @staticmethod
     async def _repeated_text(ctx: AgentContext, lead: Lead) -> bool:
